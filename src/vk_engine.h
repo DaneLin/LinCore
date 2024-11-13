@@ -124,13 +124,18 @@ public:
 	VkPipelineLayout _meshPipelineLayout;
 	VkPipeline _meshPipeline;
 
-	GPUMeshBuffers rectangle;
-	
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	GPUSceneData sceneData;
 
 	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+
+	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	void destroy_image(const AllocatedImage& image);
+
+	VkDescriptorSetLayout _single_image_descriptor_layout;
+
 
 private:
 	void init_vulkan();
@@ -154,5 +159,13 @@ private:
 	void draw_geometry(VkCommandBuffer cmd);
 
 private:
+
+	AllocatedImage _white_image;
+	AllocatedImage _black_image;
+	AllocatedImage _grey_image;
+	AllocatedImage _error_checker_board_image;
+
+	VkSampler _default_sampler_linear;
+	VkSampler _default_sampler_nearest;
 	
 };
