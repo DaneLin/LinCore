@@ -66,6 +66,13 @@ void VulkanEngine::init()
     mainCamera.pitch = 0;
     mainCamera.yaw = 0;
 
+    std::string structurePath = { "assets/structure.glb" };
+    auto structureFile = load_gltf(this, structurePath);
+
+    assert(structureFile.has_value());
+
+    loadedScenes["structure"] = *structureFile;
+
     // everything went fine
     _isInitialized = true;
 }
@@ -76,6 +83,8 @@ void VulkanEngine::cleanup()
 
 		// make sure the GPU has stopped doing its thing
         vkDeviceWaitIdle(_device);
+
+        loadedScenes.clear();
 
         for (int i = 0; i < FRAME_OVERLAP; i++) {
 			vkDestroyCommandPool(_device, _frames[i]._commandPool, nullptr);
@@ -1180,6 +1189,7 @@ void VulkanEngine::update_scene()
         loadedNodes["Cube"]->draw(translation * scale, mainDrawContext);
     }
 
+	loadedScenes["structure"]->draw(glm::mat4{ 1.f }, mainDrawContext);
 }
 
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
@@ -1292,6 +1302,7 @@ void MeshNode::draw(const glm::mat4& topMatrix, DrawContext& ctx)
 {
     glm::mat4 nodeMatrix = topMatrix * worldTransform;
 
+    if (mesh.get())
     for (auto& s : mesh->surfaces) {
         RenderObject def;
         def.indexCount = s.count;

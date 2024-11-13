@@ -190,6 +190,25 @@ public:
 
 	VkDescriptorSetLayout _single_image_descriptor_layout;
 
+	AllocatedImage _white_image;
+	AllocatedImage _black_image;
+	AllocatedImage _grey_image;
+	AllocatedImage _error_checker_board_image;
+
+	VkSampler _default_sampler_linear;
+	VkSampler _default_sampler_nearest;
+
+	MaterialInstance _default_data;
+	GLTFMetallic_Roughness metal_rough_material;
+
+	DrawContext mainDrawContext;
+	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
+
+	void update_scene();
+
+	Camera mainCamera;
+
+	std::unordered_map < std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 private:
 	void init_vulkan();
@@ -212,24 +231,6 @@ private:
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void draw_geometry(VkCommandBuffer cmd);
 
-private:
-
-	AllocatedImage _white_image;
-	AllocatedImage _black_image;
-	AllocatedImage _grey_image;
-	AllocatedImage _error_checker_board_image;
-
-	VkSampler _default_sampler_linear;
-	VkSampler _default_sampler_nearest;
-
-	MaterialInstance _default_data;
-	GLTFMetallic_Roughness metal_rough_material;
-
-	DrawContext mainDrawContext;
-	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
-
-	void update_scene();
-
-	Camera mainCamera;
+	
 	
 };
