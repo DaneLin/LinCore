@@ -11,6 +11,8 @@ public:
 
 	float yaw{ 0.f };
 
+	float speedFactor{ 1.f };
+
 	glm::mat4 get_view_matrix();
 
 	glm::mat4 get_rotation_matrix();

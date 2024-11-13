@@ -40,7 +40,7 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 					imagesize.height = height;
 					imagesize.depth = 1;
 
-					newImage = engine->create_image(data, imagesize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false);
+					newImage = engine->create_image(data, imagesize, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true);
 					stbi_image_free(data);
 				}
 				 else {
@@ -492,6 +492,19 @@ std::optional<std::shared_ptr<LoadedGLTF>> load_gltf(VulkanEngine* engine, std::
 			else {
 				newSurface.material = materials[0];
 			}
+
+			// loop the vertice of this surface. find min/max bounds
+			glm::vec3 minpos = vertices[initial_vtx].position;
+			glm::vec3 maxpos = vertices[initial_vtx].position;
+			for (int i = initial_vtx; i < vertices.size(); i++) {
+				minpos = glm::min(minpos, vertices[i].position);
+				maxpos = glm::max(maxpos, vertices[i].position);
+			}
+
+			// calculate origin and extents from the min/max, use extent length for radius
+			newSurface.bounds.origin = (minpos + maxpos) * 0.5f;
+			newSurface.bounds.extents = (maxpos - minpos) * 0.5f;
+			newSurface.bounds.sphereRadius = glm::length(newSurface.bounds.extents);
 
 			newmesh->surfaces.push_back(newSurface);
 		}

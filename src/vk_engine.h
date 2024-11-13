@@ -78,19 +78,28 @@ struct RenderObject {
 	VkBuffer indexBuffer;
 
 	MaterialInstance* material;
-
+	Bounds bounds;
 	glm::mat4 transform;
 	VkDeviceAddress vertexBufferAddress;
 };
 
 struct DrawContext {
 	std::vector<RenderObject> OpaqueSurfaces;
+	std::vector<RenderObject> TransparentSurfaces;
 };
 
 struct MeshNode : public Node {
 	std::shared_ptr<MeshAsset> mesh;
 
 	virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+};
+
+struct EngineStats {
+	float frametime;
+	int triangeCount;
+	int drawcallCount;
+	float sceneUpdateTime;
+	float meshDrawTime;
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -209,6 +218,8 @@ public:
 	Camera mainCamera;
 
 	std::unordered_map < std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
+
+	EngineStats stats;
 
 private:
 	void init_vulkan();

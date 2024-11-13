@@ -12,19 +12,43 @@
       "environment": {
         "INHERIT": "msvc_x64_x64"
       }
+    },
+    {
+      "name": "x64-Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "environment": {
+        "INHERIT": "msvc_x64_x64"
+      }
     }
   ],
   "buildPresets": [
     {
-      "name": "build",
+      "name": "build-debug",
       "configurePreset": "x64-Debug",
-      "jobs": 4
+      "jobs": "${CMAKE_HOST_SYSTEM_PROCESSOR_COUNT}"
+    },
+    {
+      "name": "build-release",
+      "configurePreset": "x64-Release",
+      "jobs": "${CMAKE_HOST_SYSTEM_PROCESSOR_COUNT}"
     }
   ],
   "testPresets": [
     {
-      "name": "test",
+      "name": "test-debug",
       "configurePreset": "x64-Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "test-release",
+      "configurePreset": "x64-Release",
       "output": {
         "outputOnFailure": true
       }
