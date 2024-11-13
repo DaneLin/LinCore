@@ -12,6 +12,8 @@
 #include <vk_descriptors.h>
 #include <vk_loader.h>
 
+#include "camera.h"
+
 struct ComputePushConstants {
 	glm::vec4 data1;
 	glm::vec4 data2;
@@ -227,5 +229,7 @@ private:
 	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
 
 	void update_scene();
+
+	Camera mainCamera;
 	
 };
