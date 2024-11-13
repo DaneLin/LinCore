@@ -109,6 +109,7 @@ void VulkanEngine::draw()
 	VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, VK_TRUE, UINT64_MAX));
 
     get_current_frame()._deletionQueue.flush();
+    get_current_frame()._frameDescriptors.clear_pools(_device);
 
 	VK_CHECK(vkResetFences(_device, 1, &get_current_frame()._renderFence));
 
@@ -127,8 +128,8 @@ void VulkanEngine::draw()
 	// begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know it may be recorded only once
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-    _drawExtent.width = std::min(_swapchainExtent.width, _drawImage.imageExtent.width) *renderScale;
-	_drawExtent.height = std::min(_swapchainExtent.height, _drawImage.imageExtent.height) * renderScale;
+    _drawExtent.width = static_cast<uint32_t>(std::min(_swapchainExtent.width, _drawImage.imageExtent.width) * renderScale);
+    _drawExtent.height = static_cast<uint32_t>(std::min(_swapchainExtent.height, _drawImage.imageExtent.height) * renderScale);
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
@@ -540,21 +541,9 @@ void VulkanEngine::init_descriptors()
     // allocate a descriptor set for our draw image
 	_drawImageDescriptor = _globalDescriptorAllocator.allocate(_device, _drawImageDescriptorLayout);
 
-	VkDescriptorImageInfo imgInfo{};
-	imgInfo.imageView = _drawImage.imageView;
-	imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-    VkWriteDescriptorSet drawImageWrite = {};
-    drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	drawImageWrite.pNext = nullptr;
-
-	drawImageWrite.dstSet = _drawImageDescriptor;
-	drawImageWrite.dstBinding = 0;
-	drawImageWrite.descriptorCount = 1;
-	drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-	drawImageWrite.pImageInfo = &imgInfo;
-
-	vkUpdateDescriptorSets(_device, 1, &drawImageWrite, 0, nullptr);
+    DescriptorWriter writer;
+    writer.write_image(0, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.update_set(_device, _drawImageDescriptor);
 
     //make sure both the descriptor allocator and the new layout get cleaned up properly
     _mainDeletionQueue.push_function([&]() {
@@ -562,6 +551,29 @@ void VulkanEngine::init_descriptors()
 
         vkDestroyDescriptorSetLayout(_device, _drawImageDescriptorLayout, nullptr);
         });
+
+    for (int i =0; i < FRAME_OVERLAP; i++) {
+        // create a descriptor pool
+        std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frameSizes = {
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4},
+        };
+
+        _frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
+        _frames[i]._frameDescriptors.init(_device, 1000, frameSizes);
+
+        _mainDeletionQueue.push_function([&, i]() {
+            _frames[i]._frameDescriptors.destroy_pools(_device);
+            });
+    }
+
+    {
+        DescriptorLayoutBuilder builder;
+        builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        _gpuSceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+    }
 }
 
 void VulkanEngine::init_pipelines()
@@ -589,12 +601,12 @@ void VulkanEngine::init_background_pipelines()
 	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_gradientPipelineLayout));
 
     VkShaderModule gradientShader;
-    if (!vkutil::load_shader_module("../shaders/gradient_color.comp.spv", _device, &gradientShader)) {
+    if (!vkutil::load_shader_module("shaders/gradient_color.comp.spv", _device, &gradientShader)) {
 		fmt::print("Error when loading compute shader module\n");
     }
 
     VkShaderModule skyShader;
-    if (!vkutil::load_shader_module("../shaders/sky.comp.spv", _device, &skyShader)) {
+    if (!vkutil::load_shader_module("shaders/sky.comp.spv", _device, &skyShader)) {
         fmt::print("Error when loading compute shader module\n");
     }
 
@@ -720,12 +732,12 @@ void VulkanEngine::init_imgui()
 void VulkanEngine::init_mesh_pipeline()
 {
     VkShaderModule triangleVertexShader;
-    if (!vkutil::load_shader_module("../shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
+    if (!vkutil::load_shader_module("shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
         fmt::print("Error when loading triangle vertex shader module\n");
     }
 
     VkShaderModule triangleFragmentShader;
-    if (!vkutil::load_shader_module("../shaders/colored_triangle.frag.spv", _device, &triangleFragmentShader)) {
+    if (!vkutil::load_shader_module("shaders/colored_triangle.frag.spv", _device, &triangleFragmentShader)) {
         fmt::print("Error when loading triangle fragment shader module\n");
     }
 
@@ -798,7 +810,7 @@ void VulkanEngine::init_default_data()
 
     rectangle = upload_mesh(rect_indices, rect_vertices);
 
-    testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
+    testMeshes = loadGltfMeshes(this, "assets/basicmesh.glb").value();
 
     //delete the rectangle data on engine shutdown
     _mainDeletionQueue.push_function([&]() {
@@ -918,6 +930,29 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
     scissor.extent.width = _drawExtent.width;
     scissor.extent.height = _drawExtent.height;
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    /*
+    	//allocate a new uniform buffer for the scene data
+	AllocatedBuffer gpuSceneDataBuffer = create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	//add it to the deletion queue of this frame so it gets deleted once its been used
+	get_current_frame()._deletionQueue.push_function([=, this]() {
+		destroy_buffer(gpuSceneDataBuffer);
+		});
+
+	//write the buffer
+	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
+	*sceneUniformData = sceneData;
+
+	//create a descriptor set that binds that buffer and update it
+	VkDescriptorSet globalDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _gpuSceneDataDescriptorLayout);
+
+	DescriptorWriter writer;
+	writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.update_set(_device, globalDescriptor);
+
+    */
+
 
     GPUDrawPushConstants pushConstants;
     glm::mat4 view = glm::translate(glm::vec3{ 0,0,-5 });

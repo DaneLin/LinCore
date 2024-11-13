@@ -48,14 +48,6 @@ struct DeletionQueue {
 	}
 };
 
-struct FrameData {
-	VkCommandPool _commandPool;
-	VkCommandBuffer _mainCommandBuffer;
-	VkSemaphore _swapchainSemaphore, _renderSemaphore;
-	VkFence _renderFence;
-
-	DeletionQueue _deletionQueue;
-};
 
 
 /// <summary>
@@ -77,6 +69,15 @@ struct Vertex {
 	glm::vec3 normal;
 	float uv_y;
 	glm::vec4 color;
+};
+
+struct GPUSceneData {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewproj;
+    glm::vec4 ambientColor;
+    glm::vec4 sunlightDirection; // w for sun power
+    glm::vec4 sunlightColor;
 };
 
 // holds the resources needed for a mesh

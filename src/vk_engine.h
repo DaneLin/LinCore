@@ -28,6 +28,17 @@ struct ComputeEffect {
 	ComputePushConstants data;
 };
 
+
+struct FrameData {
+	VkCommandPool _commandPool;
+	VkCommandBuffer _mainCommandBuffer;
+	VkSemaphore _swapchainSemaphore, _renderSemaphore;
+	VkFence _renderFence;
+
+	DeletionQueue _deletionQueue;
+	struct DescriptorAllocatorGrowable _frameDescriptors;
+};
+
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 
@@ -116,7 +127,10 @@ public:
 	GPUMeshBuffers rectangle;
 	
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
-	
+
+	GPUSceneData sceneData;
+
+	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 
 private:
 	void init_vulkan();

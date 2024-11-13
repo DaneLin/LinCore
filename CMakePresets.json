@@ -1,0 +1,33 @@
+﻿{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "x64-Debug",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "installDir": "${sourceDir}/out/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "environment": {
+        "INHERIT": "msvc_x64_x64"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build",
+      "configurePreset": "x64-Debug",
+      "jobs": 4
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test",
+      "configurePreset": "x64-Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
