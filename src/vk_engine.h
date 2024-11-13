@@ -39,6 +39,58 @@ struct FrameData {
 	struct DescriptorAllocatorGrowable _frameDescriptors;
 };
 
+
+struct GLTFMetallic_Roughness {
+	MaterialPipeline opaquePipeline;
+	MaterialPipeline transparentPipeline;
+
+	VkDescriptorSetLayout materialLayout;
+
+	struct MaterialConstants {
+		glm::vec4 colorFactors;
+		glm::vec4 metalRoughFactors;
+		// padding ,we need it anyway for uniform buffers
+		glm::vec4 extra[14];
+	};
+
+	struct MaterialResources {
+		AllocatedImage colorImage;
+		VkSampler colorSampler;
+		AllocatedImage metalRoughImage;
+		VkSampler metalRoughSampler;
+		VkBuffer dataBuffer;
+		uint32_t dataBufferOffset;
+	};
+
+	DescriptorWriter writer;
+
+	void build_pipelines(VulkanEngine* engine);
+	void clear_resources(VkDevice device);
+
+	MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
+};
+
+struct RenderObject {
+	uint32_t indexCount;
+	uint32_t firstIndex;
+	VkBuffer indexBuffer;
+
+	MaterialInstance* material;
+
+	glm::mat4 transform;
+	VkDeviceAddress vertexBufferAddress;
+};
+
+struct DrawContext {
+	std::vector<RenderObject> OpaqueSurfaces;
+};
+
+struct MeshNode : public Node {
+	std::shared_ptr<MeshAsset> mesh;
+
+	virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
+};
+
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 
@@ -98,7 +150,7 @@ public:
 	VkExtent2D _drawExtent;
 	float renderScale = 1.f;
 
-	DescriptorAllocator _globalDescriptorAllocator;
+	DescriptorAllocatorGrowable _globalDescriptorAllocator;
 
 	VkDescriptorSet _drawImageDescriptor;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
@@ -167,5 +219,13 @@ private:
 
 	VkSampler _default_sampler_linear;
 	VkSampler _default_sampler_nearest;
+
+	MaterialInstance _default_data;
+	GLTFMetallic_Roughness metal_rough_material;
+
+	DrawContext mainDrawContext;
+	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
+
+	void update_scene();
 	
 };

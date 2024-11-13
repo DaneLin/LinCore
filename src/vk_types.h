@@ -93,6 +93,56 @@ struct GPUDrawPushConstants {
 	VkDeviceAddress vertexBuffer;
 };
 
+/// <summary>
+/// This is the structs we need for the material data. 
+/// MaterialInstance will hold a raw pointer (non owning) into its MaterialPipeline which contains the real pipeline.
+/// It holds a descriptor set too.
+/// </summary>
+enum class MaterialPass : uint8_t {
+	MainColor,
+	Transparent,
+	Other
+};
+
+struct MaterialPipeline {
+	VkPipeline pipeline;
+	VkPipelineLayout layout;
+};
+
+struct MaterialInstance {
+	MaterialPipeline* pipeline;
+	VkDescriptorSet materialSet;
+	MaterialPass passType;
+};
+
+struct DrawContext;
+
+class IRenderable {
+	virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) = 0;
+};
+
+struct Node : public IRenderable {
+	std::weak_ptr<Node> parent;
+	std::vector<std::shared_ptr<Node>> children;
+
+	glm::mat4 localTransform;
+	glm::mat4 worldTransform;
+
+	void refresh_transform(const glm::mat4& parentMatrix) {
+		worldTransform = parentMatrix * localTransform;
+		for (auto child : children) {
+			child->refresh_transform(worldTransform);
+		}
+	}
+
+	virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) {
+		// draw children
+		for (auto& c : children) {
+			c->draw(topMatrix, ctx);
+		}
+	}
+};
+
 #define VK_CHECK(x)                                                     \
     do {                                                                \
         VkResult err = x;                                               \
