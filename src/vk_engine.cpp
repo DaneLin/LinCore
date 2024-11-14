@@ -20,6 +20,7 @@
 #include <glm/gtx/transform.hpp>
 
 #include <cvars.h>
+#include <logging.h>
 
 AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
 
@@ -27,7 +28,7 @@ VulkanEngine* loadedEngine = nullptr;
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
     std::array<glm::vec3, 8> corners{
@@ -71,6 +72,7 @@ bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
 
 void VulkanEngine::init()
 {
+    spdlog::set_pattern(LOGGER_FORMAT);
     // only one engine initialization is allowed with the application.
     assert(loadedEngine == nullptr);
     loadedEngine = this;
@@ -104,13 +106,15 @@ void VulkanEngine::init()
 
     init_default_data();
 
+    
+
     mainCamera.velocity = glm::vec3(0.f);
     mainCamera.position = glm::vec3(0, 0, 5);
 
     mainCamera.pitch = 0;
     mainCamera.yaw = 0;
 
-    std::string structurePath = { "assets/structure.glb" };
+    std::string structurePath = { "../assets/structure.glb" };
     auto structureFile = load_gltf(this, structurePath);
 
     assert(structureFile.has_value());
@@ -793,12 +797,12 @@ void VulkanEngine::init_background_pipelines()
 	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_gradientPipelineLayout));
 
     VkShaderModule gradientShader;
-    if (!vkutil::load_shader_module("shaders/gradient_color.comp.spv", _device, &gradientShader)) {
+    if (!vkutil::load_shader_module("../shaders/gradient_color.comp.spv", _device, &gradientShader)) {
 		fmt::print("Error when loading compute shader module\n");
     }
 
     VkShaderModule skyShader;
-    if (!vkutil::load_shader_module("shaders/sky.comp.spv", _device, &skyShader)) {
+    if (!vkutil::load_shader_module("../shaders/sky.comp.spv", _device, &skyShader)) {
         fmt::print("Error when loading compute shader module\n");
     }
 
@@ -924,12 +928,12 @@ void VulkanEngine::init_imgui()
 void VulkanEngine::init_mesh_pipeline()
 {
     VkShaderModule triangleVertexShader;
-    if (!vkutil::load_shader_module("shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
+    if (!vkutil::load_shader_module("../shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
         fmt::print("Error when loading triangle vertex shader module\n");
     }
 
     VkShaderModule triangleFragmentShader;
-    if (!vkutil::load_shader_module("shaders/tex_image.frag.spv", _device, &triangleFragmentShader)) {
+    if (!vkutil::load_shader_module("../shaders/tex_image.frag.spv", _device, &triangleFragmentShader)) {
         fmt::print("Error when loading triangle fragment shader module\n");
     }
 
@@ -980,7 +984,7 @@ void VulkanEngine::init_mesh_pipeline()
 
 void VulkanEngine::init_default_data()
 {
-    testMeshes = loadGltfMeshes(this, "assets/basicmesh.glb").value();
+    testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
 
     
 
@@ -1329,12 +1333,12 @@ void VulkanEngine::update_scene()
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
     VkShaderModule meshFragShader;
-    if (!vkutil::load_shader_module("shaders/mesh.frag.spv", engine->_device, &meshFragShader)) {
+    if (!vkutil::load_shader_module("../shaders/mesh.frag.spv", engine->_device, &meshFragShader)) {
 		fmt::print("Error when loading mesh fragment shader module\n");
     }
 
 	VkShaderModule meshVertShader;
-	if (!vkutil::load_shader_module("shaders/mesh.vert.spv", engine->_device, &meshVertShader)) {
+	if (!vkutil::load_shader_module("../shaders/mesh.vert.spv", engine->_device, &meshVertShader)) {
 		fmt::print("Error when loading mesh vertex shader module\n");
 	}
 
