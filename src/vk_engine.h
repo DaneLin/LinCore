@@ -12,6 +12,8 @@
 #include <vk_descriptors.h>
 #include <vk_loader.h>
 
+#include "vk_shaders.h"
+
 #include "camera.h"
 
 struct ComputePushConstants {
@@ -220,6 +222,9 @@ public:
 	std::unordered_map < std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 	EngineStats stats;
+
+	Shader gradientCS = {};
+	Program gradientProgram;
 
 private:
 	void init_vulkan();

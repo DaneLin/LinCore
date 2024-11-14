@@ -1,6 +1,6 @@
 ﻿//> includes
 #include "vk_engine.h"
-
+#include "config.h"
 #include <SDL.h>
 #include <SDL_vulkan.h>
 #define VMA_IMPLEMENTATION
@@ -22,6 +22,8 @@
 #include <cvars.h>
 #include <logging.h>
 
+#include <vk_shaders.h>
+
 AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
 
 VulkanEngine* loadedEngine = nullptr;
@@ -29,6 +31,10 @@ VulkanEngine* loadedEngine = nullptr;
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 
 constexpr bool bUseValidationLayers = false;
+
+std::vector<const char*> requiredExtensions = {
+    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+};
 
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
     std::array<glm::vec3, 8> corners{
@@ -565,6 +571,7 @@ void VulkanEngine::init_vulkan()
         .set_required_features_13(features)
         .set_required_features_12(features12)
         .set_surface(_surface)
+		.add_required_extensions(requiredExtensions)
         .select()
         .value();
     
@@ -796,6 +803,22 @@ void VulkanEngine::init_background_pipelines()
 
 	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_gradientPipelineLayout));
 
+    bool loadResult = false;
+
+    
+	loadResult = load_shader(gradientCS, _device, "", "../shaders/gradient_color.comp.spv");
+	assert(loadResult);
+
+    gradientProgram = create_program(_device, VK_PIPELINE_BIND_POINT_COMPUTE, { &gradientCS }, sizeof(ComputePushConstants));
+    //VkPipeline gradientPipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, gradientCS, gradientProgram.layout);
+    LOGI("update template created, handle: {}", reinterpret_cast<void*>(gradientProgram.updateTemplate));
+
+	_mainDeletionQueue.push_function([&]() {
+		//vkDestroyPipeline(_device, gradientPipeline, nullptr);
+		vkDestroyShaderModule(_device, gradientCS.module, nullptr);
+		destory_program(_device, gradientProgram);
+		});
+
     VkShaderModule gradientShader;
     if (!vkutil::load_shader_module("../shaders/gradient_color.comp.spv", _device, &gradientShader)) {
 		fmt::print("Error when loading compute shader module\n");
@@ -821,7 +844,7 @@ void VulkanEngine::init_background_pipelines()
     computePipelineCreateInfo.pNext = nullptr;
 
     ComputeEffect gradient;
-	gradient.layout = _gradientPipelineLayout;
+	gradient.layout = gradientProgram.layout;
     gradient.name = "gradient";
     gradient.data = {};
 
@@ -829,7 +852,8 @@ void VulkanEngine::init_background_pipelines()
     gradient.data.data1 = glm::vec4(1, 0, 0, 1);
     gradient.data.data2 = glm::vec4(0, 0, 1, 1);
 
-	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
+	//VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
+	gradient.pipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, gradientCS, gradientProgram.layout);
 
     // change the shader module only to create the skys shader
     computePipelineCreateInfo.stage.module = skyShader;
