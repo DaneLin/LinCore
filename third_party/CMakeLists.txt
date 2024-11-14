@@ -10,6 +10,10 @@ add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
+set(SPDLOG_FMT_EXTERNAL ON)
+add_subdirectory(spdlog)
+set_property(TARGET spdlog PROPERTY FOLDER "third_party")
+
 target_sources(vkbootstrap PRIVATE 
   vkbootstrap/VkBootstrap.h
   vkbootstrap/VkBootstrap.cpp
