@@ -1,54 +1,66 @@
-﻿{
+{
   "version": 3,
   "configurePresets": [
     {
-      "name": "x64-Debug",
+      "name": "windows-base",
+      "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/out/build/${presetName}",
       "installDir": "${sourceDir}/out/install/${presetName}",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug"
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
       },
-      "environment": {
-        "INHERIT": "msvc_x64_x64"
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
       }
     },
     {
-      "name": "x64-Release",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/out/build/${presetName}",
-      "installDir": "${sourceDir}/out/install/${presetName}",
+      "name": "x64-debug",
+      "displayName": "x64 Debug",
+      "inherits": "windows-base",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "x64-release",
+      "displayName": "x64 Release",
+      "inherits": "x64-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
-      },
-      "environment": {
-        "INHERIT": "msvc_x64_x64"
       }
     }
   ],
   "buildPresets": [
     {
       "name": "build-debug",
-      "configurePreset": "x64-Debug",
+      "configurePreset": "x64-debug",
       "jobs": "${CMAKE_HOST_SYSTEM_PROCESSOR_COUNT}"
     },
     {
       "name": "build-release",
-      "configurePreset": "x64-Release",
+      "configurePreset": "x64-release",
       "jobs": "${CMAKE_HOST_SYSTEM_PROCESSOR_COUNT}"
     }
   ],
   "testPresets": [
     {
       "name": "test-debug",
-      "configurePreset": "x64-Debug",
+      "configurePreset": "x64-debug",
       "output": {
         "outputOnFailure": true
       }
     },
     {
       "name": "test-release",
-      "configurePreset": "x64-Release",
+      "configurePreset": "x64-release",
       "output": {
         "outputOnFailure": true
       }

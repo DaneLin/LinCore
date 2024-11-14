@@ -2,6 +2,8 @@
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
+#include "imgui.h"
+
 constexpr float MAX_MOVING_SPEED = 10.f;
 constexpr float MIN_MOVING_SPEED = 0.1f;
 
@@ -22,6 +24,14 @@ glm::mat4 Camera::get_rotation_matrix()
 
 void Camera::process_sdl_event(SDL_Event& e)
 {
+	// 获取 ImGui IO 状态
+	ImGuiIO& io = ImGui::GetIO();
+
+	// 如果 ImGui 需要捕获键盘输入或鼠标输入，则不进行相机的事件处理
+	if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
+		return; // 如果 ImGui 正在捕获输入，直接返回，忽略相机控制
+	}
+
 	if (e.type == SDL_KEYDOWN) {
 		if (e.key.keysym.sym == SDLK_w) {
 			velocity.z = -1.f;

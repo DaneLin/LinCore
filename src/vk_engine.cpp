@@ -19,6 +19,10 @@
 #include <thread>
 #include <glm/gtx/transform.hpp>
 
+#include <cvars.h>
+
+AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
+
 VulkanEngine* loadedEngine = nullptr;
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
@@ -312,7 +316,24 @@ void VulkanEngine::run()
         ImGui::Text("update time %f ms", stats.sceneUpdateTime);
         ImGui::Text("triangles %i", stats.triangeCount);
         ImGui::Text("draws %i", stats.drawcallCount);
+
         ImGui::End();
+
+        if (ImGui::BeginMainMenuBar())
+        {
+
+            if (ImGui::BeginMenu("Debug"))
+            {
+                if (ImGui::BeginMenu("CVAR"))
+                {
+                    CVarSystem::Get()->DrawImguiEditor();
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
 
         //make imgui calculate internal draw structures
         ImGui::Render();
