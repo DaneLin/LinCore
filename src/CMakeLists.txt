@@ -17,7 +17,7 @@ add_executable (engine
   vk_loader.cpp
   camera.cpp
   camera.h
-  "logging.h" "cvars.cpp")
+  "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp")
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)

@@ -20,6 +20,22 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
+struct AllocatedBufferUntyped {
+	VkBuffer _buffer{};
+	VmaAllocation _allocation{};
+	VkDeviceSize _size{ 0 };
+	VkDescriptorBufferInfo get_info(VkDeviceSize offset = 0);
+};
+
+inline VkDescriptorBufferInfo AllocatedBufferUntyped::get_info(VkDeviceSize offset)
+{
+	VkDescriptorBufferInfo info;
+	info.buffer = _buffer;
+	info.offset = offset;
+	info.range = _size;
+	return info;
+}
+
 struct AllocatedImage {
 	VkImage image;
 	VkImageView imageView;
