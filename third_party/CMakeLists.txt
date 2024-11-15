@@ -3,7 +3,7 @@ find_package(Vulkan REQUIRED)
 add_library(vkbootstrap STATIC)
 add_library(glm INTERFACE)
 add_library(vma INTERFACE)
-
+add_library(volk STATIC)
 add_library(stb_image INTERFACE)
 add_subdirectory(simdjson)
 add_subdirectory(fastgltf)
@@ -13,6 +13,17 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 set(SPDLOG_FMT_EXTERNAL ON)
 add_subdirectory(spdlog)
 set_property(TARGET spdlog PROPERTY FOLDER "third_party")
+
+target_sources(volk PRIVATE
+	volk/volk.c
+	volk/volk.h
+)
+
+# 添加必要的包含路径
+target_include_directories(volk INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/volk)
+target_link_libraries(volk PUBLIC Vulkan::Vulkan)
+# 确保使用 Volk 时定义 VK_NO_PROTOTYPES
+target_compile_definitions(volk INTERFACE VK_NO_PROTOTYPES)
 
 target_sources(vkbootstrap PRIVATE 
   vkbootstrap/VkBootstrap.h

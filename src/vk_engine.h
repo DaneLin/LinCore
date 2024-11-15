@@ -28,6 +28,7 @@ struct ComputeEffect {
 
 	VkPipeline pipeline;
 	VkPipelineLayout layout;
+	VkDescriptorUpdateTemplate updateTemplate;
 
 	ComputePushConstants data;
 };
@@ -225,6 +226,8 @@ public:
 
 	Shader gradientCS = {};
 	Program gradientProgram;
+	Shader skyCS = {};
+	Program skyProgram;
 
 private:
 	void init_vulkan();

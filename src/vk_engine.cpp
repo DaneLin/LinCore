@@ -24,6 +24,7 @@
 
 #include <vk_shaders.h>
 
+
 AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
 
 VulkanEngine* loadedEngine = nullptr;
@@ -32,8 +33,10 @@ VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 
 constexpr bool bUseValidationLayers = false;
 
-std::vector<const char*> requiredExtensions = {
+const std::vector<const char*> requiredExtensions = {
+    VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+    
 };
 
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
@@ -580,6 +583,9 @@ void VulkanEngine::init_vulkan()
 
     vkb::Device vkbDevice = deviceBuilder.build().value();
 
+    volkLoadDevice(vkbDevice.device);
+	
+
     // get the vkdevice handle used in the rest of a vulkan application
     _device = vkbDevice.device;
     _chosenGPU = physicalDevice.physical_device;
@@ -808,15 +814,19 @@ void VulkanEngine::init_background_pipelines()
     
 	loadResult = load_shader(gradientCS, _device, "", "../shaders/gradient_color.comp.spv");
 	assert(loadResult);
+    loadResult = load_shader(skyCS, _device, "", "../shaders/sky.comp.spv");
+    assert(loadResult);
 
     gradientProgram = create_program(_device, VK_PIPELINE_BIND_POINT_COMPUTE, { &gradientCS }, sizeof(ComputePushConstants));
+	skyProgram = create_program(_device, VK_PIPELINE_BIND_POINT_COMPUTE, { &skyCS }, sizeof(ComputePushConstants));
     //VkPipeline gradientPipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, gradientCS, gradientProgram.layout);
-    LOGI("update template created, handle: {}", reinterpret_cast<void*>(gradientProgram.updateTemplate));
 
 	_mainDeletionQueue.push_function([&]() {
 		//vkDestroyPipeline(_device, gradientPipeline, nullptr);
 		vkDestroyShaderModule(_device, gradientCS.module, nullptr);
 		destory_program(_device, gradientProgram);
+        vkDestroyShaderModule(_device, skyCS.module, nullptr);
+		destory_program(_device, skyProgram);
 		});
 
     VkShaderModule gradientShader;
@@ -851,6 +861,7 @@ void VulkanEngine::init_background_pipelines()
     // default color
     gradient.data.data1 = glm::vec4(1, 0, 0, 1);
     gradient.data.data2 = glm::vec4(0, 0, 1, 1);
+    gradient.updateTemplate = gradientProgram.updateTemplate;
 
 	//VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
 	gradient.pipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, gradientCS, gradientProgram.layout);
@@ -859,13 +870,15 @@ void VulkanEngine::init_background_pipelines()
     computePipelineCreateInfo.stage.module = skyShader;
 
     ComputeEffect sky;
-	sky.layout = _gradientPipelineLayout;
+	sky.layout = skyProgram.layout;
     sky.name = "sky";
     sky.data = {};
     // default sky parameters
     sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
+	sky.updateTemplate = skyProgram.updateTemplate;
 
-	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
+	//VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
+	sky.pipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, skyCS, skyProgram.layout);
 
 	backgroundEffects.push_back(gradient);
 	backgroundEffects.push_back(sky);
@@ -1156,7 +1169,11 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
 
     // bind the descriptor set containing the draw image for the compute pipeline
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.layout, 0, 1, &_drawImageDescriptor, 0, nullptr);
+	//vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.layout, 0, 1, &_drawImageDescriptor, 0, nullptr);
+
+    DescriptorInfo drawImageDesc(_drawImage.imageView, VK_IMAGE_LAYOUT_GENERAL);
+    DescriptorInfo descs[] = { drawImageDesc };
+	vkCmdPushDescriptorSetWithTemplateKHR(cmd, effect.updateTemplate, effect.layout,0, descs);
 
     vkCmdPushConstants(cmd, effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 

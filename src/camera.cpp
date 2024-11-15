@@ -1,4 +1,4 @@
-#include "camera.h"
+ï»¿#include "camera.h"
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
@@ -24,12 +24,12 @@ glm::mat4 Camera::get_rotation_matrix()
 
 void Camera::process_sdl_event(SDL_Event& e)
 {
-	// »ñÈ¡ ImGui IO ×´Ì¬
+	// è·å– ImGui IO çŠ¶æ€
 	ImGuiIO& io = ImGui::GetIO();
 
-	// Èç¹û ImGui ĞèÒª²¶»ñ¼üÅÌÊäÈë»òÊó±êÊäÈë£¬Ôò²»½øĞĞÏà»úµÄÊÂ¼ş´¦Àí
+	// å¦‚æœ ImGui éœ€è¦æ•è·é”®ç›˜è¾“å…¥æˆ–é¼ æ ‡è¾“å…¥ï¼Œåˆ™ä¸è¿›è¡Œç›¸æœºçš„äº‹ä»¶å¤„ç†
 	if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
-		return; // Èç¹û ImGui ÕıÔÚ²¶»ñÊäÈë£¬Ö±½Ó·µ»Ø£¬ºöÂÔÏà»ú¿ØÖÆ
+		return; // å¦‚æœ ImGui æ­£åœ¨æ•è·è¾“å…¥ï¼Œç›´æ¥è¿”å›ï¼Œå¿½ç•¥ç›¸æœºæ§åˆ¶
 	}
 
 	if (e.type == SDL_KEYDOWN) {
@@ -66,21 +66,21 @@ void Camera::process_sdl_event(SDL_Event& e)
 
 	if (e.type == SDL_MOUSEMOTION) {
 		
-		// ¼ì²éÓÒ¼üÊÇ·ñ°´ÏÂ
+		// æ£€æŸ¥å³é”®æ˜¯å¦æŒ‰ä¸‹
 		if (e.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-			// Ö»ÓĞÓÒ¼ü°´ÏÂÊ±²Å¸üĞÂÊÓ½Ç
+			// åªæœ‰å³é”®æŒ‰ä¸‹æ—¶æ‰æ›´æ–°è§†è§’
 			yaw += e.motion.xrel * 0.001f;
 			pitch -= e.motion.yrel * 0.001f;
 		}
 	}
 
-	// ¼àÌıÊó±ê¹öÂÖÊÂ¼şÀ´µ÷ÕûËÙ¶È
+	// ç›‘å¬é¼ æ ‡æ»šè½®äº‹ä»¶æ¥è°ƒæ•´é€Ÿåº¦
 	if (e.type == SDL_MOUSEWHEEL) {
-		if (e.wheel.y > 0) { // ¹öÂÖÏòÉÏ¹ö¶¯£¬Ôö¼ÓËÙ¶È
-			speedFactor = std::min(MAX_MOVING_SPEED, speedFactor + 0.1f); // È·±£ËÙ¶È²»»á³¬¹ı MAX_MOVING_SPEED
+		if (e.wheel.y > 0) { // æ»šè½®å‘ä¸Šæ»šåŠ¨ï¼Œå¢åŠ é€Ÿåº¦
+			speedFactor = std::min(MAX_MOVING_SPEED, speedFactor + 0.1f); // ç¡®ä¿é€Ÿåº¦ä¸ä¼šè¶…è¿‡ MAX_MOVING_SPEED
 		}
-		else if (e.wheel.y < 0) { // ¹öÂÖÏòÏÂ¹ö¶¯£¬¼õÉÙËÙ¶È
-			speedFactor = std::max(MIN_MOVING_SPEED, speedFactor - 0.1f); // È·±£ËÙ¶È²»»áµÍÓÚ MIN_MOVING_SPEED
+		else if (e.wheel.y < 0) { // æ»šè½®å‘ä¸‹æ»šåŠ¨ï¼Œå‡å°‘é€Ÿåº¦
+			speedFactor = std::max(MIN_MOVING_SPEED, speedFactor - 0.1f); // ç¡®ä¿é€Ÿåº¦ä¸ä¼šä½äº MIN_MOVING_SPEED
 
 		}
 	}
