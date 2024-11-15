@@ -12,8 +12,6 @@
 #include <vk_descriptors.h>
 #include <vk_loader.h>
 
-#include "vk_shaders.h"
-
 #include "camera.h"
 
 struct ComputePushConstants {
@@ -25,12 +23,16 @@ struct ComputePushConstants {
 
 struct ComputeEffect {
 	const char* name;
-
 	VkPipeline pipeline;
-	VkPipelineLayout layout;
-	VkDescriptorUpdateTemplate updateTemplate;
-
+	Program program;
 	ComputePushConstants data;
+};
+
+struct MeshRenderPass
+{
+	const char* name;
+	Program program;
+	VkPipeline pipeline;
 };
 
 
@@ -184,8 +186,7 @@ public:
 
 	GPUMeshBuffers upload_mesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
-	VkPipelineLayout _meshPipelineLayout;
-	VkPipeline _meshPipeline;
+	MeshRenderPass _meshRenderPass;
 
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
@@ -197,15 +198,16 @@ public:
 	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
 	void destroy_image(const AllocatedImage& image);
 
-	VkDescriptorSetLayout _single_image_descriptor_layout;
 
 	AllocatedImage _white_image;
 	AllocatedImage _black_image;
 	AllocatedImage _grey_image;
 	AllocatedImage _error_checker_board_image;
 
-	VkSampler _default_sampler_linear;
-	VkSampler _default_sampler_nearest;
+	struct {
+		VkSampler linear;
+		VkSampler nearest;
+	}_default_samplers;
 
 	MaterialInstance _default_data;
 	GLTFMetallic_Roughness metal_rough_material;
@@ -220,11 +222,6 @@ public:
 	std::unordered_map < std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 	EngineStats stats;
-
-	Shader gradientCS = {};
-	Program gradientProgram;
-	Shader skyCS = {};
-	Program skyProgram;
 
 private:
 	void init_vulkan();
@@ -246,7 +243,4 @@ private:
 	void draw_background(VkCommandBuffer cmd);
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void draw_geometry(VkCommandBuffer cmd);
-
-	
-	
 };

@@ -364,9 +364,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> load_gltf(VulkanEngine* engine, std::
 		GLTFMetallic_Roughness::MaterialResources materialResources;
 		// TODO: Replace with real images
 		materialResources.colorImage = engine->_white_image;
-		materialResources.colorSampler = engine->_default_sampler_linear;
+		materialResources.colorSampler = engine->_default_samplers.linear;
 		materialResources.metalRoughImage = engine->_white_image;
-		materialResources.metalRoughSampler = engine->_default_sampler_linear;
+		materialResources.metalRoughSampler = engine->_default_samplers.linear;
 
 		materialResources.dataBuffer = file.materialDataBuffer.buffer;
 		materialResources.dataBufferOffset = dataIndex * sizeof(GLTFMetallic_Roughness::MaterialConstants);

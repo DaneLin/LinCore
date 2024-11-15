@@ -120,6 +120,21 @@ enum class MaterialPass : uint8_t {
 	Other
 };
 
+struct Program {
+	VkPipelineBindPoint bindpoint;
+	VkPipelineLayout layout;
+	VkDescriptorSetLayout setLayout;
+	VkDescriptorUpdateTemplate updateTemplate;
+	VkShaderStageFlags pushConstantStages;
+
+	void destroy(VkDevice device) {
+		vkDestroyPipelineLayout(device, layout, nullptr);
+		vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
+		vkDestroyDescriptorUpdateTemplate(device, updateTemplate, nullptr);
+	}
+};
+
+
 struct MaterialPipeline {
 	VkPipeline pipeline;
 	VkPipelineLayout layout;
@@ -158,6 +173,8 @@ struct Node : public IRenderable {
 		}
 	}
 };
+
+
 
 #define VK_CHECK(x)                                                     \
     do {                                                                \

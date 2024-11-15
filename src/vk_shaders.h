@@ -1,6 +1,8 @@
 #pragma once
 
 #include "volk.h"
+#include "vk_types.h"
+#include "vk_engine.h"
 
 struct Shader {
 	VkShaderModule module;
@@ -15,23 +17,12 @@ struct Shader {
 
 	bool usesPushConstants;
 	bool usesDescriptorArray;
+
+	~Shader()
+	{
+		vkDestroyShaderModule(VulkanEngine::Get()._device, module, nullptr);
+	}
 };
-
-struct Program {
-	VkPipelineBindPoint bindpoint;
-	VkPipelineLayout layout;
-	VkDescriptorSetLayout setLayout;
-	VkDescriptorUpdateTemplate updateTemplate;
-	VkShaderStageFlags pushConstantStages;
-};
-
-static void destory_program(VkDevice device, Program& program) {
-	vkDestroyDescriptorUpdateTemplate(device, program.updateTemplate, nullptr);
-	vkDestroyPipelineLayout(device, program.layout, nullptr);
-	vkDestroyDescriptorSetLayout(device, program.setLayout, nullptr);
-
-	
-}
 
 bool load_shader(Shader& shader, VkDevice device, const char* base, const char* path);
 
