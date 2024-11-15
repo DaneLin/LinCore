@@ -44,6 +44,15 @@ float StableStarField( in vec2 vSamplePos, float fThreshhold )
 	return StarVal;
 }
 
+//push constants block
+layout( push_constant ) uniform constants
+{
+ vec4 data1;
+ vec4 data2;
+ vec4 data3;
+ vec4 data4;
+} PushConstants;
+
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     vec2 iResolution = imageSize(image);

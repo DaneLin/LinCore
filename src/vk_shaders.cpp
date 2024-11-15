@@ -359,7 +359,6 @@ static VkDescriptorUpdateTemplate create_update_template(VkDevice device, VkPipe
 
 	VkDescriptorUpdateTemplate updateTemplate = 0;
 	VK_CHECK(vkCreateDescriptorUpdateTemplate(device, &createInfo, 0, &updateTemplate));
-	LOGI("update template created, handle: {}", reinterpret_cast<void*>(updateTemplate));
 	return updateTemplate;
 }
 
@@ -551,7 +550,6 @@ Program create_program(VkDevice device, VkPipelineBindPoint bindPoint, Shaders s
 
 	program.updateTemplate = create_update_template(device, bindPoint, program.layout, shaders);
 	assert(program.updateTemplate);
-	LOGI("update template created, handle: {}", reinterpret_cast<void*>(program.updateTemplate));
 	
 
 	program.pushConstantStages = pushConstantStages;

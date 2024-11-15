@@ -19,8 +19,6 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 	AllocatedImage newImage{};
 	int width, height, nrChannels;
 
-	LOGI("Starting image load...");
-
 	std::visit(
 		fastgltf::visitor{
 			[](auto& arg) {},
@@ -29,12 +27,10 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 				assert(filePath.uri.isLocalPath()); // 只支持本地文件
 
 				const std::string path(filePath.uri.path().begin(), filePath.uri.path().end());
-				LOGI("Loading image from file path: {}", path);
+
 
 				unsigned char* data = stbi_load(path.c_str(), &width, &height, &nrChannels, 4);
 				if (data) {
-					LOGI("Image loaded from file successfully with dimensions: {}x{} and {} channels.", width, height, nrChannels);
-
 					VkExtent3D imagesize;
 					imagesize.width = width;
 					imagesize.height = height;
@@ -48,16 +44,12 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 				}
 			},
 			[&](fastgltf::sources::Vector& vector) {
-				LOGI("Loading image from memory vector, byte size: {}", vector.bytes.size());
-
 				unsigned char* data = stbi_load_from_memory(
 					reinterpret_cast<const stbi_uc*>(vector.bytes.data()),
 					static_cast<int>(vector.bytes.size()),
 					&width, &height, &nrChannels, 4
 				);
 				if (data) {
-					LOGI("Image loaded from memory vector successfully with dimensions: {}x{} and {} channels.", width, height, nrChannels);
-
 					VkExtent3D imagesize;
 					imagesize.width = width;
 					imagesize.height = height;
@@ -74,8 +66,6 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 				auto& bufferView = asset.bufferViews[view.bufferViewIndex];
 				auto& buffer = asset.buffers[bufferView.bufferIndex];
 
-				LOGI("Loading image from buffer view with offset: {} and length: {}", bufferView.byteOffset, bufferView.byteLength);
-
 				std::visit(fastgltf::visitor {
 					[](auto& arg) {},
 					[&](fastgltf::sources::Array& vector) {
@@ -85,7 +75,6 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 							&width, &height, &nrChannels, 4
 						);
 						if (data) {
-							LOGI("Image loaded from buffer view successfully with dimensions: {}x{} and {} channels.", width, height, nrChannels);
 
 							VkExtent3D imagesize;
 							imagesize.width = width;
@@ -106,11 +95,10 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 	);
 
 	if (newImage.image == VK_NULL_HANDLE) {
-		LOGE("Image load failed, returning empty optional.");
+		LOGE("{} Image load failed, returning empty optional.",image.name );
 		return {};
 	}
 	else {
-		LOGI("Image loaded and created successfully, returning AllocatedImage.");
 		return newImage;
 	}
 }
@@ -151,23 +139,19 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
 
 std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanEngine* engine, std::filesystem::path filePath)
 {
-	std::cout << "Loading GLTF: " << filePath << std::endl;
-
-	fastgltf::GltfDataBuffer data;
-
-	auto ret = data.FromPath(filePath);
+	LOGI("Loading GLTF: {}", filePath.string());
 
 	constexpr auto gltfOptions = fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers;
 
 	fastgltf::Asset gltf;
 	fastgltf::Parser parser{};
 
-	auto load = parser.loadGltfBinary(ret.get(), filePath.parent_path(), gltfOptions);
+	auto load = parser.loadGltfBinary(fastgltf::GltfDataBuffer::FromPath(filePath).get(), filePath.parent_path(), gltfOptions);
 	if (load) {
 		gltf = std::move(load.get());
 	}
 	else {
-		fmt::print("Failed to load gltf: {} \n", fastgltf::to_underlying(load.error()));
+		LOGE("Failed to load gltf: {}", fastgltf::to_underlying(load.error()));
 		return {};
 	}
 
@@ -286,7 +270,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> load_gltf(VulkanEngine* engine, std::
 			gltf = std::move(load.get());
 		}
 		else {
-			fmt::print("Failed to load gltf: {} \n", fastgltf::to_underlying(load.error()));
+			LOGE("Failed to load gltf: {}", fastgltf::to_underlying(load.error()));
 			return {};
 		}
 	}
@@ -296,7 +280,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> load_gltf(VulkanEngine* engine, std::
 			gltf = std::move(load.get());
 		}
 		else {
-			fmt::print("Failed to load gltf: {} \n", fastgltf::to_underlying(load.error()));
+			LOGE("Failed to load gltf: {}", fastgltf::to_underlying(load.error()));
 			return {};
 		}
 	}

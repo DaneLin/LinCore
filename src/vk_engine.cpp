@@ -24,6 +24,8 @@
 
 #include <vk_shaders.h>
 
+#include<volk.h>
+
 
 AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
 
@@ -31,12 +33,16 @@ VulkanEngine* loadedEngine = nullptr;
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 
+#if NDEBUG
 constexpr bool bUseValidationLayers = false;
+#else
+constexpr bool bUseValidationLayers = true;
+#endif
 
 const std::vector<const char*> requiredExtensions = {
-    VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-    
+    VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+    VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
 };
 
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
@@ -313,7 +319,7 @@ void VulkanEngine::run()
 
             ImGui::Text("Selected effect: ", selected.name);
 
-			ImGui::SliderInt("Effect Index: ", &currentBackgroundEffect, 0, backgroundEffects.size() - 1);
+			ImGui::SliderInt("Effect Index: ", &currentBackgroundEffect, 0, static_cast<int>(backgroundEffects.size() - 1));
 
             ImGui::InputFloat4("data1", (float*)&selected.data.data1);
             ImGui::InputFloat4("data2", (float*)&selected.data.data2);
@@ -367,7 +373,7 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
 	VK_CHECK(vkResetFences(_device, 1, &_immFence));
 	VK_CHECK(vkResetCommandBuffer(_immCommandBuffer, 0));
 
-	VkCommandBuffer cmd = _immCommandBuffer;
+	VkCommandBuffer& cmd = _immCommandBuffer;
 
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
@@ -379,6 +385,7 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
 
 	VkCommandBufferSubmitInfo cmdInfo = vkinit::command_buffer_submit_info(cmd);
 	VkSubmitInfo2 submitInfo = vkinit::submit_info(&cmdInfo, nullptr, nullptr);
+
 
 	VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submitInfo, _immFence));
 
@@ -537,6 +544,10 @@ void VulkanEngine::destroy_image(const AllocatedImage& image)
 
 void VulkanEngine::init_vulkan()
 {
+    if (volkInitialize() != VK_SUCCESS) {
+        LOGE("Failed to initialize volk");
+        return;
+    }
     vkb::InstanceBuilder builder;
 
     // make the vulkan instance with basic debug features
@@ -546,13 +557,76 @@ void VulkanEngine::init_vulkan()
         .require_api_version(1, 3, 0)
         .build();
 
+    if (!inst_ret.has_value()) {
+		LOGE("Failed to create Vulkan instance: {}", inst_ret.error().message());
+		return;
+    }
     vkb::Instance vkb_inst = inst_ret.value();
 
     // grab the instance
     _instance = vkb_inst.instance;
     _debug_messenger = vkb_inst.debug_messenger;
 
+    volkLoadInstance(_instance);
+
     SDL_Vulkan_CreateSurface(_window, _instance, &_surface);
+
+    // 获取物理设备数量
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr);
+
+    if (deviceCount == 0) {
+        LOGE("Failed to find GPUs with Vulkan support!");
+        vkDestroyInstance(_instance, nullptr);
+        return;
+    }
+    // 获取所有物理设备
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(_instance, &deviceCount, devices.data());
+
+    LOGI("Found {} GPU(s) with Vulkan support:", deviceCount);
+
+    // 输出每个设备的信息以及其支持的扩展
+    for (const auto& device : devices) {
+        VkPhysicalDeviceProperties deviceProperties;
+        vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+        // 输出设备名称和类型
+        LOGI("GPU: {}", deviceProperties.deviceName);
+        LOGI("    - Type: {}", deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated" :
+            deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? "Discrete" :
+            deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ? "Virtual" :
+            deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "CPU" : "Other");
+
+        // 输出该设备支持的扩展
+        // 获取设备支持的扩展数量
+        uint32_t extensionCount = 0;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+        if (extensionCount == 0) {
+            LOGW("This device does not support any Vulkan extensions.");
+            continue;
+        }
+
+        // 分配存储扩展属性的空间
+        std::vector<VkExtensionProperties> extensions(extensionCount);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, extensions.data());
+
+        // Check if required extensions are supported
+        for (const char* extension : requiredExtensions) {
+            bool found = false;
+            for (const auto& ext : extensions) {
+                if (strcmp(extension, ext.extensionName) == 0) {
+                    found = true;
+					LOGI("    - {} (Version: {})", ext.extensionName, ext.specVersion);
+                    break;
+                }
+            }
+            if (!found) {
+                LOGE("Extension {} is not supported!", extension);
+            }
+        }
+    }
 
     // vulkan 1.3 features
     VkPhysicalDeviceVulkan13Features features{
@@ -560,12 +634,13 @@ void VulkanEngine::init_vulkan()
     };
     features.dynamicRendering = true;
     features.synchronization2 = true;
+   
 
     //vulkan 1.2 features
     VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
     features12.bufferDeviceAddress = true;
     features12.descriptorIndexing = true;
-
+    
 	// use vkbootstrap to select a gpu
 	// we want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
     vkb::PhysicalDeviceSelector selector{ vkb_inst };
@@ -581,29 +656,50 @@ void VulkanEngine::init_vulkan()
     // create the final vulkan device
     vkb::DeviceBuilder deviceBuilder{ physicalDevice };
 
-    vkb::Device vkbDevice = deviceBuilder.build().value();
-
-    volkLoadDevice(vkbDevice.device);
-	
+	auto deviceBuilderRet = deviceBuilder.build();
+	if (!deviceBuilderRet.has_value()) {
+		LOGE("Failed to create Vulkan device: {}", deviceBuilderRet.error().message());
+		return;
+	}
+    vkb::Device vkbDevice = deviceBuilderRet.value();
 
     // get the vkdevice handle used in the rest of a vulkan application
     _device = vkbDevice.device;
+    volkLoadDevice(_device);
     _chosenGPU = physicalDevice.physical_device;
 
-	_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
+    VkPhysicalDeviceProperties deviceProperties;
+    vkGetPhysicalDeviceProperties(_chosenGPU, &deviceProperties);
+
+    LOGI("Vulkan API Version: {}.{}.{}",
+        VK_VERSION_MAJOR(deviceProperties.apiVersion),
+        VK_VERSION_MINOR(deviceProperties.apiVersion),
+        VK_VERSION_PATCH(deviceProperties.apiVersion));
+
+    auto graphicsQueueResult = vkbDevice.get_queue(vkb::QueueType::graphics);
+	if (!graphicsQueueResult.has_value()) {
+		LOGE("Failed to find a graphics queue!");
+		return;
+	}
+	_graphicsQueue = graphicsQueueResult.value();
 	_graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
+    VmaVulkanFunctions vulkanFunctions = {};
+    vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
     // Init the memory allocator
     VmaAllocatorCreateInfo allocatorInfo = {};
 	allocatorInfo.physicalDevice = _chosenGPU;
 	allocatorInfo.device = _device;
 	allocatorInfo.instance = _instance;
+	allocatorInfo.pVulkanFunctions = &vulkanFunctions;
     allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     vmaCreateAllocator(&allocatorInfo, &_allocator);
 
 	_mainDeletionQueue.push_function([&]() {
 		vmaDestroyAllocator(_allocator);
 		});
+
 }
 
 void VulkanEngine::init_swapchain()
@@ -793,25 +889,7 @@ void VulkanEngine::init_pipelines()
 
 void VulkanEngine::init_background_pipelines()
 {
-    VkPipelineLayoutCreateInfo computeLayout{};
-	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	computeLayout.setLayoutCount = 1;
-	computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
-    computeLayout.pNext = nullptr;
-
-    VkPushConstantRange pushConstant{};
-    pushConstant.offset = 0;
-    pushConstant.size = sizeof(ComputePushConstants);
-    pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-    computeLayout.pPushConstantRanges = &pushConstant;
-    computeLayout.pushConstantRangeCount = 1;
-
-	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_gradientPipelineLayout));
-
     bool loadResult = false;
-
-    
 	loadResult = load_shader(gradientCS, _device, "", "../shaders/gradient_color.comp.spv");
 	assert(loadResult);
     loadResult = load_shader(skyCS, _device, "", "../shaders/sky.comp.spv");
@@ -819,81 +897,43 @@ void VulkanEngine::init_background_pipelines()
 
     gradientProgram = create_program(_device, VK_PIPELINE_BIND_POINT_COMPUTE, { &gradientCS }, sizeof(ComputePushConstants));
 	skyProgram = create_program(_device, VK_PIPELINE_BIND_POINT_COMPUTE, { &skyCS }, sizeof(ComputePushConstants));
-    //VkPipeline gradientPipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, gradientCS, gradientProgram.layout);
 
-	_mainDeletionQueue.push_function([&]() {
-		//vkDestroyPipeline(_device, gradientPipeline, nullptr);
-		vkDestroyShaderModule(_device, gradientCS.module, nullptr);
-		destory_program(_device, gradientProgram);
-        vkDestroyShaderModule(_device, skyCS.module, nullptr);
-		destory_program(_device, skyProgram);
-		});
-
-    VkShaderModule gradientShader;
-    if (!vkutil::load_shader_module("../shaders/gradient_color.comp.spv", _device, &gradientShader)) {
-		fmt::print("Error when loading compute shader module\n");
-    }
-
-    VkShaderModule skyShader;
-    if (!vkutil::load_shader_module("../shaders/sky.comp.spv", _device, &skyShader)) {
-        fmt::print("Error when loading compute shader module\n");
-    }
-
-
-    VkPipelineShaderStageCreateInfo stageInfo{};
-	stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stageInfo.pNext = nullptr;
-	stageInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageInfo.module = gradientShader;
-	stageInfo.pName = "main";
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo{};
-	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.stage = stageInfo;
-	computePipelineCreateInfo.layout = _gradientPipelineLayout;
-    computePipelineCreateInfo.pNext = nullptr;
-
-    ComputeEffect gradient;
+    ComputeEffect gradient{};
 	gradient.layout = gradientProgram.layout;
     gradient.name = "gradient";
     gradient.data = {};
-
-    // default color
     gradient.data.data1 = glm::vec4(1, 0, 0, 1);
     gradient.data.data2 = glm::vec4(0, 0, 1, 1);
     gradient.updateTemplate = gradientProgram.updateTemplate;
-
-	//VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
 	gradient.pipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, gradientCS, gradientProgram.layout);
 
-    // change the shader module only to create the skys shader
-    computePipelineCreateInfo.stage.module = skyShader;
 
-    ComputeEffect sky;
+    ComputeEffect sky{};
 	sky.layout = skyProgram.layout;
     sky.name = "sky";
     sky.data = {};
-    // default sky parameters
     sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
 	sky.updateTemplate = skyProgram.updateTemplate;
-
-	//VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
 	sky.pipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, skyCS, skyProgram.layout);
 
 	backgroundEffects.push_back(gradient);
 	backgroundEffects.push_back(sky);
 
+    _mainDeletionQueue.push_function([&]() {
+        //vkDestroyPipeline(_device, gradientPipeline, nullptr);
+        vkDestroyShaderModule(_device, gradientCS.module, nullptr);
+        destory_program(_device, gradientProgram);
+        vkDestroyShaderModule(_device, skyCS.module, nullptr);
+        destory_program(_device, skyProgram);
 
+        for (auto& effect : backgroundEffects) {
+			vkDestroyPipeline(_device, effect.pipeline, nullptr);
+        }
+        });
+}
 
-	vkDestroyShaderModule(_device, gradientShader, nullptr);
-    vkDestroyShaderModule(_device, skyShader, nullptr);
-
-	_mainDeletionQueue.push_function([=]() {
-        vkDestroyPipelineLayout(_device, _gradientPipelineLayout, nullptr);
-		vkDestroyPipeline(_device, sky.pipeline, nullptr);
-        vkDestroyPipeline(_device, gradient.pipeline, nullptr);
-		});
-
+PFN_vkVoidFunction imgui_load_func(const char* funtion_name, void* user_data) {
+    return vkGetInstanceProcAddr(static_cast<VkInstance>(user_data), funtion_name);
 }
 
 void VulkanEngine::init_imgui()
@@ -950,6 +990,10 @@ void VulkanEngine::init_imgui()
 
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 
+    if (!ImGui_ImplVulkan_LoadFunctions(imgui_load_func, _instance)) {
+        throw std::runtime_error("Failed to load imgui functions");
+    }
+
     ImGui_ImplVulkan_Init(&init_info);
 
     ImGui_ImplVulkan_CreateFontsTexture();
@@ -966,12 +1010,12 @@ void VulkanEngine::init_mesh_pipeline()
 {
     VkShaderModule triangleVertexShader;
     if (!vkutil::load_shader_module("../shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
-        fmt::print("Error when loading triangle vertex shader module\n");
+		LOGE("Error when loading triangle vertex shader module");
     }
 
     VkShaderModule triangleFragmentShader;
     if (!vkutil::load_shader_module("../shaders/tex_image.frag.spv", _device, &triangleFragmentShader)) {
-        fmt::print("Error when loading triangle fragment shader module\n");
+		LOGE("Error when loading triangle fragment shader module");
     }
 
     VkPushConstantRange bufferRange{};
@@ -1022,8 +1066,6 @@ void VulkanEngine::init_mesh_pipeline()
 void VulkanEngine::init_default_data()
 {
     testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
-
-    
 
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
     _white_image = create_image((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -1161,15 +1203,9 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
 
     VkImageSubresourceRange subresourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
 
-    // clear image
-    //vkCmdClearColorImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &subresourceRange);
-
     ComputeEffect& effect = backgroundEffects[currentBackgroundEffect];
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-
-    // bind the descriptor set containing the draw image for the compute pipeline
-	//vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.layout, 0, 1, &_drawImageDescriptor, 0, nullptr);
 
     DescriptorInfo drawImageDesc(_drawImage.imageView, VK_IMAGE_LAYOUT_GENERAL);
     DescriptorInfo descs[] = { drawImageDesc };
@@ -1178,7 +1214,7 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
     vkCmdPushConstants(cmd, effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 
     // execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
-    vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
+    vkCmdDispatch(cmd, static_cast<uint32_t>(std::ceil(_drawExtent.width / 16.0)), static_cast<uint32_t>(std::ceil(_drawExtent.height / 16.0)), 1);
 }
 
 void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView)
@@ -1274,8 +1310,8 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
                 VkViewport viewport = {};
                 viewport.x = 0;
                 viewport.y = 0;
-                viewport.width = _drawExtent.width;
-                viewport.height = _drawExtent.height;
+                viewport.width = static_cast<float>(_drawExtent.width);
+                viewport.height = static_cast<float>(_drawExtent.height);
                 viewport.minDepth = 0.f;
                 viewport.maxDepth = 1.f;
                 vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -1356,7 +1392,7 @@ void VulkanEngine::update_scene()
 
     for (int x = -3; x < 3; x++) {
 
-        glm::mat4 scale = glm::scale(glm::vec3{ 0.2 });
+        glm::mat4 scale = glm::scale(glm::vec3{ 0.2f });
         glm::mat4 translation = glm::translate(glm::vec3{ x, 1, 0 });
 
         loadedNodes["Cube"]->draw(translation * scale, mainDrawContext);

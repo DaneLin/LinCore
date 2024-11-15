@@ -102,6 +102,7 @@ VkSubmitInfo2 vkinit::submit_info(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSub
 
     info.commandBufferInfoCount = 1;
     info.pCommandBufferInfos = cmd;
+    
 
     return info;
 }

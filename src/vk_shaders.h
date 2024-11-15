@@ -1,5 +1,7 @@
 #pragma once
 
+#include "volk.h"
+
 struct Shader {
 	VkShaderModule module;
 	VkShaderStageFlagBits stage;
