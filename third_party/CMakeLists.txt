@@ -5,6 +5,7 @@ add_library(glm INTERFACE)
 add_library(vma INTERFACE)
 add_library(volk STATIC)
 add_library(stb_image INTERFACE)
+add_library(spirv_reflect STATIC)
 add_subdirectory(simdjson)
 add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
@@ -65,3 +66,11 @@ target_sources(imgui PRIVATE
 target_link_libraries(imgui PUBLIC Vulkan::Vulkan SDL2::SDL2)
 
 target_include_directories(stb_image INTERFACE stb_image)
+
+target_sources(spirv_reflect PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/spv_reflect/spirv_reflect.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/spv_reflect/spirv_reflect.c"
+)
+
+target_include_directories(spirv_reflect PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/spv_reflect" )
+target_include_directories(spirv_reflect PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/spv_reflect/include" )

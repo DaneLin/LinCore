@@ -17,13 +17,13 @@ add_executable (engine
   vk_loader.cpp
   camera.cpp
   camera.h
-  "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "vk_shaders.h" "vk_shaders.cpp" "config.h")
+  "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "vk_shaders.h" "vk_shaders.cpp" "config.h" "vk_shaders_new.h" "vk_shaders_new.cpp")
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
 target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(engine PUBLIC volk vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf spdlog::spdlog )
+target_link_libraries(engine PUBLIC volk vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf spdlog::spdlog spirv_reflect)
 
 target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk/volk.h>)
 
