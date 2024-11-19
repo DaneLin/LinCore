@@ -104,7 +104,7 @@ struct GPUMeshBuffers {
 };
 
 // push constants for our mesh object draws
-struct GPUDrawPushConstants {
+struct alignas(16) GPUDrawPushConstants {
 	glm::mat4 worldMatrix;
 	VkDeviceAddress vertexBuffer;
 };

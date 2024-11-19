@@ -14,6 +14,8 @@
 
 #include "camera.h"
 
+#include "vk_shaders_new.h"
+
 struct ComputePushConstants {
 	glm::vec4 data1;
 	glm::vec4 data2;
@@ -24,15 +26,16 @@ struct ComputePushConstants {
 struct ComputeEffect {
 	const char* name;
 	VkPipeline pipeline;
-	Program program;
+	lc::ShaderDescriptorBinder descriptorBinder;
+	VkPipelineLayout layout;
 	ComputePushConstants data;
 };
 
 struct MeshRenderPass
 {
 	const char* name;
-	Program program;
 	VkPipeline pipeline;
+	VkPipelineLayout layout;
 };
 
 
@@ -223,6 +226,8 @@ public:
 
 	EngineStats stats;
 
+	lc::ShaderCache _shaderCache;
+
 private:
 	void init_vulkan();
 	void init_swapchain();
@@ -232,7 +237,6 @@ private:
 	void init_pipelines();
 	void init_background_pipelines();
 	void init_imgui();
-	void init_mesh_pipeline();
 	void init_default_data();
 
 	void resize_swapchain();

@@ -1,5 +1,6 @@
 ﻿#pragma once 
 #include <vk_types.h>
+#include "vk_shaders_new.h"
 
 class PipelineBuilder {
 public:
@@ -20,7 +21,11 @@ public:
 
 	VkPipeline build_pipeline(VkDevice device);
 
+	VkPipeline build_pipeline_compute(VkDevice device);
+
 	void set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
+
+	void set_shaders(lc::ShaderEffect* effect);
 
 	void set_input_topology(VkPrimitiveTopology topology);
 

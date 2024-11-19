@@ -22,9 +22,8 @@
 #include <cvars.h>
 #include <logging.h>
 
-#include <vk_shaders.h>
-
 #include<volk.h>
+#include <vk_shaders_new.h>
 
 
 AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
@@ -147,6 +146,7 @@ void VulkanEngine::cleanup()
 		// make sure the GPU has stopped doing its thing
         vkDeviceWaitIdle(_device);
 
+        _shaderCache.clear();
         loadedScenes.clear();
 
         for (int i = 0; i < FRAME_OVERLAP; i++) {
@@ -872,44 +872,56 @@ void VulkanEngine::init_descriptors()
 void VulkanEngine::init_pipelines()
 {
     init_background_pipelines();
-    init_mesh_pipeline();
-
     metal_rough_material.build_pipelines(this);
 }
 
 void VulkanEngine::init_background_pipelines()
 {
-    bool loadResult = false;
+    lc::ShaderEffect* gradientEffect = new lc::ShaderEffect();
+    lc::ShaderEffect* skyEffect = new lc::ShaderEffect();
 
-	Shader gradientCS{}, skyCS{};
-	loadResult = load_shader(gradientCS, _device, "", "shaders/gradient_color.comp.spv");
-	assert(loadResult);
-    loadResult = load_shader(skyCS, _device, "", "shaders/sky.comp.spv");
-    assert(loadResult);
+	gradientEffect->add_stage(_shaderCache.get_shader("shaders/gradient_color.comp.spv"), VK_SHADER_STAGE_COMPUTE_BIT);
+	skyEffect->add_stage(_shaderCache.get_shader("shaders/sky.comp.spv"), VK_SHADER_STAGE_COMPUTE_BIT);
+    gradientEffect->reflect_layout(_device, nullptr, 0);
+	skyEffect->reflect_layout(_device, nullptr, 0);
+
+
+    PipelineBuilder builder{};
+    builder.set_shaders(gradientEffect);
 
     ComputeEffect gradient{};
-	gradient.program = create_program(_device, VK_PIPELINE_BIND_POINT_COMPUTE, { &gradientCS }, sizeof(ComputePushConstants));
     gradient.name = "gradient";
     gradient.data = {};
     gradient.data.data1 = glm::vec4(1, 0, 0, 1);
     gradient.data.data2 = glm::vec4(0, 0, 1, 1);
-	gradient.pipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, gradientCS, gradient.program.layout);
+    gradient.pipeline = builder.build_pipeline(_device);
+    gradient.layout = gradientEffect->builtLayout;
 
+    gradient.descriptorBinder.set_shader(gradientEffect);
+    gradient.descriptorBinder.bind_image("image", { .sampler = VK_NULL_HANDLE, .imageView = _drawImage.imageView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL });
+    gradient.descriptorBinder.build_sets(_device, _globalDescriptorAllocator);
 
+    builder.set_shaders(skyEffect);
     ComputeEffect sky{};
-	sky.program = create_program(_device, VK_PIPELINE_BIND_POINT_COMPUTE, { &skyCS }, sizeof(ComputePushConstants));
     sky.name = "sky";
     sky.data = {};
     sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-	sky.pipeline = create_compute_pipeline(_device, VK_NULL_HANDLE, skyCS, sky.program.layout);
+	sky.pipeline = builder.build_pipeline(_device);
+	sky.layout = skyEffect->builtLayout;
+
+
+    sky.descriptorBinder.set_shader(skyEffect);
+	sky.descriptorBinder.bind_image("image", {.sampler = VK_NULL_HANDLE, .imageView = _drawImage.imageView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL});
+    sky.descriptorBinder.build_sets(_device, _globalDescriptorAllocator);
 
 	backgroundEffects.push_back(gradient);
 	backgroundEffects.push_back(sky);
 
     _mainDeletionQueue.push_function([&]() {
         for (auto& effect : backgroundEffects) {
-            effect.program.destroy(_device);
             vkDestroyPipeline(_device, effect.pipeline, nullptr);
+			vkDestroyPipelineLayout(_device, effect.layout, nullptr);
+            effect.descriptorBinder.destroy();
         }
         });
 }
@@ -986,47 +998,6 @@ void VulkanEngine::init_imgui()
         vkDestroyDescriptorPool(_device, imguiPool, nullptr);
         });
 
-}
-
-void VulkanEngine::init_mesh_pipeline()
-{
-    Shader meshVS{}, meshFS{};
-
-    bool result = false;
-    result = load_shader(meshVS, _device, "", "shaders/colored_triangle_mesh.vert.spv");
-    assert(result);
-    result = load_shader(meshFS, _device, "", "shaders/tex_image.frag.spv");
-    assert(result);
-
-    _meshRenderPass.program = create_program(_device, VK_PIPELINE_BIND_POINT_GRAPHICS, { &meshVS, &meshFS }, sizeof(GPUDrawPushConstants));
-
-    PipelineBuilder pipelineBuilder;
-
-    pipelineBuilder._pipelineLayout = _meshRenderPass.program.layout;
-    pipelineBuilder.set_shaders(meshVS.module, meshFS.module);
-    pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-    pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
-    //no backface culling
-    pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-    //no multisampling
-    pipelineBuilder.set_multisampling_none();
-    //no blending
-    //pipelineBuilder.disable_blending();
-    //pipelineBuilder.enable_blending_additive();
-    pipelineBuilder.enable_blending_alphablend();
-    pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
-
-    // connect the image format we will draw into, from draw image
-    pipelineBuilder.set_color_attachment_format(_drawImage.imageFormat);
-    pipelineBuilder.set_depth_format(_depthImage.imageFormat);
-
-    // build the pipeline
-    _meshRenderPass.pipeline = pipelineBuilder.build_pipeline(_device);
-
-    _mainDeletionQueue.push_function([&]() {
-		_meshRenderPass.program.destroy(_device);
-		vkDestroyPipeline(_device, _meshRenderPass.pipeline, nullptr);
-        });
 }
 
 void VulkanEngine::init_default_data()
@@ -1173,11 +1144,12 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
 
-    DescriptorInfo drawImageDesc(_drawImage.imageView, VK_IMAGE_LAYOUT_GENERAL);
+    /*DescriptorInfo drawImageDesc(_drawImage.imageView, VK_IMAGE_LAYOUT_GENERAL);
     DescriptorInfo descs[] = { drawImageDesc };
-	vkCmdPushDescriptorSetWithTemplateKHR(cmd, effect.program.updateTemplate, effect.program.layout,0, descs);
+	vkCmdPushDescriptorSetWithTemplateKHR(cmd, effect.program.updateTemplate, effect.program.layout,0, descs);*/
+    effect.descriptorBinder.apply_binds(cmd, effect.layout);
 
-    vkCmdPushConstants(cmd, effect.program.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
+    vkCmdPushConstants(cmd, effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 
     // execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
     vkCmdDispatch(cmd, static_cast<uint32_t>(std::ceil(_drawExtent.width / 16.0)), static_cast<uint32_t>(std::ceil(_drawExtent.height / 16.0)), 1);
@@ -1375,46 +1347,23 @@ void VulkanEngine::update_scene()
 
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
-    Shader meshVS{}, meshFS{};
-
-    bool result = false;
-    result = load_shader(meshVS, engine->_device, "", "shaders/mesh.vert.spv");
-    assert(result);
-    result = load_shader(meshFS, engine->_device, "", "shaders/mesh.frag.spv");
-    assert(result);
+	std::unique_ptr<lc::ShaderEffect> meshEffect = std::make_unique<lc::ShaderEffect>();
+	meshEffect->add_stage(engine->_shaderCache.get_shader("shaders/mesh.vert.spv"), VK_SHADER_STAGE_VERTEX_BIT);
+	meshEffect->add_stage(engine->_shaderCache.get_shader("shaders/mesh.frag.spv"), VK_SHADER_STAGE_FRAGMENT_BIT);
+	meshEffect->reflect_layout(engine->_device, nullptr, 0, sizeof(GPUDrawPushConstants));
    
-    VkPushConstantRange matrixRange{};
-    matrixRange.offset = 0;
-    matrixRange.size = sizeof(GPUDrawPushConstants);
-    matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
     DescriptorLayoutBuilder layoutBuilder;
     layoutBuilder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	layoutBuilder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    layoutBuilder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-	materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+    materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
-    VkDescriptorSetLayout layouts[] = {
-        engine->_gpuSceneDataDescriptorLayout,
-        materialLayout
-    };
-
-    VkPipelineLayoutCreateInfo meshLayoutInfo = vkinit::pipeline_layout_create_info();
-    meshLayoutInfo.setLayoutCount = 2;
-	meshLayoutInfo.pSetLayouts = layouts;
-	meshLayoutInfo.pPushConstantRanges = &matrixRange;
-	meshLayoutInfo.pushConstantRangeCount = 1;
-
-    VkPipelineLayout newLayout;
-	VK_CHECK(vkCreatePipelineLayout(engine->_device, &meshLayoutInfo, nullptr, &newLayout));
-
-    opaquePipeline.layout = newLayout;
-    transparentPipeline.layout = newLayout;
 
     // build the stage-create-info for both vertx and fragment stages
     PipelineBuilder pipelineBuilder;
-	pipelineBuilder.set_shaders(meshVS.module, meshFS.module);
+	pipelineBuilder.set_shaders(meshEffect.get());
     pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
@@ -1427,8 +1376,8 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 	pipelineBuilder.set_depth_format(engine->_depthImage.imageFormat);
 
     // use the triangle layout we created
-    pipelineBuilder._pipelineLayout = newLayout;
-
+    //pipelineBuilder._pipelineLayout = meshEffect->builtLayout;
+    opaquePipeline.layout = pipelineBuilder._pipelineLayout;
 	opaquePipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device);
 
     // create the transparent variant
@@ -1436,8 +1385,8 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 
     pipelineBuilder.enable_depthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
+	transparentPipeline.layout = pipelineBuilder._pipelineLayout;
 	transparentPipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device);
-
 }
 
 void GLTFMetallic_Roughness::clear_resources(VkDevice device)

@@ -17,7 +17,7 @@ add_executable (engine
   vk_loader.cpp
   camera.cpp
   camera.h
-  "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "vk_shaders.h" "vk_shaders.cpp" "config.h" "vk_shaders_new.h" "vk_shaders_new.cpp")
+  "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "legacy/vk_shaders.h" "legacy/vk_shaders.cpp" "config.h" "vk_shaders_new.h" "vk_shaders_new.cpp")
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)

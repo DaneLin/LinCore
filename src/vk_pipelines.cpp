@@ -2,6 +2,8 @@
 #include <fstream>
 #include <vk_initializers.h>
 
+
+
 bool vkutil::load_shader_module(const char* filePath, VkDevice device, VkShaderModule* outShaderModule)
 {
 	// open the file with cursor at the end
@@ -65,6 +67,17 @@ void PipelineBuilder::clear()
 
 VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
 {
+	if (_shaderStages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT) {
+		VkComputePipelineCreateInfo pipelineInfo{};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfo.stage = _shaderStages[0];
+		pipelineInfo.layout = _pipelineLayout;
+
+		VkPipeline pipeline;
+		VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
+		return pipeline;
+	}
+
 	// make viewport state from our stored viewport and scissor
 	VkPipelineViewportStateCreateInfo viewportState{};
 	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -131,6 +144,14 @@ void PipelineBuilder::set_shaders(VkShaderModule vertexShader, VkShaderModule fr
 
 	_shaderStages.push_back(
 		vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
+}
+
+void PipelineBuilder::set_shaders(lc::ShaderEffect* effect)
+{
+	_shaderStages.clear();
+	effect->fill_stage(_shaderStages);
+
+	_pipelineLayout = effect->builtLayout;
 }
 
 void PipelineBuilder::set_input_topology(VkPrimitiveTopology topology)
