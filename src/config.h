@@ -6,3 +6,5 @@
 
 // Maximum number of texture descriptors in the pool
 #define DESCRIPTOR_LIMIT 65536
+
+#define ASSET_PATH "../../"

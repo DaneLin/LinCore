@@ -129,7 +129,7 @@ void VulkanEngine::init()
     mainCamera.pitch = 0;
     mainCamera.yaw = 0;
 
-    std::string structurePath = { "../assets/structure.glb" };
+    std::string structurePath = { ASSET_PATH + std::string("assets/structure.glb") };
     auto structureFile = load_gltf(this, structurePath);
 
     assert(structureFile.has_value());
@@ -882,9 +882,9 @@ void VulkanEngine::init_background_pipelines()
     bool loadResult = false;
 
 	Shader gradientCS{}, skyCS{};
-	loadResult = load_shader(gradientCS, _device, "", "../shaders/gradient_color.comp.spv");
+	loadResult = load_shader(gradientCS, _device, "", "shaders/gradient_color.comp.spv");
 	assert(loadResult);
-    loadResult = load_shader(skyCS, _device, "", "../shaders/sky.comp.spv");
+    loadResult = load_shader(skyCS, _device, "", "shaders/sky.comp.spv");
     assert(loadResult);
 
     ComputeEffect gradient{};
@@ -993,9 +993,9 @@ void VulkanEngine::init_mesh_pipeline()
     Shader meshVS{}, meshFS{};
 
     bool result = false;
-    result = load_shader(meshVS, _device, "", "../shaders/colored_triangle_mesh.vert.spv");
+    result = load_shader(meshVS, _device, "", "shaders/colored_triangle_mesh.vert.spv");
     assert(result);
-    result = load_shader(meshFS, _device, "", "../shaders/tex_image.frag.spv");
+    result = load_shader(meshFS, _device, "", "shaders/tex_image.frag.spv");
     assert(result);
 
     _meshRenderPass.program = create_program(_device, VK_PIPELINE_BIND_POINT_GRAPHICS, { &meshVS, &meshFS }, sizeof(GPUDrawPushConstants));
@@ -1031,7 +1031,7 @@ void VulkanEngine::init_mesh_pipeline()
 
 void VulkanEngine::init_default_data()
 {
-    testMeshes = loadGltfMeshes(this, "../assets/basicmesh.glb").value();
+    testMeshes = loadGltfMeshes(this, ASSET_PATH + std::string("assets/basicmesh.glb")).value();
 
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
     _white_image = create_image((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -1378,9 +1378,9 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
     Shader meshVS{}, meshFS{};
 
     bool result = false;
-    result = load_shader(meshVS, engine->_device, "", "../shaders/mesh.vert.spv");
+    result = load_shader(meshVS, engine->_device, "", "shaders/mesh.vert.spv");
     assert(result);
-    result = load_shader(meshFS, engine->_device, "", "../shaders/mesh.frag.spv");
+    result = load_shader(meshFS, engine->_device, "", "shaders/mesh.frag.spv");
     assert(result);
    
     VkPushConstantRange matrixRange{};

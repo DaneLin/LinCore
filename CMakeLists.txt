@@ -9,10 +9,6 @@ project ("lindot")
 find_package(Vulkan REQUIRED)
 
 add_subdirectory(third_party)
-
-set (CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
-set (CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin")
-
 add_subdirectory(src)
 
 find_program(GLSL_VALIDATOR glslangValidator HINTS /usr/bin /usr/local/bin $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/Bin32/)
@@ -20,7 +16,9 @@ if (NOT GLSL_VALIDATOR)
     message(FATAL_ERROR "glslangValidator not found!")
 endif()
 
-
+set(SHADER_OUTPUT_DIR "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders")
+# Ensure the shader output directory exists
+file(MAKE_DIRECTORY ${SHADER_OUTPUT_DIR})
 
 file(GLOB_RECURSE GLSL_SOURCE_FILES
     "${PROJECT_SOURCE_DIR}/shaders/*.frag"
@@ -31,7 +29,7 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
 message(STATUS "BUILDING SHADER")
 foreach(GLSL ${GLSL_SOURCE_FILES})
   get_filename_component(FILE_NAME ${GLSL} NAME)
-  set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILE_NAME}.spv")
+  set(SPIRV "${SHADER_OUTPUT_DIR}/${FILE_NAME}.spv")
   message(STATUS ${GLSL})
   execute_process(
     COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
@@ -41,6 +39,10 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
   )
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
+
+if (NOT COMPILE_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to compile shader: ${GLSL}")
+endif()
 
 add_custom_target(
     Shaders 

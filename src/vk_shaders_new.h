@@ -62,6 +62,8 @@ struct ShaderDescriptorBinder {
 
 	void bind_buffer(const char* name, const VkDescriptorBufferInfo& bufferInfo);
 
+	
+
 	void bind_dynamic_buffer(const char* name, uint32_t offset, const VkDescriptorBufferInfo& bufferInfo);
 
 	void apply_binds(VkCommandBuffer cmd);
