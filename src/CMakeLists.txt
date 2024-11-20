@@ -1,6 +1,6 @@
 
 # Add source to this project's executable.
-add_executable (engine 
+add_executable (lincore
   main.cpp
   vk_types.h
   vk_initializers.cpp
@@ -19,16 +19,16 @@ add_executable (engine
   camera.h
   "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "legacy/vk_shaders.h" "legacy/vk_shaders.cpp" "config.h" "vk_shaders_new.h" "vk_shaders_new.cpp" "vk_scene.h" "vk_scene.cpp" )
 
-set_property(TARGET engine PROPERTY CXX_STANDARD 20)
-target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
-target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+set_property(TARGET lincore PROPERTY CXX_STANDARD 20)
+target_compile_definitions(lincore PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
+target_include_directories(lincore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_dependencies(engine Shaders)
-target_link_libraries(engine PUBLIC volk vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf spdlog::spdlog spirv_reflect)
+add_dependencies(lincore Shaders)
+target_link_libraries(lincore PUBLIC volk vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf spdlog::spdlog spirv_reflect)
 
-target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk/volk.h>)
+target_precompile_headers(lincore PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk/volk.h>)
 
-add_custom_command(TARGET engine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:engine> $<TARGET_FILE_DIR:engine>
+add_custom_command(TARGET lincore POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:lincore> $<TARGET_FILE_DIR:lincore>
   COMMAND_EXPAND_LISTS
   )

@@ -219,7 +219,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> load_gltf(VulkanEngine* engine, std::
 		}
 		else {
 			// we failed to load, so lets give the slot a default white texture to not completely break loading
-			images.push_back(engine->_error_checker_board_image);
+			images.push_back(engine->default_images.error_checker_board_image);
 			LOGW("gltf failed to load texture {}, fallint to default error texture", image.name);
 		}
 	}
@@ -250,9 +250,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> load_gltf(VulkanEngine* engine, std::
 
 		GLTFMetallic_Roughness::MaterialResources materialResources;
 		// TODO: Replace with real images
-		materialResources.colorImage = engine->_white_image;
+		materialResources.colorImage = engine->default_images.white_image;
 		materialResources.colorSampler = engine->_default_samplers.linear;
-		materialResources.metalRoughImage = engine->_white_image;
+		materialResources.metalRoughImage = engine->default_images.white_image;
 		materialResources.metalRoughSampler = engine->_default_samplers.linear;
 
 		materialResources.dataBuffer = file.materialDataBuffer.buffer;
@@ -464,7 +464,7 @@ void LoadedGLTF::clear_all()
 
 	for (auto& [k, v] : images) {
 
-		if (v.image == creator->_error_checker_board_image.image) {
+		if (v.image == creator->default_images.error_checker_board_image.image) {
 			//dont destroy the default images
 			continue;
 		}

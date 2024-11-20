@@ -99,7 +99,7 @@ void VulkanEngine::init()
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE) ;
 
     _window = SDL_CreateWindow(
-        "Vulkan Engine",
+        "LinCore",
         SDL_WINDOWPOS_UNDEFINED,
         SDL_WINDOWPOS_UNDEFINED,
         _windowExtent.width,
@@ -996,13 +996,13 @@ void VulkanEngine::init_default_data()
 {
 
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
-    _white_image = create_image((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    default_images.white_image = create_image((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66, 0.66, 0.66, 1));
-	_grey_image = create_image((void*)&grey, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    default_images.grey_image = create_image((void*)&grey, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
-	_black_image = create_image((void*)&black, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    default_images.black_image = create_image((void*)&black, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     // checkerboard image
     uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
@@ -1012,7 +1012,7 @@ void VulkanEngine::init_default_data()
             pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
         }
     }
-	_error_checker_board_image = create_image(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+    default_images.error_checker_board_image = create_image(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
     VkSamplerCreateInfo samplerCreateInfo = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 
@@ -1030,17 +1030,17 @@ void VulkanEngine::init_default_data()
 		vkDestroySampler(_device, _default_samplers.nearest, nullptr);
 		vkDestroySampler(_device, _default_samplers.linear, nullptr);
 
-		destroy_image(_white_image);
-		destroy_image(_grey_image);
-		destroy_image(_black_image);
-		destroy_image(_error_checker_board_image);
+		destroy_image(default_images.white_image);
+		destroy_image(default_images.grey_image);
+		destroy_image(default_images.black_image);
+		destroy_image(default_images.error_checker_board_image);
 
 		});
 
     GLTFMetallic_Roughness::MaterialResources materialResources;
-	materialResources.colorImage = _white_image;
+	materialResources.colorImage = default_images.white_image;
 	materialResources.colorSampler = _default_samplers.linear;
-    materialResources.metalRoughImage = _white_image;
+    materialResources.metalRoughImage = default_images.white_image;
 	materialResources.metalRoughSampler = _default_samplers.linear;
 
     // set the uniform buffer for the material data

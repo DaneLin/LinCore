@@ -214,11 +214,12 @@ public:
 	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
 	void destroy_image(const AllocatedImage& image);
 
-
-	AllocatedImage _white_image;
-	AllocatedImage _black_image;
-	AllocatedImage _grey_image;
-	AllocatedImage _error_checker_board_image;
+	struct {
+		AllocatedImage white_image;
+		AllocatedImage black_image;
+		AllocatedImage grey_image;
+		AllocatedImage error_checker_board_image;
+	}default_images;
 
 	struct {
 		VkSampler linear;

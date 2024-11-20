@@ -3,8 +3,7 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
-project ("lindot")
-
+project ("LinCore")
 
 find_package(Vulkan REQUIRED)
 
