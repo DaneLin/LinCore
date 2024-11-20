@@ -8,6 +8,7 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 - [x] 自动管线布局创建 Automating Pipeline Layout Creation 
   - [x] 通过反射自动创建管线布局 Automatically create pipeline layout through reflection
   - [x] 通过反射自动创建着色器模块 Automatically create shader module through reflection
+- [x] 简易CVar系统 Simple CVar System
 
 # 待实现特性 (To-Do Features)
 - [ ] 管线缓存 Pipeline Cache
