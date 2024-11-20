@@ -4,47 +4,7 @@
 
 
 
-bool vkutil::load_shader_module(const char* filePath, VkDevice device, VkShaderModule* outShaderModule)
-{
-	// open the file with cursor at the end
-	std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
-	if (!file.is_open()) {
-		
-		return false;
-	}
-
-	size_t fileSize = static_cast<size_t>(file.tellg());
-
-	// spirv expects the buffer to be on uint32
-	std::vector<uint32_t> buffer(fileSize / (sizeof(uint32_t)));
-
-	// put file cursor at begining
-	file.seekg(0);
-
-	// load the entire file into the buffer
-	file.read((char*)buffer.data(), fileSize);
-
-	file.close();
-
-	// Create a new shader module, using the buffer we loaded
-	VkShaderModuleCreateInfo createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	createInfo.pNext = nullptr;
-
-	// codeSize has to be in bytes, so we multiply the number of uint32_t in the buffer by the size of a uint32_t
-	createInfo.codeSize = buffer.size() * sizeof(uint32_t);
-	createInfo.pCode = buffer.data();
-
-	// check that the creation goes well
-	VkShaderModule shaderModule;
-	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-		return false;
-	}
-	*outShaderModule = shaderModule;
-	return true;
-	
-}
 
 void PipelineBuilder::clear()
 {

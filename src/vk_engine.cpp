@@ -25,6 +25,8 @@
 #include<volk.h>
 #include <vk_shaders_new.h>
 
+#include "frustum_cull.h"
+
 
 AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
 
@@ -157,11 +159,6 @@ void VulkanEngine::cleanup()
 			vkDestroySemaphore(_device, _frames[i]._swapchainSemaphore, nullptr);
 
             _frames[i]._deletionQueue.flush();
-        }
-
-        for (auto& mesh : testMeshes) {
-			destroy_buffer(mesh->meshBuffers.indexBuffer);
-            destroy_buffer(mesh->meshBuffers.vertexBuffer);
         }
 
         metal_rough_material.clear_resources(_device);
@@ -997,7 +994,6 @@ void VulkanEngine::init_imgui()
 
 void VulkanEngine::init_default_data()
 {
-    testMeshes = loadGltfMeshes(this, get_asset_path("assets/basicmesh.glb")).value();
 
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
     _white_image = create_image((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -1064,19 +1060,7 @@ void VulkanEngine::init_default_data()
 
     _default_data = metal_rough_material.write_material(_device, MaterialPass::MainColor, materialResources, _globalDescriptorAllocator);
 
-    for (auto& m : testMeshes) {
-        std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
-        newNode->mesh = m;
-
-        newNode->localTransform = glm::mat4{ 1.f };
-        newNode->worldTransform = glm::mat4{ 1.f };
-
-        for (auto& s : newNode->mesh->surfaces) {
-            s.material = std::make_shared<GLTFMaterial>(_default_data);
-        }
-
-        loadedNodes[m->name] = std::move(newNode);
-    }
+   
 }
 
 void VulkanEngine::resize_swapchain()
@@ -1175,10 +1159,15 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
     std::vector<uint32_t> opaqueDraws;
     opaqueDraws.reserve(mainDrawContext.OpaqueSurfaces.size());
 
+    Frustum frustum(sceneData.viewproj);
+
     for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); ++i) {
-        if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
-            opaqueDraws.push_back(i);
-        }
+        RenderObject& obj = mainDrawContext.OpaqueSurfaces[i];
+        //if (frustum.isSphereVisible(obj.bounds.origin, obj.bounds.sphereRadius)) {
+            if (is_visible(obj, sceneData.viewproj)) {
+                opaqueDraws.push_back(i);
+            }
+        //}
     }
 
     // sort the opaque surfaces by material and mesh
@@ -1310,8 +1299,6 @@ void VulkanEngine::update_scene()
 
     mainDrawContext.OpaqueSurfaces.clear();
 
-    loadedNodes["Suzanne"]->draw(glm::mat4{ 1.f }, mainDrawContext);
-
     mainCamera.update();
 
     sceneData.view = mainCamera.get_view_matrix();
@@ -1327,14 +1314,6 @@ void VulkanEngine::update_scene()
     sceneData.ambientColor = glm::vec4(.1f);
     sceneData.sunlightColor = glm::vec4(1.f);
     sceneData.sunlightDirection = glm::vec4(0, 1, 0.5, 1.f);
-
-    for (int x = -3; x < 3; x++) {
-
-        glm::mat4 scale = glm::scale(glm::vec3{ 0.2f });
-        glm::mat4 translation = glm::translate(glm::vec3{ x, 1, 0 });
-
-        loadedNodes["Cube"]->draw(translation * scale, mainDrawContext);
-    }
 
 	loadedScenes["structure"]->draw(glm::mat4{ 1.f }, mainDrawContext);
 
@@ -1448,4 +1427,21 @@ void MeshNode::draw(const glm::mat4& topMatrix, DrawContext& ctx)
     
 
     Node::draw(topMatrix, ctx);
+}
+
+TextureID TextureCache::add_texture(const VkImageView& image_view, VkSampler sampler) {
+    for (unsigned int i = 0; i < Cache.size(); ++i) {
+        if (Cache[i].imageView == image_view && Cache[i].sampler == sampler) {
+            // found, return
+            return TextureID{ i };
+        }
+    }
+
+    uint32_t idx = static_cast<uint32_t>(Cache.size());
+
+    Cache.push_back(VkDescriptorImageInfo{ .sampler = sampler, .imageView = image_view, .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL });
+
+    return TextureID{ idx };
+
+
 }

@@ -11,6 +11,24 @@ public:
 	// http://iquilezles.org/www/articles/frustumcorrect/frustumcorrect.htm
 	bool IsBoxVisible(const glm::vec3& minp, const glm::vec3& maxp) const;
 
+	bool isSphereVisible(const glm::vec3& center, float radius) const {
+		float epsilon = 0.01f; // 增加较大的误差容限来处理浮点精度问题
+
+		// 增加一定冗余，确保包围球包含所有边界
+		float adjustedRadius = radius * 1.1f;
+
+		// Check if the sphere is completely outside of any of the planes
+		for (int i = 0; i < Count; ++i) {
+			float distance = glm::dot(glm::vec3(m_planes[i]), center) + m_planes[i].w;
+
+			// 远平面符号在 Reversed-Z 中是反的，确保符号判断一致
+			if (distance < -adjustedRadius - epsilon) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 private:
 	enum Planes
 	{
@@ -39,14 +57,23 @@ private:
 
 inline Frustum::Frustum(glm::mat4 m)
 {
+	// Adapt to Reversed-Z, transpose the matrix first
 	m = glm::transpose(m);
+
+	// In Reversed-Z, the meaning of Near and Far changes.
 	m_planes[Left] = m[3] + m[0];
 	m_planes[Right] = m[3] - m[0];
-	m_planes[Bottom] = m[3] + m[1];
-	m_planes[Top] = m[3] - m[1];
-	m_planes[Near] = m[3] + m[2];
-	m_planes[Far] = m[3] - m[2];
+	m_planes[Bottom] = m[3] - m[1];  // Adjusted to match Y-axis inversion
+	m_planes[Top] = m[3] + m[1];     // Adjusted to match Y-axis inversion
+	m_planes[Near] = m[3] - m[2];    // Near plane is the farthest in Reversed-Z
+	m_planes[Far] = m[3] + m[2];     // Far plane is closest in Reversed-Z
 
+	// Normalize the planes
+	for (int i = 0; i < Count; ++i) {
+		m_planes[i] /= glm::length(glm::vec3(m_planes[i]));
+	}
+
+	// Calculate intersection points (used for more precise box culling if needed)
 	glm::vec3 crosses[Combinations] = {
 		glm::cross(glm::vec3(m_planes[Left]),   glm::vec3(m_planes[Right])),
 		glm::cross(glm::vec3(m_planes[Left]),   glm::vec3(m_planes[Bottom])),
@@ -73,6 +100,7 @@ inline Frustum::Frustum(glm::mat4 m)
 	m_points[5] = intersection<Left, Top, Far>(crosses);
 	m_points[6] = intersection<Right, Bottom, Far>(crosses);
 	m_points[7] = intersection<Right, Top, Far>(crosses);
+
 
 }
 

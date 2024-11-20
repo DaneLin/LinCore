@@ -60,7 +60,11 @@ struct GLTFMetallic_Roughness {
 		glm::vec4 colorFactors;
 		glm::vec4 metalRoughFactors;
 		// padding ,we need it anyway for uniform buffers
-		glm::vec4 extra[14];
+		uint32_t colorTexID;
+		uint32_t metalRoughTexID;
+		uint32_t pad1;
+		uint32_t pad2;
+		glm::vec4 extra[13];
 	};
 
 	struct MaterialResources {
@@ -108,6 +112,16 @@ struct EngineStats {
 	int drawcallCount;
 	float sceneUpdateTime;
 	float meshDrawTime;
+};
+
+struct TextureID {
+	uint32_t Index;
+};
+
+struct TextureCache {
+	std::vector<VkDescriptorImageInfo> Cache;
+	std::unordered_map<std::string, TextureID> NameMap;
+	TextureID add_texture(const VkImageView& image_view, VkSampler sampler);
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -191,7 +205,6 @@ public:
 
 	MeshRenderPass _meshRenderPass;
 
-	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	GPUSceneData sceneData;
 
@@ -216,7 +229,6 @@ public:
 	GLTFMetallic_Roughness metal_rough_material;
 
 	DrawContext mainDrawContext;
-	std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
 
 	void update_scene();
 
@@ -227,6 +239,7 @@ public:
 	EngineStats stats;
 
 	lc::ShaderCache _shaderCache;
+	TextureCache texCache;
 
 private:
 	void init_vulkan();

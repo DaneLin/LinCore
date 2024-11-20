@@ -21,8 +21,6 @@ public:
 
 	VkPipeline build_pipeline(VkDevice device);
 
-	VkPipeline build_pipeline_compute(VkDevice device);
-
 	void set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
 
 	void set_shaders(lc::ShaderEffect* effect);
@@ -50,7 +48,3 @@ public:
 	void enable_blending_alphablend();
 };
 
-namespace vkutil {
-
-	bool load_shader_module(const char* filePath, VkDevice device, VkShaderModule* outShaderModule);
-};
