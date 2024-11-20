@@ -94,7 +94,7 @@ void DescriptorAllocatorGrowable::init(VkDevice device, uint32_t initialSets, st
 
     VkDescriptorPool newPool = create_pool(device, initialSets, poolRatios);
 
-    _sets_per_pool = initialSets * 1.5; // grow it next allocation
+    _sets_per_pool = static_cast<uint32_t>(initialSets * 1.5); // grow it next allocation
 
     _ready_pools.push_back(newPool);
 }

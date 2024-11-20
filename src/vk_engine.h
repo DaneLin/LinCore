@@ -247,4 +247,6 @@ private:
 	void draw_background(VkCommandBuffer cmd);
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 	void draw_geometry(VkCommandBuffer cmd);
+
+	const std::string get_asset_path(const std::string& path) const;
 };

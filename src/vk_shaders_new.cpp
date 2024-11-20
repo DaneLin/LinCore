@@ -1,4 +1,4 @@
-#include "vk_shaders_new.h"
+ï»¿#include "vk_shaders_new.h"
 #include "vk_initializers.h"
 #include "logging.h"
 
@@ -250,7 +250,7 @@ namespace lc {
 				return VK_PIPELINE_BIND_POINT_GRAPHICS;
 			}
 		}
-		return VK_PIPELINE_BIND_POINT_GRAPHICS; // Ä¬ÈÏ·µ»ØÍ¼ÐÎ¹ÜÏß
+		return VK_PIPELINE_BIND_POINT_GRAPHICS; // é»˜è®¤è¿”å›žå›¾å½¢ç®¡çº¿
 
 	}
 
@@ -435,10 +435,20 @@ namespace lc {
 		shaders = newShader;
 	}
 
-	void ShaderDescriptorBinder::destroy()
-	{
-		delete shaders;
+	ShaderEffect* ShaderCache::get_shader_effect() {
+		ShaderEffect* result = new ShaderEffect();
+		shader_effect_cache_.push_back(result);
+		return result;
 	}
+
+	ShaderEffect* ShaderCache::get_shader_effect(const std::string& path, VkShaderStageFlagBits stage)
+	{
+		ShaderEffect* result = new ShaderEffect();
+		result->add_stage(get_shader(path), stage);
+		shader_effect_cache_.push_back(result);
+		return result;
+	}
+
 
 	ShaderModule* ShaderCache::get_shader(const std::string& path)
 	{
@@ -461,6 +471,9 @@ namespace lc {
 	{
 		for (auto& [k, v] : module_cache) {
 			vkDestroyShaderModule(VulkanEngine::Get()._device, v.module, nullptr);
+		}
+		for (ShaderEffect* effect : shader_effect_cache_) {
+			delete effect;
 		}
 		module_cache.clear();
 	}

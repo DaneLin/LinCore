@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 
 #include <vk_types.h>
 
@@ -33,7 +33,7 @@ namespace lc {
 
 		void fill_stage(std::vector<VkPipelineShaderStageCreateInfo>& pipelineStages);
 
-		// ÔÚShaderEffectÖÐÌí¼Óº¯Êý
+		// åœ¨ShaderEffectä¸­æ·»åŠ å‡½æ•°
 		VkPipelineBindPoint get_bind_point() const;
 
 		~ShaderEffect();
@@ -86,9 +86,7 @@ namespace lc {
 
 		void build_sets(VkDevice device, DescriptorAllocatorGrowable& allocator);
 
-		void set_shader(ShaderEffect* newShader);
-
-		void destroy();
+		void set_shader(ShaderEffect* newShader);;
 
 		std::array<VkDescriptorSet, 4> cachedDescriptorSets;
 
@@ -107,11 +105,17 @@ namespace lc {
 
 	class ShaderCache {
 	public:
+
+		ShaderEffect* get_shader_effect();
+
+		ShaderEffect* get_shader_effect(const std::string& path, VkShaderStageFlagBits stage);
+
 		ShaderModule* get_shader(const std::string& path);
 
 		void clear();
 
 	private:
 		std::unordered_map<std::string, ShaderModule> module_cache;
+		std::vector<ShaderEffect*> shader_effect_cache_;
 	};
 } // namespace lc

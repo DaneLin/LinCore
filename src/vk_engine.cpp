@@ -128,7 +128,7 @@ void VulkanEngine::init()
     mainCamera.pitch = 0;
     mainCamera.yaw = 0;
 
-    std::string structurePath = { ASSET_PATH + std::string("assets/structure.glb") };
+    std::string structurePath = get_asset_path("assets/structure.glb");
     auto structureFile = load_gltf(this, structurePath);
 
     assert(structureFile.has_value());
@@ -655,7 +655,7 @@ void VulkanEngine::init_vulkan()
     
     // create the final vulkan device
     vkb::DeviceBuilder deviceBuilder{ physicalDevice };
-
+    
 	auto deviceBuilderRet = deviceBuilder.build();
 	if (!deviceBuilderRet.has_value()) {
 		LOGE("Failed to create Vulkan device: {}", deviceBuilderRet.error().message());
@@ -679,7 +679,7 @@ void VulkanEngine::init_vulkan()
     auto graphicsQueueResult = vkbDevice.get_queue(vkb::QueueType::graphics);
 	if (!graphicsQueueResult.has_value()) {
 		LOGE("Failed to find a graphics queue!");
-		return;
+        return;
 	}
 	_graphicsQueue = graphicsQueueResult.value();
 	_graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
@@ -877,11 +877,8 @@ void VulkanEngine::init_pipelines()
 
 void VulkanEngine::init_background_pipelines()
 {
-    lc::ShaderEffect* gradientEffect = new lc::ShaderEffect();
-    lc::ShaderEffect* skyEffect = new lc::ShaderEffect();
-
-	gradientEffect->add_stage(_shaderCache.get_shader("shaders/gradient_color.comp.spv"), VK_SHADER_STAGE_COMPUTE_BIT);
-	skyEffect->add_stage(_shaderCache.get_shader("shaders/sky.comp.spv"), VK_SHADER_STAGE_COMPUTE_BIT);
+    lc::ShaderEffect* gradientEffect = _shaderCache.get_shader_effect("shaders/gradient_color.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+    lc::ShaderEffect* skyEffect = _shaderCache.get_shader_effect("shaders/sky.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
     gradientEffect->reflect_layout(_device, nullptr, 0);
 	skyEffect->reflect_layout(_device, nullptr, 0);
 
@@ -920,9 +917,7 @@ void VulkanEngine::init_background_pipelines()
     _mainDeletionQueue.push_function([&]() {
         for (auto& effect : backgroundEffects) {
             vkDestroyPipeline(_device, effect.pipeline, nullptr);
-			vkDestroyPipelineLayout(_device, effect.layout, nullptr);
-            effect.descriptorBinder.destroy();
-        }
+			vkDestroyPipelineLayout(_device, effect.layout, nullptr);        }
         });
 }
 
@@ -1002,7 +997,7 @@ void VulkanEngine::init_imgui()
 
 void VulkanEngine::init_default_data()
 {
-    testMeshes = loadGltfMeshes(this, ASSET_PATH + std::string("assets/basicmesh.glb")).value();
+    testMeshes = loadGltfMeshes(this, get_asset_path("assets/basicmesh.glb")).value();
 
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
     _white_image = create_image((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -1302,6 +1297,11 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
     mainDrawContext.TransparentSurfaces.clear();
 }
 
+const std::string VulkanEngine::get_asset_path(const std::string& path) const
+{
+    return std::string(ASSET_PATH + path);
+}
+
 void VulkanEngine::update_scene()
 {
     stats.sceneUpdateTime = 0;
@@ -1347,7 +1347,7 @@ void VulkanEngine::update_scene()
 
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
-	std::unique_ptr<lc::ShaderEffect> meshEffect = std::make_unique<lc::ShaderEffect>();
+    lc::ShaderEffect* meshEffect = engine->_shaderCache.get_shader_effect();
 	meshEffect->add_stage(engine->_shaderCache.get_shader("shaders/mesh.vert.spv"), VK_SHADER_STAGE_VERTEX_BIT);
 	meshEffect->add_stage(engine->_shaderCache.get_shader("shaders/mesh.frag.spv"), VK_SHADER_STAGE_FRAGMENT_BIT);
 	meshEffect->reflect_layout(engine->_device, nullptr, 0, sizeof(GPUDrawPushConstants));
@@ -1363,7 +1363,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 
     // build the stage-create-info for both vertx and fragment stages
     PipelineBuilder pipelineBuilder;
-	pipelineBuilder.set_shaders(meshEffect.get());
+	pipelineBuilder.set_shaders(meshEffect);
     pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
     pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
     pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
