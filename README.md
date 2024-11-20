@@ -6,15 +6,11 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 
 # 已实现特性 (Implemented Features)
 - [x] 自动管线布局创建 Automating Pipeline Layout Creation 
-  - [x] 通过反射自动创建管线布局 Automatically create pipeline layout through reflection
-  - [x] 通过反射自动创建着色器模块 Automatically create shader module through reflection
 - [x] 简易CVar系统 Simple CVar System
 
 # 待实现特性 (To-Do Features)
 - [ ] 管线缓存 Pipeline Cache
 - [ ] 无绑定渲染 Bindless Rendering
-	- [ ] 无绑定纹理 Bindless Texture
-	- [ ] 无绑定缓冲 Bindless Buffer
 - [ ] 多线程渲染 Multi-threaded Rendering
 - [ ] 阴影映射 Shadow Mapping
 - [ ] 全局光照 Global Illumination
@@ -24,9 +20,13 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 https://vkguide.dev/  
 https://vulkan-tutorial.com/
 
+## 博客 (Blogs)
+https://themaister.net/blog/2017/08/
+
 ## 参考代码库 (CodeBases)
 https://github.com/vblanco20-1/vulkan-guide.git  
 https://github.com/zoheth/Xihe  
 https://github.com/SaschaWillems/Vulkan.git  
 https://github.com/KhronosGroup/Vulkan-Samples  
-https://github.com/PacktPublishing/Mastering-Graphics-Programming-with-Vulkan.git
+https://github.com/PacktPublishing/Mastering-Graphics-Programming-with-Vulkan.git  
+https://github.com/zeux/niagara/tree/master
