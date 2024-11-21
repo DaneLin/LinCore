@@ -1,5 +1,4 @@
 ﻿#include "vk_shaders.h"
-#include "config.h"
 
 #include <stdio.h>
 

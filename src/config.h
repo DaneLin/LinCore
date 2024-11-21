@@ -8,3 +8,8 @@
 #define DESCRIPTOR_LIMIT 65536
 
 #define ASSET_PATH "../../"
+
+constexpr uint32_t BINDLESS_TEXTURE_BINDING = 11;;
+
+constexpr uint32_t MAX_BINDLESS_RESOURCES = 1024;
+

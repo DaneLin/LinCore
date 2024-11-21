@@ -16,6 +16,12 @@
 
 #include "vk_shaders_new.h"
 
+#include "config.h"
+
+constexpr unsigned int FRAME_OVERLAP = 2;
+
+
+
 struct ComputePushConstants {
 	glm::vec4 data1;
 	glm::vec4 data2;
@@ -118,20 +124,54 @@ struct TextureID {
 	uint32_t Index;
 };
 
-struct TextureCache {
-	std::vector<VkDescriptorImageInfo> Cache;
-	std::unordered_map<std::string, TextureID> NameMap;
-	TextureID add_texture(const VkImageView& image_view, VkSampler sampler);
+class TextureCache {
+public:
+	void set_descriptor_set(VkDescriptorSet bindless_set) {
+		bindless_set_ = bindless_set;
+	}
+
+	TextureID add_texture(VkDevice device, const VkImageView& image_view, VkSampler sampler) {
+		// 检查是否已存在
+		for (uint32_t i = 0; i < cache_.size(); i++) {
+			if (cache_[i].imageView == image_view && cache_[i].sampler == sampler) {
+				return TextureID{ i };
+			}
+		}
+		// 检查是否超出最大数量
+		if (cache_.size() >= MAX_BINDLESS_RESOURCES) {
+			throw std::runtime_error("Exceeded maximum bindless texture count");
+		}
+
+		uint32_t idx = static_cast<uint32_t>(cache_.size());
+
+		// 添加到缓存
+		VkDescriptorImageInfo image_info{
+			.sampler = sampler,
+			.imageView = image_view,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+		cache_.push_back(image_info);
+
+		// 更新bindless descriptor set
+		DescriptorWriter writer;
+		writer.write_image_array(BINDLESS_TEXTURE_BINDING, idx, { image_info }, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		writer.update_set(device, bindless_set_);
+
+		return TextureID{ idx };
+	}
+
+private:
+	std::vector<VkDescriptorImageInfo> cache_;
+	VkDescriptorSet bindless_set_;
 };
 
-constexpr unsigned int FRAME_OVERLAP = 2;
 
 
 class VulkanEngine {
 public:
 
 	bool _isInitialized{ false };
-	int _frameNumber {0};
+	int _frameNumber{ 0 };
 	bool stop_rendering{ false };
 	bool resize_requested{ false };
 	VkExtent2D _windowExtent{ 1700 , 900 };
@@ -185,8 +225,15 @@ public:
 
 	DescriptorAllocatorGrowable _globalDescriptorAllocator;
 
+	// 添加bindless相关成员
+	VkDescriptorSetLayout bindless_texture_layout_{ VK_NULL_HANDLE };
+	VkDescriptorSet bindless_texture_set_{ VK_NULL_HANDLE };
+
+
 	VkDescriptorSet _drawImageDescriptor;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
+
+	VkPipelineLayout mesh_pipeline_layout_;
 
 	// immediate submit structures
 	VkFence _immFence;
@@ -240,7 +287,8 @@ public:
 	EngineStats stats;
 
 	lc::ShaderCache _shaderCache;
-	TextureCache texCache;
+	TextureCache texture_cache_;
+
 
 private:
 	void init_vulkan();

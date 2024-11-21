@@ -30,18 +30,16 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
   get_filename_component(FILE_NAME ${GLSL} NAME)
   set(SPIRV "${SHADER_OUTPUT_DIR}/${FILE_NAME}.spv")
   message(STATUS ${GLSL})
-  execute_process(
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-    RESULT_VARIABLE COMPILE_RESULT
-    OUTPUT_QUIET 
-  )
+  # Define a custom command to compile the shader
+    add_custom_command(
+        OUTPUT ${SPIRV}
+        COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
+        DEPENDS ${GLSL}
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        COMMENT "Compiling shader: ${GLSL}"
+    )
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
-
-if (NOT COMPILE_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to compile shader: ${GLSL}")
-endif()
 
 add_custom_target(
     Shaders 

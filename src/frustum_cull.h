@@ -1,4 +1,4 @@
-#include <glm/matrix.hpp>
+ï»¿#include <glm/matrix.hpp>
 
 class Frustum
 {
@@ -12,16 +12,16 @@ public:
 	bool IsBoxVisible(const glm::vec3& minp, const glm::vec3& maxp) const;
 
 	bool isSphereVisible(const glm::vec3& center, float radius) const {
-		float epsilon = 0.01f; // Ôö¼Ó½Ï´óµÄÎó²îÈİÏŞÀ´´¦Àí¸¡µã¾«¶ÈÎÊÌâ
+		float epsilon = 0.01f; // å¢åŠ è¾ƒå¤§çš„è¯¯å·®å®¹é™æ¥å¤„ç†æµ®ç‚¹ç²¾åº¦é—®é¢˜
 
-		// Ôö¼ÓÒ»¶¨ÈßÓà£¬È·±£°üÎ§Çò°üº¬ËùÓĞ±ß½ç
+		// å¢åŠ ä¸€å®šå†—ä½™ï¼Œç¡®ä¿åŒ…å›´çƒåŒ…å«æ‰€æœ‰è¾¹ç•Œ
 		float adjustedRadius = radius * 1.1f;
 
 		// Check if the sphere is completely outside of any of the planes
 		for (int i = 0; i < Count; ++i) {
 			float distance = glm::dot(glm::vec3(m_planes[i]), center) + m_planes[i].w;
 
-			// Ô¶Æ½Ãæ·ûºÅÔÚ Reversed-Z ÖĞÊÇ·´µÄ£¬È·±£·ûºÅÅĞ¶ÏÒ»ÖÂ
+			// è¿œå¹³é¢ç¬¦å·åœ¨ Reversed-Z ä¸­æ˜¯åçš„ï¼Œç¡®ä¿ç¬¦å·åˆ¤æ–­ä¸€è‡´
 			if (distance < -adjustedRadius - epsilon) {
 				return false;
 			}

@@ -267,8 +267,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> load_gltf(VulkanEngine* engine, std::
 			materialResources.colorSampler = file.samplers[sampler];
 		}
 		
-		constants.colorTexID = engine->texCache.add_texture(materialResources.colorImage.imageView, materialResources.colorSampler).Index;
-		constants.metalRoughTexID = engine->texCache.add_texture(materialResources.metalRoughImage.imageView, materialResources.metalRoughSampler).Index;
+		constants.colorTexID = engine->texture_cache_.add_texture(engine->_device,materialResources.colorImage.imageView, materialResources.colorSampler).Index;
+		constants.metalRoughTexID = engine->texture_cache_.add_texture(engine->_device, materialResources.metalRoughImage.imageView, materialResources.metalRoughSampler).Index;
 		
 		// write material parameter to buffer
 		sceneMaterialConstants[dataIndex] = constants;
