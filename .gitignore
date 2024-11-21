@@ -4,5 +4,5 @@
 .vs/
 /out
 *.ini
-
+/.vscode
 /shaders/*.spv

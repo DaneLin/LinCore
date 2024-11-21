@@ -7,11 +7,9 @@
 // Maximum number of texture descriptors in the pool
 #define DESCRIPTOR_LIMIT 65536
 
-#define ASSET_PATH "../../"
+constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 11;;
 
-constexpr uint32_t BINDLESS_TEXTURE_BINDING = 11;;
+constexpr uint32_t kMAX_BINDLESS_RESOURCES = 1024;
 
-constexpr uint32_t MAX_BINDLESS_RESOURCES = 1024;
-
-const std::string cacheFilePath = "pipeline_cache_data.bin";
+const std::string cache_file_path = "pipeline_cache_data.bin";
 

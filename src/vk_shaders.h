@@ -67,7 +67,7 @@ namespace lc {
             int dst_set;
             int dst_binding;
             VkDescriptorType descriptor_type;
-            VkDescriptorBufferInfo buffer_info;
+            VkDescriptorBufferInfo BufferInfo;
             uint32_t dynamic_offset;
         };
 
@@ -79,11 +79,11 @@ namespace lc {
         };
 
         void BindBuffer(const char* name,
-            const VkDescriptorBufferInfo& buffer_info);
+            const VkDescriptorBufferInfo& BufferInfo);
         void BindImage(const char* name,
             const VkDescriptorImageInfo& image_info);
         void BindDynamicBuffer(const char* name, uint32_t offset,
-            const VkDescriptorBufferInfo& buffer_info);
+            const VkDescriptorBufferInfo& BufferInfo);
         void ApplyBinds(VkCommandBuffer cmd, VkPipelineLayout layout);
         void BuildSets(VkDevice device, DescriptorAllocatorGrowable& allocator);
         void SetShader(ShaderEffect* new_shader);

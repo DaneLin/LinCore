@@ -4,20 +4,20 @@
 
 class Camera {
 public:
-	glm::vec3 velocity;
-	glm::vec3 position;
+	glm::vec3 velocity_;
+	glm::vec3 position_;
 
-	float pitch{ 0.f };
+	float pitch_{ 0.f };
 
-	float yaw{ 0.f };
+	float yaw_{ 0.f };
 
-	float speedFactor{ 1.f };
+	float speed_factor_{ 1.f };
 
-	glm::mat4 get_view_matrix();
+	glm::mat4 GetViewMatrix();
 
-	glm::mat4 get_rotation_matrix();
+	glm::mat4 GetRotationMatrix();
 
-	void process_sdl_event(SDL_Event& e);
+	void ProcessSdlEvent(SDL_Event& e);
 
-	void update();
+	void Update();
 };

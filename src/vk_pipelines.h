@@ -1,6 +1,6 @@
 ﻿#pragma once 
 #include <vk_types.h>
-#include "vk_shaders_new.h"
+#include "vk_shaders.h"
 
 namespace lc {
 	namespace vkutils {
@@ -47,7 +47,7 @@ namespace lc {
 
 		void SetShaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader);
 
-		void SetShaders(lc::ShaderEffect* effect);
+		void SetShaders(ShaderEffect* effect);
 
 		void SetInputTopology(VkPrimitiveTopology topology);
 

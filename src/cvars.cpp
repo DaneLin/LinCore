@@ -97,7 +97,7 @@ struct CVarArray
 
 uint32_t Hash(const char *str)
 {
-	return StringUtils::fnv1a_32(str, strlen(str));
+	return StringUtils::Fnv1a32(str, strlen(str));
 }
 
 class CVarSystemImpl : public CVarSystem

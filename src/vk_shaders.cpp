@@ -1,4 +1,4 @@
-﻿#include "vk_shaders_new.h"
+﻿#include "vk_shaders.h"
 #include "vk_initializers.h"
 #include "logging.h"
 
@@ -10,8 +10,6 @@
 #include <spirv-headers/spirv.h>
 
 namespace lc {
-
-
 
 	bool vkutil::LoadShader(VkDevice device, const char* file_path,ShaderModule* out_shader_module)
 	{
@@ -211,7 +209,7 @@ namespace lc {
 		}
 
 		// we start from just the default empty pipeline layout info
-		VkPipelineLayoutCreateInfo pipelineCreateInfo = vkinit::pipeline_layout_create_info();
+		VkPipelineLayoutCreateInfo pipelineCreateInfo = vkinit::PipelineLayoutCreateInfo();
 
 		pipelineCreateInfo.pushConstantRangeCount = static_cast<uint32_t>(constant_ranges.size());
 		pipelineCreateInfo.pPushConstantRanges = constant_ranges.data();
@@ -235,7 +233,7 @@ namespace lc {
 	void ShaderEffect::FillStage(std::vector<VkPipelineShaderStageCreateInfo>& pipeline_stages)
 	{
 		for (auto& s : stages_) {
-			pipeline_stages.push_back(vkinit::pipeline_shader_stage_create_info(s.stage, s.module->module));
+			pipeline_stages.push_back(vkinit::PipelineShaderStageCreateInfo(s.stage, s.module->module));
 		}
 	}
 
@@ -258,15 +256,15 @@ namespace lc {
 	{
 		for (int i = 0; i < 4; i++) {
 			if (set_layouts_[i] != VK_NULL_HANDLE) {
-				vkDestroyDescriptorSetLayout(VulkanEngine::Get()._device, set_layouts_[i], nullptr);
+				vkDestroyDescriptorSetLayout(VulkanEngine::Get().device_, set_layouts_[i], nullptr);
 			}
 		}
 	}
 
 
-	void ShaderDescriptorBinder::BindBuffer(const char* name, const VkDescriptorBufferInfo& buffer_info)
+	void ShaderDescriptorBinder::BindBuffer(const char* name, const VkDescriptorBufferInfo& BufferInfo)
 	{
-		BindDynamicBuffer(name, -1, buffer_info);
+		BindDynamicBuffer(name, -1, BufferInfo);
 	}
 
 	void ShaderDescriptorBinder::BindImage(const char* name, const VkDescriptorImageInfo& image_info)
@@ -301,7 +299,7 @@ namespace lc {
 		}
 	}
 
-	void ShaderDescriptorBinder::BindDynamicBuffer(const char* name, uint32_t offset, const VkDescriptorBufferInfo& buffer_info)
+	void ShaderDescriptorBinder::BindDynamicBuffer(const char* name, uint32_t offset, const VkDescriptorBufferInfo& BufferInfo)
 	{
 		if (shaders_ == nullptr) {
 			LOGE("No shader set");
@@ -314,10 +312,10 @@ namespace lc {
 
 			for (auto& write : buffer_writes_) {
 				if (write.dst_binding == bind.binding && write.dst_set == bind.set) {
-					if (write.buffer_info.buffer != buffer_info.buffer ||
-						write.buffer_info.range != buffer_info.range ||
-						write.buffer_info.offset != buffer_info.offset) {
-						write.buffer_info = buffer_info;
+					if (write.BufferInfo.buffer != BufferInfo.buffer ||
+						write.BufferInfo.range != BufferInfo.range ||
+						write.BufferInfo.offset != BufferInfo.offset) {
+						write.BufferInfo = BufferInfo;
 						write.dynamic_offset = offset;
 
 						cached_descriptor_sets_[write.dst_set] = VK_NULL_HANDLE;
@@ -334,7 +332,7 @@ namespace lc {
 			newWrite.dst_set = bind.set;
 			newWrite.dst_binding = bind.binding;
 			newWrite.descriptor_type = bind.type;
-			newWrite.buffer_info = buffer_info;
+			newWrite.BufferInfo = BufferInfo;
 			newWrite.dynamic_offset = offset;
 
 			cached_descriptor_sets_[bind.set] = VK_NULL_HANDLE;
@@ -347,7 +345,7 @@ namespace lc {
 	{
 		for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i) {
 			if (cached_descriptor_sets_[i] != VK_NULL_HANDLE) {
-				vkCmdBindDescriptorSets(cmd, shaders_->GetBindPoint(), shaders_->built_layout_, i, 1, &cached_descriptor_sets_[i], set_offsets_[i].count, set_offsets_[i].offset.data());
+				vkCmdBindDescriptorSets(cmd, shaders_->GetBindPoint(), shaders_->built_layout_, static_cast<uint32_t>(i), 1, &cached_descriptor_sets_[i], set_offsets_[i].count, set_offsets_[i].offset.data());
 			}
 		}
 	}
@@ -372,7 +370,7 @@ namespace lc {
 
 		for (BufferWriteDescriptor& w : buffer_writes_) {
 			uint32_t set = w.dst_set;
-			VkWriteDescriptorSet write = vkinit::write_descriptor_buffer(w.descriptor_type, VK_NULL_HANDLE, &w.buffer_info, w.dst_binding);
+			VkWriteDescriptorSet write = vkinit::WriteDescriptorBuffer(w.descriptor_type, VK_NULL_HANDLE, &w.BufferInfo, w.dst_binding);
 
 			writes[set].push_back(write);
 
@@ -387,7 +385,7 @@ namespace lc {
 
 		for (ImageWriteDescriptor& w : image_writes_) {
 			uint32_t set = w.dst_set;
-			VkWriteDescriptorSet write = vkinit::write_descriptor_image(w.descriptor_type, VK_NULL_HANDLE, &w.image_info, w.dst_binding);
+			VkWriteDescriptorSet write = vkinit::WriteDescriptorImage(w.descriptor_type, VK_NULL_HANDLE, &w.image_info, w.dst_binding);
 
 			writes[set].push_back(write);
 		}
@@ -398,7 +396,7 @@ namespace lc {
 					// alloc
 					auto layout = shaders_->set_layouts_[i];
 
-					VkDescriptorSet new_descriptor = allocator.allocate(device, layout);
+					VkDescriptorSet new_descriptor = allocator.Allocate(device, layout);
 
 					for (auto& w : writes[i]) {
 						w.dstSet = new_descriptor;
@@ -456,7 +454,7 @@ namespace lc {
 		if (it == module_cache_.end()) {
 			ShaderModule newShader;
 
-			bool result = vkutil::LoadShader(VulkanEngine::Get()._device, path.c_str(), &newShader);
+			bool result = vkutil::LoadShader(VulkanEngine::Get().device_, path.c_str(), &newShader);
 			if (!result) {
 				LOGE("Error when compiling shader {}", path);
 				return nullptr;
@@ -470,7 +468,7 @@ namespace lc {
 	void ShaderCache::Clear()
 	{
 		for (auto& [k, v] : module_cache_) {
-			vkDestroyShaderModule(VulkanEngine::Get()._device, v.module, nullptr);
+			vkDestroyShaderModule(VulkanEngine::Get().device_, v.module, nullptr);
 		}
 		for (ShaderEffect* effect : shader_effect_cache_) {
 			delete effect;

@@ -21,38 +21,38 @@
 #include <glm/vec4.hpp>
 
 struct AllocatedBufferUntyped {
-	VkBuffer _buffer{};
-	VmaAllocation _allocation{};
-	VkDeviceSize _size{ 0 };
-	VkDescriptorBufferInfo get_info(VkDeviceSize offset = 0);
+	VkBuffer buffer{};
+	VmaAllocation allocation{};
+	VkDeviceSize size{ 0 };
+	VkDescriptorBufferInfo GetInfo(VkDeviceSize offset = 0);
 };
 
-inline VkDescriptorBufferInfo AllocatedBufferUntyped::get_info(VkDeviceSize offset)
+inline VkDescriptorBufferInfo AllocatedBufferUntyped::GetInfo(VkDeviceSize offset)
 {
 	VkDescriptorBufferInfo info;
-	info.buffer = _buffer;
+	info.buffer = buffer;
 	info.offset = offset;
-	info.range = _size;
+	info.range = size;
 	return info;
 }
 
 struct AllocatedImage {
 	VkImage image;
-	VkImageView imageView;
-	VmaAllocation allocations;
-	VkExtent3D imageExtent;
-	VkFormat imageFormat;
+	VkImageView view;
+	VmaAllocation allocation;
+	VkExtent3D extent;
+	VkFormat format;
 };
 
 struct DeletionQueue {
 	std::deque<std::function<void()>> deletors;
 
-	void push_function(std::function<void()>&& function)
+	void PushFunction(std::function<void()>&& function)
 	{
 		deletors.push_back(function);
 	};
 
-	void flush()
+	void Flush()
 	{
 		// reverse iterate the deletion queue to execute all the functions
 		for (auto it = deletors.rbegin(); it != deletors.rend(); it++)
@@ -91,22 +91,22 @@ struct GPUSceneData {
     glm::mat4 view;
     glm::mat4 proj;
     glm::mat4 viewproj;
-    glm::vec4 ambientColor;
-    glm::vec4 sunlightDirection; // w for sun power
-    glm::vec4 sunlightColor;
+    glm::vec4 ambient_color;
+    glm::vec4 sunlight_direction; // w for sun power
+    glm::vec4 sunlight_color;
 };
 
 // holds the resources needed for a mesh
 struct GPUMeshBuffers {
-	AllocatedBuffer indexBuffer;
-	AllocatedBuffer vertexBuffer;
-	VkDeviceAddress vertexBufferAddress;
+	AllocatedBuffer index_buffer;
+	AllocatedBuffer vertex_buffer;
+	VkDeviceAddress vertex_buffer_address;
 };
 
 // push constants for our mesh object draws
 struct alignas(16) GPUDrawPushConstants {
-	glm::mat4 worldMatrix;
-	VkDeviceAddress vertexBuffer;
+	glm::mat4 world_matrix;
+	VkDeviceAddress vertex_buffer_address;
 };
 
 /// <summary>
@@ -115,25 +115,10 @@ struct alignas(16) GPUDrawPushConstants {
 /// It holds a descriptor set too.
 /// </summary>
 enum class MaterialPass : uint8_t {
-	MainColor,
-	Transparent,
-	Other
+	kMainColor,
+	kTransparent,
+	kOther
 };
-
-struct Program {
-	VkPipelineBindPoint bindpoint;
-	VkPipelineLayout layout;
-	VkDescriptorSetLayout setLayout;
-	VkDescriptorUpdateTemplate updateTemplate;
-	VkShaderStageFlags pushConstantStages;
-
-	void destroy(VkDevice device) {
-		vkDestroyPipelineLayout(device, layout, nullptr);
-		vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
-		vkDestroyDescriptorUpdateTemplate(device, updateTemplate, nullptr);
-	}
-};
-
 
 struct MaterialPipeline {
 	VkPipeline pipeline;
@@ -142,34 +127,34 @@ struct MaterialPipeline {
 
 struct MaterialInstance {
 	MaterialPipeline* pipeline;
-	VkDescriptorSet materialSet;
-	MaterialPass passType;
+	VkDescriptorSet set;
+	MaterialPass pass_type;
 };
 
 struct DrawContext;
 
 class IRenderable {
-	virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) = 0;
+	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) = 0;
 };
 
 struct Node : public IRenderable {
 	std::weak_ptr<Node> parent;
 	std::vector<std::shared_ptr<Node>> children;
 
-	glm::mat4 localTransform;
-	glm::mat4 worldTransform;
+	glm::mat4 local_transform;
+	glm::mat4 world_transform;
 
-	void refresh_transform(const glm::mat4& parentMatrix) {
-		worldTransform = parentMatrix * localTransform;
+	void RefreshTransform(const glm::mat4& parent_matrix) {
+		world_transform = parent_matrix * local_transform;
 		for (auto child : children) {
-			child->refresh_transform(worldTransform);
+			child->RefreshTransform(world_transform);
 		}
 	}
 
-	virtual void draw(const glm::mat4& topMatrix, DrawContext& ctx) {
+	virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) {
 		// draw children
 		for (auto& c : children) {
-			c->draw(topMatrix, ctx);
+			c->Draw(top_matrix, ctx);
 		}
 	}
 };

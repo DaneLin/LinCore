@@ -17,7 +17,7 @@ void vkutils::PushBuffer::Init(VmaAllocator& allocator, AllocatedBufferUntyped s
 	align = alignment;
 	source = sourceBuffer;
 	current_offset = 0;
-	vmaMapMemory(allocator, sourceBuffer._allocation, &mapped);
+	vmaMapMemory(allocator, sourceBuffer.allocation, &mapped);
 }
 
 void vkutils::PushBuffer::Reset()
