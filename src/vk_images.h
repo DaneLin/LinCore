@@ -1,7 +1,7 @@
 
 #pragma once 
 
-namespace vkutil {
+namespace vkutils {
 
 	void transition_image_layout(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout);
 

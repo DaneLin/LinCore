@@ -2,55 +2,78 @@
 #include <vk_types.h>
 #include "vk_shaders_new.h"
 
-namespace vkutils {
-	bool load_pipeline_cache(VkDevice device, const std::string cacheFilePath, VkPipelineCache& cache);
-	VkPipelineCache create_pipeline_cache(VkDevice device);
-	void save_pipeline_cache(VkDevice device, const std::string cacheFilePath, VkPipelineCache cache);
-}
+namespace lc {
+	namespace vkutils {
+		
+	} // namespace vkutils
 
-class PipelineBuilder {
-public:
-	std::vector<VkPipelineShaderStageCreateInfo> _shaderStages;
+	class PipelineCache {
+	public:
+		PipelineCache(VkDevice device, const std::string cache_file_path);
+		~PipelineCache();
 
-	VkPipelineInputAssemblyStateCreateInfo _inputAssembly;
-	VkPipelineRasterizationStateCreateInfo _rasterizer;
-	VkPipelineColorBlendAttachmentState _colorBlendAttachment;
-	VkPipelineMultisampleStateCreateInfo _multisampling;
-	VkPipelineLayout _pipelineLayout;
-	VkPipelineDepthStencilStateCreateInfo _depthStencil;
-	VkPipelineRenderingCreateInfo _renderInfo;
-	VkFormat _colorAttachmentFormat;
+		VkPipelineCache GetCache() { return cache_; }
 
-	PipelineBuilder() { clear(); }
+		void SaveCache();
 
-	void clear();
+	private:
+		bool LoadPipelineCache();
+		void CreatePipelineCache();
 
-	VkPipeline build_pipeline(VkDevice device, VkPipelineCache cache = VK_NULL_HANDLE);
+	private:
+		VkPipelineCache cache_;
+		VkDevice device_;
+		std::string cache_file_path_;
+	};
 
-	void set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
+	class PipelineBuilder {
+	public:
+		std::vector<VkPipelineShaderStageCreateInfo> shader_stages_;
 
-	void set_shaders(lc::ShaderEffect* effect);
+		VkPipelineInputAssemblyStateCreateInfo input_assembly_;
+		VkPipelineRasterizationStateCreateInfo rasterizer_;
+		VkPipelineColorBlendAttachmentState color_blend_attachment_;
+		VkPipelineMultisampleStateCreateInfo multisampling_;
+		VkPipelineLayout pipeline_layout_;
+		VkPipelineDepthStencilStateCreateInfo depth_stencil_;
+		VkPipelineRenderingCreateInfo render_info_;
+		VkFormat color_attachment_format_;
 
-	void set_input_topology(VkPrimitiveTopology topology);
+		PipelineBuilder() { Clear(); }
 
-	void set_polygon_mode(VkPolygonMode mode);
+		void Clear();
 
-	void set_cull_mode(VkCullModeFlags cullMode, VkFrontFace frontFace);
+		VkPipeline BuildPipeline(VkDevice device, VkPipelineCache cache = VK_NULL_HANDLE);
 
-	void set_multisampling_none();
+		void SetShaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader);
 
-	void disable_blending();
+		void SetShaders(lc::ShaderEffect* effect);
 
-	void set_color_attachment_format(VkFormat format);
+		void SetInputTopology(VkPrimitiveTopology topology);
 
-	void set_depth_format(VkFormat format);
+		void SetPolygonMode(VkPolygonMode mode);
 
-	void disable_depthtest();
+		void SetCullMode(VkCullModeFlags cullMode, VkFrontFace front_face);
 
-	void enable_depthtest(bool depthWriteEnable, VkCompareOp op);
+		void SetMultisamplingNone();
 
-	void enable_blending_additive();
+		void DisableBlending();
 
-	void enable_blending_alphablend();
-};
+		void SetColorAttachmentFormat(VkFormat format);
+
+		void SetDepthFormat(VkFormat format);
+
+		void DisableDepthtest();
+
+		void EnableDepthtest(bool depth_write_enable, VkCompareOp op);
+
+		void EnableBlendingAdditive();
+
+		void EnableBlendingAlphablend();
+	};
+
+
+} // namespace lc
+
+
 

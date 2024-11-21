@@ -149,7 +149,7 @@ void VulkanEngine::cleanup()
 		// make sure the GPU has stopped doing its thing
 		vkDeviceWaitIdle(_device);
 
-		_shaderCache.clear();
+		shader_cache_.Clear();
 		loadedScenes.clear();
 
 		for (int i = 0; i < FRAME_OVERLAP; i++) {
@@ -211,29 +211,29 @@ void VulkanEngine::draw()
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-	vkutil::transition_image_layout(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutils::transition_image_layout(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	draw_background(cmd);
 
 	// make the swapchain image into presentable mode
-	vkutil::transition_image_layout(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transition_image_layout(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	vkutils::transition_image_layout(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutils::transition_image_layout(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 	draw_geometry(cmd);
 
-	vkutil::transition_image_layout(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutil::transition_image_layout(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	vkutils::transition_image_layout(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	vkutils::transition_image_layout(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	// execute a copy from the draw image into the swapchain
-	vkutil::copy_image_to_image(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
+	vkutils::copy_image_to_image(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
 
 	// transition the swapchain image to be ready for display
-	vkutil::transition_image_layout(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutils::transition_image_layout(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 	// draw imgui into the swapchain image
 	draw_imgui(cmd, _swapchainImageViews[swapchainImageIndex]);
 
-	vkutil::transition_image_layout(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	vkutils::transition_image_layout(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	// finish recording the command buffer
 	VK_CHECK(vkEndCommandBuffer(cmd));
@@ -504,7 +504,7 @@ AllocatedImage VulkanEngine::create_image(void* data, VkExtent3D size, VkFormat 
 	AllocatedImage newImage = create_image(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
 
 	immediate_submit([&](VkCommandBuffer cmd) {
-		vkutil::transition_image_layout(cmd, newImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		vkutils::transition_image_layout(cmd, newImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 		VkBufferImageCopy copyRegion{};
 		copyRegion.bufferOffset = 0;
@@ -521,10 +521,10 @@ AllocatedImage VulkanEngine::create_image(void* data, VkExtent3D size, VkFormat 
 		vkCmdCopyBufferToImage(cmd, uploadBuffer.buffer, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
 		if (mipmapped) {
-			vkutil::generate_mipmaps(cmd, newImage.image, VkExtent2D{ newImage.imageExtent.width, newImage.imageExtent.height });
+			vkutils::generate_mipmaps(cmd, newImage.image, VkExtent2D{ newImage.imageExtent.width, newImage.imageExtent.height });
 		}
 		else {
-			vkutil::transition_image_layout(cmd, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			vkutils::transition_image_layout(cmd, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 
 		});
@@ -899,56 +899,52 @@ void VulkanEngine::init_descriptors()
 
 void VulkanEngine::init_pipelines()
 {
-	if (!vkutils::load_pipeline_cache(_device, cacheFilePath, global_pipeline_cache)) {
-		LOGI("Creating pipeline cache");
-		global_pipeline_cache = vkutils::create_pipeline_cache(_device);
-	}
+	global_pipeline_cache_ = new lc::PipelineCache(_device, cacheFilePath);
 
 	init_background_pipelines();
 	metal_rough_material.build_pipelines(this);
 
 	_mainDeletionQueue.push_function([&]() {
-		vkutils::save_pipeline_cache(_device, cacheFilePath, global_pipeline_cache);
-		vkDestroyPipelineCache(_device, global_pipeline_cache, nullptr);
-		global_pipeline_cache = VK_NULL_HANDLE;
+		
+		delete global_pipeline_cache_;
 		});
 }
 
 void VulkanEngine::init_background_pipelines()
 {
-	lc::ShaderEffect* gradientEffect = _shaderCache.get_shader_effect("shaders/gradient_color.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
-	lc::ShaderEffect* skyEffect = _shaderCache.get_shader_effect("shaders/sky.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
-	gradientEffect->reflect_layout(_device, nullptr, 0);
-	skyEffect->reflect_layout(_device, nullptr, 0);
+	lc::ShaderEffect* gradientEffect = shader_cache_.GetShaderEffect("shaders/gradient_color.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+	lc::ShaderEffect* skyEffect = shader_cache_.GetShaderEffect("shaders/sky.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+	gradientEffect->ReflectLayout(_device, nullptr, 0);
+	skyEffect->ReflectLayout(_device, nullptr, 0);
 
 
-	PipelineBuilder builder{};
-	builder.set_shaders(gradientEffect);
+	lc::PipelineBuilder builder{};
+	builder.SetShaders(gradientEffect);
 
 	ComputeEffect gradient{};
 	gradient.name = "gradient";
 	gradient.data = {};
 	gradient.data.data1 = glm::vec4(1, 0, 0, 1);
 	gradient.data.data2 = glm::vec4(0, 0, 1, 1);
-	gradient.pipeline = builder.build_pipeline(_device,global_pipeline_cache);
-	gradient.layout = gradientEffect->builtLayout;
+	gradient.pipeline = builder.BuildPipeline(_device,global_pipeline_cache_->GetCache());
+	gradient.layout = gradientEffect->built_layout_;
 
-	gradient.descriptorBinder.set_shader(gradientEffect);
-	gradient.descriptorBinder.bind_image("image", { .sampler = VK_NULL_HANDLE, .imageView = _drawImage.imageView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL });
-	gradient.descriptorBinder.build_sets(_device, _globalDescriptorAllocator);
+	gradient.descriptorBinder.SetShader(gradientEffect);
+	gradient.descriptorBinder.BindImage("image", { .sampler = VK_NULL_HANDLE, .imageView = _drawImage.imageView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL });
+	gradient.descriptorBinder.BuildSets(_device, _globalDescriptorAllocator);
 
-	builder.set_shaders(skyEffect);
+	builder.SetShaders(skyEffect);
 	ComputeEffect sky{};
 	sky.name = "sky";
 	sky.data = {};
 	sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-	sky.pipeline = builder.build_pipeline(_device, global_pipeline_cache);
-	sky.layout = skyEffect->builtLayout;
+	sky.pipeline = builder.BuildPipeline(_device, global_pipeline_cache_->GetCache());
+	sky.layout = skyEffect->built_layout_;
 
 
-	sky.descriptorBinder.set_shader(skyEffect);
-	sky.descriptorBinder.bind_image("image", { .sampler = VK_NULL_HANDLE, .imageView = _drawImage.imageView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL });
-	sky.descriptorBinder.build_sets(_device, _globalDescriptorAllocator);
+	sky.descriptorBinder.SetShader(skyEffect);
+	sky.descriptorBinder.BindImage("image", { .sampler = VK_NULL_HANDLE, .imageView = _drawImage.imageView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL });
+	sky.descriptorBinder.BuildSets(_device, _globalDescriptorAllocator);
 
 	backgroundEffects.push_back(gradient);
 	backgroundEffects.push_back(sky);
@@ -1169,7 +1165,7 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
 	/*DescriptorInfo drawImageDesc(_drawImage.imageView, VK_IMAGE_LAYOUT_GENERAL);
 	DescriptorInfo descs[] = { drawImageDesc };
 	vkCmdPushDescriptorSetWithTemplateKHR(cmd, effect.program.updateTemplate, effect.program.layout,0, descs);*/
-	effect.descriptorBinder.apply_binds(cmd, effect.layout);
+	effect.descriptorBinder.ApplyBinds(cmd, effect.layout);
 
 	vkCmdPushConstants(cmd, effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 
@@ -1371,9 +1367,9 @@ void VulkanEngine::update_scene()
 
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
-	lc::ShaderEffect* meshEffect = engine->_shaderCache.get_shader_effect();
-	meshEffect->add_stage(engine->_shaderCache.get_shader("shaders/mesh.vert.spv"), VK_SHADER_STAGE_VERTEX_BIT);
-	meshEffect->add_stage(engine->_shaderCache.get_shader("shaders/mesh.frag.spv"), VK_SHADER_STAGE_FRAGMENT_BIT);
+	lc::ShaderEffect* meshEffect = engine->shader_cache_.GetShaderEffect();
+	meshEffect->AddStage(engine->shader_cache_.GetShader("shaders/mesh.vert.spv"), VK_SHADER_STAGE_VERTEX_BIT);
+	meshEffect->AddStage(engine->shader_cache_.GetShader("shaders/mesh.frag.spv"), VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	DescriptorLayoutBuilder layoutBuilder;
 	layoutBuilder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
@@ -1400,32 +1396,32 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 	VK_CHECK(vkCreatePipelineLayout(engine->_device, &meshLayoutInfo, nullptr, &engine->mesh_pipeline_layout_));
 
 	// build the stage-create-info for both vertx and fragment stages
-	PipelineBuilder pipelineBuilder;
-	pipelineBuilder.set_shaders(meshEffect);
-	pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
-	pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
-	pipelineBuilder.set_multisampling_none();
-	pipelineBuilder.disable_blending();
-	pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
+	lc::PipelineBuilder pipelineBuilder;
+	pipelineBuilder.SetShaders(meshEffect);
+	pipelineBuilder.SetInputTopology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	pipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
+	pipelineBuilder.SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	pipelineBuilder.SetMultisamplingNone();
+	pipelineBuilder.DisableBlending();
+	pipelineBuilder.EnableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	// render format
-	pipelineBuilder.set_color_attachment_format(engine->_drawImage.imageFormat);
-	pipelineBuilder.set_depth_format(engine->_depthImage.imageFormat);
-	pipelineBuilder._pipelineLayout = engine->mesh_pipeline_layout_;
+	pipelineBuilder.SetColorAttachmentFormat(engine->_drawImage.imageFormat);
+	pipelineBuilder.SetDepthFormat(engine->_depthImage.imageFormat);
+	pipelineBuilder.pipeline_layout_ = engine->mesh_pipeline_layout_;
 
 	// use the triangle layout we created
-	//pipelineBuilder._pipelineLayout = meshEffect->builtLayout;
+	//pipelineBuilder._pipelineLayout = meshEffect->built_layout_;
 	opaquePipeline.layout = engine->mesh_pipeline_layout_;
-	opaquePipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device,engine->global_pipeline_cache);
+	opaquePipeline.pipeline = pipelineBuilder.BuildPipeline(engine->_device,engine->global_pipeline_cache_->GetCache());
 
 	// create the transparent variant
-	pipelineBuilder.enable_blending_additive();
+	pipelineBuilder.EnableBlendingAdditive();
 
-	pipelineBuilder.enable_depthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
+	pipelineBuilder.EnableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	transparentPipeline.layout = engine->mesh_pipeline_layout_;
-	transparentPipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device,engine->global_pipeline_cache);
+	transparentPipeline.pipeline = pipelineBuilder.BuildPipeline(engine->_device,engine->global_pipeline_cache_->GetCache());
 
 	
 }

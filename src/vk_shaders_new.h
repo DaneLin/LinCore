@@ -1,121 +1,118 @@
 ﻿#pragma once
 
 #include <vk_types.h>
-
 #include "vk_descriptors.h"
 
 class VulkanEngine;
+
 namespace lc {
 
+    // Represents a compiled shader module with its SPIR-V code.
+    struct ShaderModule {
+        std::vector<uint32_t> code;
+        VkShaderModule module;
+    };
 
-	struct ShaderModule {
-		std::vector<uint32_t> code;
-		VkShaderModule module;
-	};
+    namespace vkutil {
+        // Loads a shader module from a SPIR-V file.
+        // Returns false if loading fails.
+        bool LoadShader(VkDevice device, const char* file_path,
+            ShaderModule* out_shader_module);
 
-	namespace vkutil {
-		// load a shader module from a spir-v file. Return false if it errors
-		bool load_shader(VkDevice device, const char* filePath, ShaderModule* outShaderModule);
+        // Computes hash for descriptor layout information.
+        uint32_t HashDescriptorLayoutInfo(VkDescriptorSetLayoutCreateInfo* info);
+    }  // namespace vkutil
 
-		uint32_t hash_descriptor_layout_info(VkDescriptorSetLayoutCreateInfo* info);
-	}
+    // Contains all information needed for a shader effect pipeline.
+    class ShaderEffect {
+    public:
+        // Defines type overrides for shader reflection.
+        struct ReflectionOverrides {
+            const char* name;
+            VkDescriptorType overriden_type;
+        };
 
-	// holds all information for a given shader set for pipeline
-	struct ShaderEffect {
-		struct ReflectionOverrides {
-			const char* name;
-			VkDescriptorType overridenType;
-		};
+        // Stores information about reflected bindings.
+        struct ReflectedBinding {
+            uint32_t set;
+            uint32_t binding;
+            VkDescriptorType type;
+        };
 
-		void add_stage(ShaderModule* shaderModule, VkShaderStageFlagBits stage);
+        ~ShaderEffect();
 
-		void reflect_layout(VkDevice device, ReflectionOverrides* overrides, int overrideCount, uint32_t overrideConstantSize = -1);
+        void AddStage(ShaderModule* shader_module, VkShaderStageFlagBits stage);
+        void ReflectLayout(VkDevice device, ReflectionOverrides* overrides,
+            int override_count, uint32_t override_constant_size = -1);
+        void FillStage(std::vector<VkPipelineShaderStageCreateInfo>& pipeline_stages);
+        VkPipelineBindPoint GetBindPoint() const;
 
-		void fill_stage(std::vector<VkPipelineShaderStageCreateInfo>& pipelineStages);
+        VkPipelineLayout built_layout_;
+        std::unordered_map<std::string, ReflectedBinding> bindings_;
+        std::array<VkDescriptorSetLayout, 4> set_layouts_;
+        std::array<uint32_t, 4> set_hashes_;
 
-		// 在ShaderEffect中添加函数
-		VkPipelineBindPoint get_bind_point() const;
+    private:
+        struct ShaderStage {
+            ShaderModule* module;
+            VkShaderStageFlagBits stage;
+        };
 
-		~ShaderEffect();
+        std::vector<ShaderStage> stages_;
+    };
 
-		VkPipelineLayout builtLayout;
+    class ShaderDescriptorBinder {
+    public:
+        struct BufferWriteDescriptor {
+            int dst_set;
+            int dst_binding;
+            VkDescriptorType descriptor_type;
+            VkDescriptorBufferInfo buffer_info;
+            uint32_t dynamic_offset;
+        };
 
-		struct ReflectedBinding {
-			uint32_t set;
-			uint32_t binding;
-			VkDescriptorType type;
-		};
+        struct ImageWriteDescriptor {
+            int dst_set;
+            int dst_binding;
+            VkDescriptorType descriptor_type;
+            VkDescriptorImageInfo image_info;
+        };
 
-		std::unordered_map<std::string, ReflectedBinding> bindings;
-		std::array<VkDescriptorSetLayout, 4> setLayouts;
-		std::array<uint32_t, 4> setHashes;
+        void BindBuffer(const char* name,
+            const VkDescriptorBufferInfo& buffer_info);
+        void BindImage(const char* name,
+            const VkDescriptorImageInfo& image_info);
+        void BindDynamicBuffer(const char* name, uint32_t offset,
+            const VkDescriptorBufferInfo& buffer_info);
+        void ApplyBinds(VkCommandBuffer cmd, VkPipelineLayout layout);
+        void BuildSets(VkDevice device, DescriptorAllocatorGrowable& allocator);
+        void SetShader(ShaderEffect* new_shader);
 
-	private:
-		struct ShaderStage {
-			ShaderModule* module;
-			VkShaderStageFlagBits stage;
-		};
+        std::array<VkDescriptorSet, 4> cached_descriptor_sets_;
 
-		std::vector<ShaderStage> stages;
-	};
+    private:
+        struct DynOffset {
+            std::array<uint32_t, 16> offset;
+            uint32_t count{ 0 };
+        };
 
-	struct ShaderDescriptorBinder {
-		struct BufferWriteDescriptor {
-			int dstSet;
-			int dstBinding;
-			VkDescriptorType descriptorType;
-			VkDescriptorBufferInfo bufferInfo;
+        std::array<DynOffset, 4> set_offsets_;
+        ShaderEffect* shaders_{ nullptr };
+        std::vector<BufferWriteDescriptor> buffer_writes_;
+        std::vector<ImageWriteDescriptor> image_writes_;
+    };
 
-			uint32_t dynamic_offset;
-		};
+    class ShaderCache {
+    public:
+        ShaderEffect* GetShaderEffect();
+        ShaderEffect* GetShaderEffect(const std::string& path,
+            VkShaderStageFlagBits stage);
+        ShaderModule* GetShader(const std::string& path);
+        void Clear();
 
-		struct ImageWriteDescriptor {
-			int dstSet;
-			int dstBinding;
-			VkDescriptorType descriptorType;
-			VkDescriptorImageInfo imageInfo;
-		};
+    private:
+        std::unordered_map<std::string, ShaderModule> module_cache_;
+        std::vector<ShaderEffect*> shader_effect_cache_;
+    };
 
-		void bind_buffer(const char* name, const VkDescriptorBufferInfo& bufferInfo);
-
-		void bind_image(const char* name, const VkDescriptorImageInfo& imageInfo);
-
-		void bind_dynamic_buffer(const char* name, uint32_t offset, const VkDescriptorBufferInfo& bufferInfo);
-
-		void apply_binds(VkCommandBuffer cmd, VkPipelineLayout layout);
-
-		void build_sets(VkDevice device, DescriptorAllocatorGrowable& allocator);
-
-		void set_shader(ShaderEffect* newShader);;
-
-		std::array<VkDescriptorSet, 4> cachedDescriptorSets;
-
-
-	private:
-		struct DynOffset {
-			std::array<uint32_t, 16> offset;
-			uint32_t count{ 0 };
-		};
-		std::array<DynOffset, 4> setOffsets;
-
-		ShaderEffect* shaders{ nullptr };
-		std::vector<BufferWriteDescriptor> bufferWrites;
-		std::vector<ImageWriteDescriptor> imageWrites;
-	};
-
-	class ShaderCache {
-	public:
-
-		ShaderEffect* get_shader_effect();
-
-		ShaderEffect* get_shader_effect(const std::string& path, VkShaderStageFlagBits stage);
-
-		ShaderModule* get_shader(const std::string& path);
-
-		void clear();
-
-	private:
-		std::unordered_map<std::string, ShaderModule> module_cache;
-		std::vector<ShaderEffect*> shader_effect_cache_;
-	};
-} // namespace lc
+}  // namespace lc

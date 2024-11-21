@@ -17,6 +17,7 @@
 #include "vk_shaders_new.h"
 
 #include "config.h"
+#include "vk_pipelines.h"
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
@@ -286,10 +287,10 @@ public:
 
 	EngineStats stats;
 
-	lc::ShaderCache _shaderCache;
+	lc::ShaderCache shader_cache_;
 	TextureCache texture_cache_;
 
-	VkPipelineCache global_pipeline_cache;
+	lc::PipelineCache* global_pipeline_cache_;
 
 
 private:

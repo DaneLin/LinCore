@@ -1,31 +1,31 @@
 #include <vk_pushbuffer.h>
 
-uint32_t vkutil::PushBuffer::push(void* data, size_t size)
+uint32_t vkutils::PushBuffer::Push(void* data, size_t size)
 {
-	uint32_t offset = currentOffset;
+	uint32_t offset = current_offset;
 	char* target = (char*)mapped;
-	target += currentOffset;
+	target += current_offset;
 	memcpy(target, data, size);
-	currentOffset += static_cast<uint32_t>(size);
-	currentOffset = pad_uniform_buffer_size(currentOffset);
+	current_offset += static_cast<uint32_t>(size);
+	current_offset = PadUniformBufferSize(current_offset);
 
 	return offset;
 }
 
-void vkutil::PushBuffer::init(VmaAllocator& allocator, AllocatedBufferUntyped sourceBuffer, uint32_t alignment)
+void vkutils::PushBuffer::Init(VmaAllocator& allocator, AllocatedBufferUntyped sourceBuffer, uint32_t alignment)
 {
 	align = alignment;
 	source = sourceBuffer;
-	currentOffset = 0;
+	current_offset = 0;
 	vmaMapMemory(allocator, sourceBuffer._allocation, &mapped);
 }
 
-void vkutil::PushBuffer::reset()
+void vkutils::PushBuffer::Reset()
 {
-	currentOffset = 0;
+	current_offset = 0;
 }
 
-uint32_t vkutil::PushBuffer::pad_uniform_buffer_size(uint32_t originalSize)
+uint32_t vkutils::PushBuffer::PadUniformBufferSize(uint32_t originalSize)
 {
 	// Calculate required aligment based on minimum device offset alignment
 	size_t minUboAlignment = align;
