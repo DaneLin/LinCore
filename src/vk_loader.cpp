@@ -148,7 +148,7 @@ namespace lc
 
 		fastgltf::Parser parser{};
 
-		constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble | fastgltf::Options::LoadGLBBuffers | fastgltf::Options::LoadExternalBuffers;
+		constexpr auto gltf_options = fastgltf::Options::DontRequireValidAssetMember | fastgltf::Options::AllowDouble | fastgltf::Options::LoadExternalBuffers;
 
 		auto data = fastgltf::GltfDataBuffer::FromPath(file_path);
 		fastgltf::Asset gltf;
@@ -478,6 +478,19 @@ namespace lc
 			vkDestroySampler(dv, sampler, nullptr);
 		}
 
+	}
+	void RunPinnedTaskLoopTask::Execute()
+	{
+		task_scheduler->WaitForNewPinnedTasks();
+		// this thread will 'sleep' until there are new pinned tasks
+		task_scheduler->RunPinnedTasks();
+	}
+	void AsynchronousLoadTask::Execute()
+	{
+		while (execute)
+		{
+			async_loader->Update();
+		}
 	}
 }
 

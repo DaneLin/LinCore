@@ -3,11 +3,103 @@
 #include "vk_descriptors.h"
 #include <unordered_map>
 #include <filesystem>
+#include <TaskScheduler.h>
+
+#include "config.h"
+
+
 
 class VulkanEngine;
 
 namespace lc
 {
+	// AsynchronousLoader class has the following responsibilities:
+	// - Process load from file requests
+    // - Process GPU upload transfers
+    // - Manage a staging buffer to handle a copy of the data
+    // - Enqueue the command buffers with copy commands
+	// - Signal to the renderer that a texture has finished a transfer
+    class AsynchronousLoader {
+    public:
+        enki::TaskScheduler* task_scheduler = nullptr;
+
+        void Init()
+        {
+
+        }
+
+        void Update()
+        {
+
+        }
+
+        VkCommandPool command_pool[kFRAME_OVERLAP];
+		VkCommandBuffer command_buffer[kFRAME_OVERLAP];
+		AllocatedBuffer staging_buffer;
+    };
+
+    struct AsynchronousLoadTask : enki::IPinnedTask {
+        void Execute() override;
+
+        AsynchronousLoader* async_loader;
+        enki::TaskScheduler* task_scheduler;
+        bool execute = true;
+    };
+
+    struct RunPinnedTaskLoopTask :enki::IPinnedTask {
+		void Execute() override;
+
+        enki::TaskScheduler* task_scheduler;
+        bool execute = true;
+	}; // struct RunPinnedTaskLoopTask
+
+    
+
+    struct TextureID {
+        uint32_t index;
+    };
+
+    class TextureCache {
+    public:
+        void SetDescriptorSet(VkDescriptorSet bindless_set) {
+            bindless_set_ = bindless_set;
+        }
+
+        TextureID AddTexture(VkDevice device, const VkImageView& image_view, VkSampler sampler) {
+            // 检查是否已存在
+            for (uint32_t i = 0; i < cache_.size(); i++) {
+                if (cache_[i].imageView == image_view && cache_[i].sampler == sampler) {
+                    return TextureID{ i };
+                }
+            }
+            // 检查是否超出最大数量
+            if (cache_.size() >= kMAX_BINDLESS_RESOURCES) {
+                throw std::runtime_error("Exceeded maximum bindless texture count");
+            }
+
+            uint32_t idx = static_cast<uint32_t>(cache_.size());
+
+            // 添加到缓存
+            VkDescriptorImageInfo image_info{
+                .sampler = sampler,
+                .imageView = image_view,
+                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+            };
+            cache_.push_back(image_info);
+
+            // 更新bindless descriptor set
+            lc::DescriptorWriter writer;
+            writer.WriteImageArray(kBINDLESS_TEXTURE_BINDING, idx, { image_info }, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+            writer.UpdateSet(device, bindless_set_);
+
+            return TextureID{ idx };
+        }
+
+    private:
+        std::vector<VkDescriptorImageInfo> cache_;
+        VkDescriptorSet bindless_set_;
+    };
+
     struct GLTFMaterial {
         MaterialInstance data;
     };

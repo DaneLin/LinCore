@@ -6,6 +6,7 @@ add_library(vma INTERFACE)
 add_library(volk STATIC)
 add_library(stb_image INTERFACE)
 add_library(spirv_reflect STATIC)
+add_library(enkiTS STATIC)
 add_subdirectory(simdjson)
 add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
@@ -25,6 +26,13 @@ target_include_directories(volk INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/volk)
 target_link_libraries(volk PUBLIC Vulkan::Vulkan)
 # 确保使用 Volk 时定义 VK_NO_PROTOTYPES
 target_compile_definitions(volk INTERFACE VK_NO_PROTOTYPES)
+
+target_sources(enkiTS PRIVATE
+	enkiTS/LockLessMultiReadPipe.h
+	enkiTS/TaskScheduler.h
+	enkiTS/TaskScheduler.cpp
+)
+target_include_directories(enkiTS PUBLIC enkiTS)
 
 target_sources(vkbootstrap PRIVATE 
   vkbootstrap/VkBootstrap.h

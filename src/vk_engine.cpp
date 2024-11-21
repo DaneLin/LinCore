@@ -10,6 +10,7 @@
 #include <vk_images.h>
 #include <vk_pipelines.h>
 #include <vk_profiler.h>
+#include <vk_loader.h>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -257,7 +258,7 @@ void VulkanEngine::Draw()
 	VkSubmitInfo2 submitInfo = vkinit::SubmitInfo(&cmdInfo, &signalInfo, &waitInfo);
 
 	// submit command buffer to the queue and execute it.
-	VK_CHECK(vkQueueSubmit2(graphics_queue_, 1, &submitInfo, GetCurrentFrame().render_fence));
+	VK_CHECK(vkQueueSubmit2(main_queue_, 1, &submitInfo, GetCurrentFrame().render_fence));
 
 	// prepare present info
 	VkPresentInfoKHR presentInfo = vkinit::PresentInfo();
@@ -269,7 +270,7 @@ void VulkanEngine::Draw()
 	presentInfo.pWaitSemaphores = &GetCurrentFrame().render_semaphore;
 	presentInfo.waitSemaphoreCount = 1;
 
-	VkResult presentResult = vkQueuePresentKHR(graphics_queue_, &presentInfo);
+	VkResult presentResult = vkQueuePresentKHR(main_queue_, &presentInfo);
 	if (presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
 		resize_requested_ = true;
 	}
@@ -407,7 +408,7 @@ void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& fu
 	VkSubmitInfo2 submitInfo = vkinit::SubmitInfo(&cmdInfo, nullptr, nullptr);
 
 
-	VK_CHECK(vkQueueSubmit2(graphics_queue_, 1, &submitInfo, imm_fence_));
+	VK_CHECK(vkQueueSubmit2(main_queue_, 1, &submitInfo, imm_fence_));
 
 	VK_CHECK(vkWaitForFences(device_, 1, &imm_fence_, VK_TRUE, UINT64_MAX));
 }
@@ -713,8 +714,17 @@ void VulkanEngine::InitVulkan()
 		LOGE("Failed to find a graphics queue!");
 		return;
 	}
-	graphics_queue_ = graphicsQueueResult.value();
-	graphics_queue_family = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+	main_queue_ = graphicsQueueResult.value();
+	main_queue_family_ = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+
+	auto transferQueueResult = vkbDevice.get_queue(vkb::QueueType::transfer);
+	if (!transferQueueResult.has_value()) {
+		LOGE("Failed to find a transfer queue!");
+		return;
+	}
+
+	transfer_queue_ = transferQueueResult.value();
+	transfer_queue_family_ = vkbDevice.get_queue_index(vkb::QueueType::transfer).value();
 
 	VmaVulkanFunctions vulkanFunctions = {};
 	vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
@@ -794,7 +804,7 @@ void VulkanEngine::InitSwapchain()
 void VulkanEngine::InitCommands()
 {
 	// create command pool for commands submitted to the graphics queue
-	VkCommandPoolCreateInfo commandPoolInfo = vkinit::CommandPoolCreateInfo(graphics_queue_family, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+	VkCommandPoolCreateInfo commandPoolInfo = vkinit::CommandPoolCreateInfo(main_queue_family_, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
 	for (int i = 0; i < kFRAME_OVERLAP; ++i)
 	{
@@ -1029,7 +1039,7 @@ void VulkanEngine::InitImGui()
 	init_info.Instance = instance_;
 	init_info.PhysicalDevice = chosen_gpu_;
 	init_info.Device = device_;
-	init_info.Queue = graphics_queue_;
+	init_info.Queue = main_queue_;
 	init_info.DescriptorPool = imguiPool;
 	init_info.MinImageCount = 3;
 	init_info.ImageCount = 3;
@@ -1128,6 +1138,23 @@ void VulkanEngine::InitDefaultData()
 	dafault_data_ = metal_rough_material_.WriteMaterial(device_, MaterialPass::kMainColor, materialResources, global_descriptor_allocator_);
 
 
+}
+
+void VulkanEngine::InitTaskSystem()
+{
+	task_config_.numTaskThreadsToCreate = 4;
+
+	task_scheduler_.Initialize(task_config_);
+
+	// Create IO threads at the end
+	lc::RunPinnedTaskLoopTask run_pinned_task;
+	run_pinned_task.threadNum = task_scheduler_.GetNumTaskThreads() - 1;
+	task_scheduler_.AddPinnedTask(&run_pinned_task);
+
+	// Send async load task to external thread
+	lc::AsynchronousLoadTask async_load_task;
+	async_load_task.threadNum = run_pinned_task.threadNum;
+	task_scheduler_.AddPinnedTask(&async_load_task);
 }
 
 void VulkanEngine::ResizeSwapchain()

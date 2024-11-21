@@ -1,4 +1,4 @@
-#include "vk_profiler.h"
+ï»¿#include "vk_profiler.h"
 
 vkutils::VulkanScopeTimer::VulkanScopeTimer(VkCommandBuffer commands, VulkanProfiler* profiler, const char* name)
 	: profiler_(profiler), commands_(commands)
@@ -73,7 +73,7 @@ void vkutils::VulkanProfiler::GrabQueries(VkCommandBuffer commands)
 	int frame = current_frame_;
 	current_frame_ = (current_frame_ + 1) % kQUERY_FRAME_OVERLAP;
 
-	// È·±£µ±Ç°Ö¡µÄ²éÑ¯³Ø±»ÖØÖÃ
+	// ç¡®ä¿å½“å‰å¸§çš„æŸ¥è¯¢æ± è¢«é‡ç½®
 	if (query_frames_[current_frame_].needs_reset) {
 		if (query_frames_[current_frame_].timer_last > 0) {
 			vkCmdResetQueryPool(commands, query_frames_[current_frame_].timer_pool, 0, query_frames_[current_frame_].timer_last);
@@ -104,7 +104,7 @@ void vkutils::VulkanProfiler::GrabQueries(VkCommandBuffer commands)
 			query_state.data(),
 			sizeof(uint64_t),
 			VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-		// ±ê¼ÇÕâ¸öÖ¡ĞèÒªÔÚÏÂ´ÎÊ¹ÓÃÇ°ÖØÖÃ
+		// æ ‡è®°è¿™ä¸ªå¸§éœ€è¦åœ¨ä¸‹æ¬¡ä½¿ç”¨å‰é‡ç½®
 		state.needs_reset = true;
 	}
 	std::vector<uint64_t> stat_results;

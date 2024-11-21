@@ -10,7 +10,6 @@
 #include "VkBootstrap.h"
 
 #include <vk_descriptors.h>
-#include <vk_loader.h>
 
 #include "camera.h"
 
@@ -18,8 +17,12 @@
 
 #include "config.h"
 #include "vk_pipelines.h"
+#include "vk_loader.h"
+#include "TaskScheduler.h"
 
-constexpr unsigned int kFRAME_OVERLAP = 2;
+namespace vkutils {
+	class VulkanProfiler;
+}
 
 struct ComputePushConstants {
 	glm::vec4 data1;
@@ -144,54 +147,8 @@ struct EngineStats {
 	float mesh_draw_time;
 };
 
-struct TextureID {
-	uint32_t index;
-};
 
-class TextureCache {
-public:
-	void SetDescriptorSet(VkDescriptorSet bindless_set) {
-		bindless_set_ = bindless_set;
-	}
 
-	TextureID AddTexture(VkDevice device, const VkImageView& image_view, VkSampler sampler) {
-		// 检查是否已存在
-		for (uint32_t i = 0; i < cache_.size(); i++) {
-			if (cache_[i].imageView == image_view && cache_[i].sampler == sampler) {
-				return TextureID{ i };
-			}
-		}
-		// 检查是否超出最大数量
-		if (cache_.size() >= kMAX_BINDLESS_RESOURCES) {
-			throw std::runtime_error("Exceeded maximum bindless texture count");
-		}
-
-		uint32_t idx = static_cast<uint32_t>(cache_.size());
-
-		// 添加到缓存
-		VkDescriptorImageInfo image_info{
-			.sampler = sampler,
-			.imageView = image_view,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-		cache_.push_back(image_info);
-
-		// 更新bindless descriptor set
-		lc::DescriptorWriter writer;
-		writer.WriteImageArray(kBINDLESS_TEXTURE_BINDING, idx, { image_info }, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-		writer.UpdateSet(device, bindless_set_);
-
-		return TextureID{ idx };
-	}
-
-private:
-	std::vector<VkDescriptorImageInfo> cache_;
-	VkDescriptorSet bindless_set_;
-};
-
-namespace vkutils {
-	class VulkanProfiler;
-}
 
 class VulkanEngine {
 public:
@@ -222,9 +179,13 @@ public:
 
 	FrameData frames_[kFRAME_OVERLAP];
 
-	VkQueue graphics_queue_;
+	VkQueue main_queue_;
 
-	uint32_t graphics_queue_family;
+	VkQueue transfer_queue_;
+
+	uint32_t main_queue_family_;
+
+	uint32_t transfer_queue_family_;
 
 	DeletionQueue main_deletion_queue_;
 
@@ -288,11 +249,14 @@ public:
 
 	lc::ShaderCache shader_cache_;
 
-	TextureCache texture_cache_;
+	lc::TextureCache texture_cache_;
 
 	lc::PipelineCache* global_pipeline_cache_;
 
 	vkutils::VulkanProfiler* profiler_;
+
+	enki::TaskSchedulerConfig task_config_;
+	enki::TaskScheduler task_scheduler_;
 
 public:
 
@@ -346,6 +310,8 @@ private:
 	void InitImGui();
 
 	void InitDefaultData();
+
+	void InitTaskSystem();
 
 	void ResizeSwapchain();
 

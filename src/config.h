@@ -1,3 +1,6 @@
+// config.h
+#ifndef CONFIG_H
+#define CONFIG_H
 // Should we enable vertical sync during presentation? Worth setting to 0 when doing perf profiling to avoid GPU downclock during idle
 #define CONFIG_VSYNC 1
 
@@ -7,9 +10,12 @@
 // Maximum number of texture descriptors in the pool
 #define DESCRIPTOR_LIMIT 65536
 
-constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 11;;
+inline constexpr unsigned int kFRAME_OVERLAP = 2;
 
-constexpr uint32_t kMAX_BINDLESS_RESOURCES = 1024;
+inline constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 11;
+
+inline constexpr uint32_t kMAX_BINDLESS_RESOURCES = 1024;
 
 const std::string cache_file_path = "pipeline_cache_data.bin";
+#endif
 
