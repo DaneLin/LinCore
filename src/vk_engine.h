@@ -189,6 +189,10 @@ private:
 	VkDescriptorSet bindless_set_;
 };
 
+namespace vkutils {
+	class VulkanProfiler;
+}
+
 class VulkanEngine {
 public:
 
@@ -209,6 +213,8 @@ public:
 	VkDebugUtilsMessengerEXT debug_messenger_;
 
 	VkPhysicalDevice chosen_gpu_;
+
+	VkPhysicalDeviceProperties gpu_properties_;
 
 	VkDevice device_;
 
@@ -285,6 +291,8 @@ public:
 	TextureCache texture_cache_;
 
 	lc::PipelineCache* global_pipeline_cache_;
+
+	vkutils::VulkanProfiler* profiler_;
 
 public:
 

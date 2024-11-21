@@ -9,6 +9,7 @@
 #include <vk_types.h>
 #include <vk_images.h>
 #include <vk_pipelines.h>
+#include <vk_profiler.h>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -21,7 +22,7 @@
 #include <cvars.h>
 #include <logging.h>
 
-#include<volk.h>
+#include <volk.h>
 #include "frustum_cull.h"
 
 
@@ -107,6 +108,10 @@ void VulkanEngine::Init()
 
 	InitVulkan();
 
+	profiler_ = new vkutils::VulkanProfiler();
+
+	profiler_->Init(device_, gpu_properties_.limits.timestampPeriod);
+
 	InitSwapchain();
 
 	InitCommands();
@@ -144,6 +149,9 @@ void VulkanEngine::CleanUp()
 
 		// make sure the GPU has stopped doing its thing
 		vkDeviceWaitIdle(device_);
+
+		profiler_->CleanUp();
+		delete profiler_;
 
 		shader_cache_.Clear();
 		loaded_scenes_.clear();
@@ -207,6 +215,9 @@ void VulkanEngine::Draw()
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+	{
+	profiler_->GrabQueries(cmd);
+
 	vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	DrawBackground(cmd);
@@ -230,6 +241,8 @@ void VulkanEngine::Draw()
 	DrawImGui(cmd, swapchain_image_views_[swapchainImageIndex]);
 
 	vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	}
+	
 
 	// finish recording the command buffer
 	VK_CHECK(vkEndCommandBuffer(cmd));
@@ -329,6 +342,18 @@ void VulkanEngine::Run()
 		ImGui::Text("update time %f ms", engine_stats_.scene_update_time);
 		ImGui::Text("triangles %i", engine_stats_.triangle_count);
 		ImGui::Text("draws %i", engine_stats_.drawcall_count);
+
+		ImGui::Separator();
+
+		for (auto &[k,v] : profiler_->timing_) {
+			ImGui::Text("%s: %f ms", k.c_str(), v);
+		}
+
+		ImGui::Separator();
+
+		for (auto &[k,v] : profiler_->stats_) {
+			ImGui::Text("%s: %i", k.c_str(), v);
+		}
 
 		ImGui::End();
 
@@ -628,7 +653,7 @@ void VulkanEngine::InitVulkan()
 	};
 	features.dynamicRendering = true;
 	features.synchronization2 = true;
-
+	
 
 	//vulkan 1.2 features
 	VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
@@ -639,7 +664,11 @@ void VulkanEngine::InitVulkan()
 	features12.descriptorBindingUniformBufferUpdateAfterBind = true;
 	features12.runtimeDescriptorArray = true;
 	features12.descriptorBindingVariableDescriptorCount = true;
+	features12.hostQueryReset = true;
 
+	// Enable pipelineStatisticsQuery in the physical device features
+	VkPhysicalDeviceFeatures features10{};
+	features10.pipelineStatisticsQuery = VK_TRUE;
 
 	// use vkbootstrap to select a gpu
 	// we want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
@@ -648,6 +677,7 @@ void VulkanEngine::InitVulkan()
 		.set_minimum_version(1, 3)
 		.set_required_features_13(features)
 		.set_required_features_12(features12)
+		.set_required_features(features10)
 		.set_surface(surface_)
 		.add_required_extensions(requiredExtensions)
 		.select()
@@ -667,6 +697,7 @@ void VulkanEngine::InitVulkan()
 	device_ = vkbDevice.device;
 	volkLoadDevice(device_);
 	chosen_gpu_ = physicalDevice.physical_device;
+	gpu_properties_ = physicalDevice.properties;
 
 	VkPhysicalDeviceProperties deviceProperties;
 	vkGetPhysicalDeviceProperties(chosen_gpu_, &deviceProperties);
@@ -1147,6 +1178,9 @@ void VulkanEngine::DestroySwapchain()
 
 void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
 {
+	vkutils::VulkanScopeTimer timer(cmd, profiler_, "Background");
+	vkutils::VulkanPipelineStatRecorder timers(cmd, profiler_, "Background Primitives");
+
 	// make a clear-color from frame number, this will flash with a 120 frame period
 	VkClearColorValue clearValue;
 	float flush = std::abs(std::sin(frame_number / 120.0f));
@@ -1171,6 +1205,8 @@ void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
 
 void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView target_image_view)
 {
+	vkutils::VulkanScopeTimer timer(cmd, profiler_, "ImGui");
+	vkutils::VulkanPipelineStatRecorder timers(cmd, profiler_, "ImGui Primitives");
 	VkRenderingAttachmentInfo colorAttachment = vkinit::AttachmentInfo(target_image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingInfo renderInfo = vkinit::RenderingInfo(swapchain_extent_, &colorAttachment, nullptr);
 
@@ -1183,7 +1219,8 @@ void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView target_image_view)
 
 void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 {
-
+	vkutils::VulkanScopeTimer timer(cmd, profiler_, "Geometry");
+	vkutils::VulkanPipelineStatRecorder timers(cmd, profiler_, "Geometry Primitives");
 	// reset counters
 	engine_stats_.drawcall_count = 0;
 	engine_stats_.triangle_count = 0;
