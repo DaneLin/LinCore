@@ -43,7 +43,8 @@ constexpr bool bUseValidationLayers = true;
 const std::vector<const char*> requiredExtensions = {
 	VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 	VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-	VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
+	VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+	VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME
 };
 
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
@@ -208,7 +209,7 @@ void VulkanEngine::Draw()
 	VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
 	// begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know it may be recorded only once
-	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT );
 
 	draw_extent_.width = static_cast<uint32_t>(std::min(swapchain_extent_.width, draw_image_.extent.width) * render_scale_);
 	draw_extent_.height = static_cast<uint32_t>(std::min(swapchain_extent_.height, draw_image_.extent.height) * render_scale_);
@@ -216,31 +217,31 @@ void VulkanEngine::Draw()
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
 	{
-	profiler_->GrabQueries(cmd);
+		profiler_->GrabQueries(cmd);
 
-	vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	DrawBackground(cmd);
+		DrawBackground(cmd);
 
-	// make the swapchain image into presentable mode
-	vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutils::TransitionImageLayout(cmd, depth_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		// make the swapchain image into presentable mode
+		vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		vkutils::TransitionImageLayout(cmd, depth_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-	DrawGeometry(cmd);
+		DrawGeometry(cmd);
 
-	vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-	// execute a copy from the draw image into the swapchain
-	vkutils::CopyImageToImage(cmd, draw_image_.image, swapchain_images_[swapchainImageIndex], draw_extent_, swapchain_extent_);
+		// execute a copy from the draw image into the swapchain
+		vkutils::CopyImageToImage(cmd, draw_image_.image, swapchain_images_[swapchainImageIndex], draw_extent_, swapchain_extent_);
 
-	// transition the swapchain image to be ready for display
-	vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		// transition the swapchain image to be ready for display
+		vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-	// draw imgui into the swapchain image
-	DrawImGui(cmd, swapchain_image_views_[swapchainImageIndex]);
+		// draw imgui into the swapchain image
+		DrawImGui(cmd, swapchain_image_views_[swapchainImageIndex]);
 
-	vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
 	
 
