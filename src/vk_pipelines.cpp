@@ -2,9 +2,7 @@
 #include <fstream>
 #include <vk_initializers.h>
 
-
-
-
+#include "logging.h"
 
 void PipelineBuilder::clear()
 {
@@ -25,7 +23,7 @@ void PipelineBuilder::clear()
 	_shaderStages.clear();
 }
 
-VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
+VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VkPipelineCache cache)
 {
 	if (_shaderStages[0].stage == VK_SHADER_STAGE_COMPUTE_BIT) {
 		VkComputePipelineCreateInfo pipelineInfo{};
@@ -34,7 +32,7 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
 		pipelineInfo.layout = _pipelineLayout;
 
 		VkPipeline pipeline;
-		VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
+		VK_CHECK(vkCreateComputePipelines(device, cache, 1, &pipelineInfo, nullptr, &pipeline));
 		return pipeline;
 	}
 
@@ -85,7 +83,7 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
 	pipelineInfo.pDynamicState = &dynamicState;
 
 	VkPipeline newPipeline;
-	if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &newPipeline) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(device, cache, 1, &pipelineInfo, nullptr, &newPipeline) != VK_SUCCESS) {
 		fmt::print("failed to create pipeline\n");
 		return VK_NULL_HANDLE;
 	}
@@ -218,3 +216,65 @@ void PipelineBuilder::enable_blending_alphablend()
 	_colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 }
 
+bool vkutils::load_pipeline_cache(VkDevice device, const std::string cacheFilePath, VkPipelineCache& cache)
+{
+	std::ifstream file(cacheFilePath, std::ios::binary | std::ios::ate);
+	if (!file.is_open()) {
+		LOGI("Failed to open pipeline cache file: {}", cacheFilePath);
+		return false;
+	}
+	LOGI("Creating pipeline cache from file: {}", cacheFilePath);
+
+	// 获取文件大小并读取数据
+	std::streamsize size = file.tellg();
+	file.seekg(0, std::ios::beg);
+	std::vector<char> cacheData(size);
+	if (!file.read(cacheData.data(), size)) {
+		return false;
+	}
+
+	// 使用缓存数据创建 Pipeline Cache
+	VkPipelineCacheCreateInfo cacheCreateInfo = {};
+	cacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	cacheCreateInfo.initialDataSize = cacheData.size();
+	cacheCreateInfo.pInitialData = cacheData.data();
+
+	VkResult result = vkCreatePipelineCache(device, &cacheCreateInfo, nullptr, &cache);
+	return result == VK_SUCCESS;
+}
+
+VkPipelineCache vkutils::create_pipeline_cache(VkDevice device)
+{
+	VkPipelineCacheCreateInfo cacheCreateInfo = {};
+	cacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	cacheCreateInfo.pNext = nullptr;
+	cacheCreateInfo.flags = 0;
+
+	VkPipelineCache cache;
+	VK_CHECK(vkCreatePipelineCache(device, &cacheCreateInfo, nullptr, &cache));
+	return cache;
+}
+
+void vkutils::save_pipeline_cache(VkDevice device, const std::string cacheFilePath, VkPipelineCache cache)
+{
+	size_t cacheSize = 0;
+	VkResult result = vkGetPipelineCacheData(device, cache, &cacheSize, nullptr);
+	if (result != VK_SUCCESS || cacheSize == 0) {
+		return;
+	}
+
+	std::vector<char> cacheData(cacheSize);
+	result = vkGetPipelineCacheData(device, cache, &cacheSize, cacheData.data());
+	if (result != VK_SUCCESS) {
+		return;
+	}
+
+	// 将缓存数据写入到文件
+	std::ofstream file(cacheFilePath, std::ios::binary);
+	if (file.is_open()) {
+		file.write(cacheData.data(), cacheData.size());
+	}
+
+	file.close();
+	LOGI("Saved pipeline cache to: {}", cacheFilePath);
+}

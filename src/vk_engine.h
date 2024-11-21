@@ -289,6 +289,8 @@ public:
 	lc::ShaderCache _shaderCache;
 	TextureCache texture_cache_;
 
+	VkPipelineCache global_pipeline_cache;
+
 
 private:
 	void init_vulkan();

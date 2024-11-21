@@ -33,6 +33,8 @@ VulkanEngine* loadedEngine = nullptr;
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 
+
+
 #if NDEBUG
 constexpr bool bUseValidationLayers = false;
 #else
@@ -897,8 +899,19 @@ void VulkanEngine::init_descriptors()
 
 void VulkanEngine::init_pipelines()
 {
+	if (!vkutils::load_pipeline_cache(_device, cacheFilePath, global_pipeline_cache)) {
+		LOGI("Creating pipeline cache");
+		global_pipeline_cache = vkutils::create_pipeline_cache(_device);
+	}
+
 	init_background_pipelines();
 	metal_rough_material.build_pipelines(this);
+
+	_mainDeletionQueue.push_function([&]() {
+		vkutils::save_pipeline_cache(_device, cacheFilePath, global_pipeline_cache);
+		vkDestroyPipelineCache(_device, global_pipeline_cache, nullptr);
+		global_pipeline_cache = VK_NULL_HANDLE;
+		});
 }
 
 void VulkanEngine::init_background_pipelines()
@@ -917,7 +930,7 @@ void VulkanEngine::init_background_pipelines()
 	gradient.data = {};
 	gradient.data.data1 = glm::vec4(1, 0, 0, 1);
 	gradient.data.data2 = glm::vec4(0, 0, 1, 1);
-	gradient.pipeline = builder.build_pipeline(_device);
+	gradient.pipeline = builder.build_pipeline(_device,global_pipeline_cache);
 	gradient.layout = gradientEffect->builtLayout;
 
 	gradient.descriptorBinder.set_shader(gradientEffect);
@@ -929,7 +942,7 @@ void VulkanEngine::init_background_pipelines()
 	sky.name = "sky";
 	sky.data = {};
 	sky.data.data1 = glm::vec4(0.1, 0.2, 0.4, 0.97);
-	sky.pipeline = builder.build_pipeline(_device);
+	sky.pipeline = builder.build_pipeline(_device, global_pipeline_cache);
 	sky.layout = skyEffect->builtLayout;
 
 
@@ -1404,7 +1417,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 	// use the triangle layout we created
 	//pipelineBuilder._pipelineLayout = meshEffect->builtLayout;
 	opaquePipeline.layout = engine->mesh_pipeline_layout_;
-	opaquePipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device);
+	opaquePipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device,engine->global_pipeline_cache);
 
 	// create the transparent variant
 	pipelineBuilder.enable_blending_additive();
@@ -1412,7 +1425,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 	pipelineBuilder.enable_depthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	transparentPipeline.layout = engine->mesh_pipeline_layout_;
-	transparentPipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device);
+	transparentPipeline.pipeline = pipelineBuilder.build_pipeline(engine->_device,engine->global_pipeline_cache);
 
 	
 }

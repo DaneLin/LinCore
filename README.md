@@ -8,9 +8,9 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 - [x] 自动管线布局创建 Automating Pipeline Layout Creation 
 - [x] 简易CVar系统 Simple CVar System
 - [x] 无绑定资源管理 Bindless Resource Management
+- [x] 管线缓存 Pipeline Cache
 
 # 待实现特性 (To-Do Features)
-- [ ] 管线缓存 Pipeline Cache
 - [ ] 多线程渲染 Multi-threaded Rendering
 - [ ] 阴影映射 Shadow Mapping
 - [ ] 全局光照 Global Illumination

@@ -2,6 +2,12 @@
 #include <vk_types.h>
 #include "vk_shaders_new.h"
 
+namespace vkutils {
+	bool load_pipeline_cache(VkDevice device, const std::string cacheFilePath, VkPipelineCache& cache);
+	VkPipelineCache create_pipeline_cache(VkDevice device);
+	void save_pipeline_cache(VkDevice device, const std::string cacheFilePath, VkPipelineCache cache);
+}
+
 class PipelineBuilder {
 public:
 	std::vector<VkPipelineShaderStageCreateInfo> _shaderStages;
@@ -19,7 +25,7 @@ public:
 
 	void clear();
 
-	VkPipeline build_pipeline(VkDevice device);
+	VkPipeline build_pipeline(VkDevice device, VkPipelineCache cache = VK_NULL_HANDLE);
 
 	void set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
 
