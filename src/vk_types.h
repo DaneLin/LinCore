@@ -24,37 +24,22 @@ static const uint32_t kInvalidIndex = UINT32_MAX;
 
 typedef uint32_t ResourceHandle;
 
-struct BufferHandle {
+struct BufferHandle
+{
 	ResourceHandle index;
 };
 
-struct TextureHandle {
+struct TextureHandle
+{
 	ResourceHandle index;
 };
-
 
 // Invaild handles
-static BufferHandle kInvalidBufferHandle = { kInvalidIndex };
-static TextureHandle kInvalidTextureHandle = { kInvalidIndex };
+static BufferHandle kInvalidBufferHandle = {kInvalidIndex};
+static TextureHandle kInvalidTextureHandle = {kInvalidIndex};
 
-
-struct AllocatedBufferUntyped {
-	VkBuffer buffer{};
-	VmaAllocation allocation{};
-	VkDeviceSize size{ 0 };
-	VkDescriptorBufferInfo GetInfo(VkDeviceSize offset = 0);
-};
-
-inline VkDescriptorBufferInfo AllocatedBufferUntyped::GetInfo(VkDeviceSize offset)
+struct AllocatedImage
 {
-	VkDescriptorBufferInfo info;
-	info.buffer = buffer;
-	info.offset = offset;
-	info.range = size;
-	return info;
-}
-
-struct AllocatedImage {
 	VkImage image;
 	VkImageView view;
 	VmaAllocation allocation;
@@ -62,10 +47,11 @@ struct AllocatedImage {
 	VkFormat format;
 };
 
-struct DeletionQueue {
+struct DeletionQueue
+{
 	std::deque<std::function<void()>> deletors;
 
-	void PushFunction(std::function<void()>&& function)
+	void PushFunction(std::function<void()> &&function)
 	{
 		deletors.push_back(function);
 	};
@@ -81,23 +67,22 @@ struct DeletionQueue {
 		deletors.clear();
 	}
 };
-
-
-
 /// <summary>
-/// We will use this structure to hold the data for a given buffer. 
-/// We have the VkBuffer which is the vulkan handle, 
+/// We will use this structure to hold the data for a given buffer.
+/// We have the VkBuffer which is the vulkan handle,
 /// and the VmaAllocation and VmaAllocationInfo wich contains metadata about the buffer and its allocation,
 /// needed to be able to free the buffer.
 /// </summary>
-struct AllocatedBuffer {
+struct AllocatedBuffer
+{
 	VkBuffer buffer;
 	VmaAllocation allocation;
 	VmaAllocationInfo info;
 };
 
 // Mesh buffers on GPU
-struct Vertex {
+struct Vertex
+{
 	glm::vec3 position;
 	float uv_x;
 	glm::vec3 normal;
@@ -105,85 +90,98 @@ struct Vertex {
 	glm::vec4 color;
 };
 
-struct GPUSceneData {
-    glm::mat4 view;
-    glm::mat4 proj;
-    glm::mat4 viewproj;
-    glm::vec4 ambient_color;
-    glm::vec4 sunlight_direction; // w for sun power
-    glm::vec4 sunlight_color;
+struct GPUSceneData
+{
+	glm::mat4 view;
+	glm::mat4 proj;
+	glm::mat4 viewproj;
+	glm::vec4 ambient_color;
+	glm::vec4 sunlight_direction; // w for sun power
+	glm::vec4 sunlight_color;
 };
 
 // holds the resources needed for a mesh
-struct GPUMeshBuffers {
+struct GPUMeshBuffers
+{
 	AllocatedBuffer index_buffer;
 	AllocatedBuffer vertex_buffer;
 	VkDeviceAddress vertex_buffer_address;
 };
 
 // push constants for our mesh object draws
-struct alignas(16) GPUDrawPushConstants {
+struct alignas(16) GPUDrawPushConstants
+{
 	glm::mat4 world_matrix;
 	VkDeviceAddress vertex_buffer_address;
 };
 
 /// <summary>
-/// This is the structs we need for the material data. 
+/// This is the structs we need for the material data.
 /// MaterialInstance will hold a raw pointer (non owning) into its MaterialPipeline which contains the real pipeline.
 /// It holds a descriptor set too.
 /// </summary>
-enum class MaterialPass : uint8_t {
+enum class MaterialPass : uint8_t
+{
 	kMainColor,
 	kTransparent,
+	kDirectionalShadow,
 	kOther
 };
 
-struct MaterialPipeline {
+struct MaterialPipeline
+{
 	VkPipeline pipeline;
 	VkPipelineLayout layout;
 };
 
-struct MaterialInstance {
-	MaterialPipeline* pipeline;
+struct MaterialInstance
+{
+	MaterialPipeline *pipeline;
 	VkDescriptorSet set;
 	MaterialPass pass_type;
 };
 
 struct DrawContext;
 
-class IRenderable {
-	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) = 0;
+class IRenderable
+{
+	virtual void Draw(const glm::mat4 &topMatrix, DrawContext &ctx) = 0;
 };
 
-struct Node : public IRenderable {
+struct Node : public IRenderable
+{
 	std::weak_ptr<Node> parent;
 	std::vector<std::shared_ptr<Node>> children;
 
 	glm::mat4 local_transform;
 	glm::mat4 world_transform;
 
-	void RefreshTransform(const glm::mat4& parent_matrix) {
+	void RefreshTransform(const glm::mat4 &parent_matrix)
+	{
 		world_transform = parent_matrix * local_transform;
-		for (auto child : children) {
+		for (auto child : children)
+		{
 			child->RefreshTransform(world_transform);
 		}
 	}
 
-	virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) {
+	virtual void Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
+	{
 		// draw children
-		for (auto& c : children) {
+		for (auto &c : children)
+		{
 			c->Draw(top_matrix, ctx);
 		}
 	}
 };
 
-
-
-#define VK_CHECK(x)                                                     \
-    do {                                                                \
-        VkResult err = x;                                               \
-        if (err) {                                                      \
-            fmt::println("Detected Vulkan error: {}", string_VkResult(err)); \
-            abort();                                                    \
-        }                                                               \
-    } while (0)
+#define VK_CHECK(x)                                                          \
+	do                                                                       \
+	{                                                                        \
+		VkResult err = x;                                                    \
+		if (err)                                                             \
+		{                                                                    \
+			fmt::println("Detected Vulkan error: {}", string_VkResult(err)); \
+			abort();                                                         \
+		}                                                                    \
+	} while (0)

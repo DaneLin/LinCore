@@ -1,14 +1,14 @@
 #include <vk_engine.h>
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
 	VulkanEngine engine;
 
-	engine.Init();	
-	
-	engine.Run();	
+	engine.Init();
 
-	engine.CleanUp();	
+	engine.Run();
+
+	engine.CleanUp();
 
 	return 0;
 }

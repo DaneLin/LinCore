@@ -20,5 +20,6 @@ const std::string cache_file_path = "pipeline_cache_data.bin";
 
 inline constexpr uint32_t kSTAGING_BUFFER_SIZE = 64 * 1024 * 1024;
 
-#endif
+inline constexpr uint32_t kMAX_DRAW_INDIRECT_COUNT = 1024;
 
+#endif

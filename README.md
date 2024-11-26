@@ -21,7 +21,8 @@ https://vkguide.dev/
 https://vulkan-tutorial.com/
 
 ## 博客 (Blogs)
-https://themaister.net/blog/2017/08/
+https://themaister.net/blog/2017/08/  
+https://jglrxavpok.github.io/
 
 ## 参考代码库 (CodeBases)
 https://github.com/vblanco20-1/vulkan-guide.git  

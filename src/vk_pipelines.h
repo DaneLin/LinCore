@@ -1,13 +1,16 @@
-﻿#pragma once 
+﻿#pragma once
 #include <vk_types.h>
 #include "vk_shaders.h"
 
-namespace lc {
-	namespace vkutils {
-		
+namespace lc
+{
+	namespace vkutils
+	{
+
 	} // namespace vkutils
 
-	class PipelineCache {
+	class PipelineCache
+	{
 	public:
 		PipelineCache(VkDevice device, const std::string cache_file_path);
 		~PipelineCache();
@@ -26,7 +29,8 @@ namespace lc {
 		std::string cache_file_path_;
 	};
 
-	class PipelineBuilder {
+	class PipelineBuilder
+	{
 	public:
 		std::vector<VkPipelineShaderStageCreateInfo> shader_stages_;
 
@@ -47,7 +51,7 @@ namespace lc {
 
 		void SetShaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader);
 
-		void SetShaders(ShaderEffect* effect);
+		void SetShaders(ShaderEffect *effect);
 
 		void SetInputTopology(VkPrimitiveTopology topology);
 
@@ -72,8 +76,4 @@ namespace lc {
 		void EnableBlendingAlphablend();
 	};
 
-
 } // namespace lc
-
-
-

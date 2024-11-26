@@ -1,9 +1,9 @@
 #include <vk_pushbuffer.h>
 
-uint32_t vkutils::PushBuffer::Push(void* data, size_t size)
+uint32_t vkutils::PushBuffer::Push(void *data, size_t size)
 {
 	uint32_t offset = current_offset;
-	char* target = (char*)mapped;
+	char *target = (char *)mapped;
 	target += current_offset;
 	memcpy(target, data, size);
 	current_offset += static_cast<uint32_t>(size);
@@ -12,7 +12,7 @@ uint32_t vkutils::PushBuffer::Push(void* data, size_t size)
 	return offset;
 }
 
-void vkutils::PushBuffer::Init(VmaAllocator& allocator, AllocatedBufferUntyped sourceBuffer, uint32_t alignment)
+void vkutils::PushBuffer::Init(VmaAllocator &allocator, AllocatedBuffer sourceBuffer, uint32_t alignment)
 {
 	align = alignment;
 	source = sourceBuffer;

@@ -88,9 +88,9 @@ namespace vkutils
 
         static constexpr int kQUERY_FRAME_OVERLAP = 3;
 
-        int current_frame_ ;
+        int current_frame_;
         float period_;
-		int per_frame_pool_sizes_;
+        int per_frame_pool_sizes_;
         std::array<QueryFrameState, kQUERY_FRAME_OVERLAP> query_frames_;
 
         VkDevice device_;

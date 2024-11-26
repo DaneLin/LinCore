@@ -4,29 +4,31 @@
 
 #include "logging.h"
 
-namespace lc {
+namespace lc
+{
 	void PipelineBuilder::Clear()
 	{
-		input_assembly_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+		input_assembly_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
 
-		rasterizer_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+		rasterizer_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
 
 		color_blend_attachment_ = {};
 
-		multisampling_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+		multisampling_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
 
 		pipeline_layout_ = {};
 
-		depth_stencil_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+		depth_stencil_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
 
-		render_info_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+		render_info_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
 
 		shader_stages_.clear();
 	}
 
 	VkPipeline PipelineBuilder::BuildPipeline(VkDevice device, VkPipelineCache cache)
 	{
-		if (shader_stages_[0].stage == VK_SHADER_STAGE_COMPUTE_BIT) {
+		if (shader_stages_[0].stage == VK_SHADER_STAGE_COMPUTE_BIT)
+		{
 			VkComputePipelineCreateInfo pipeline_info{};
 			pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
 			pipeline_info.stage = shader_stages_[0];
@@ -56,10 +58,10 @@ namespace lc {
 		color_blending.pAttachments = &color_blend_attachment_;
 
 		// completely clear vertexinputstatecreateinfo, as we have no need for it
-		VkPipelineVertexInputStateCreateInfo vertex_input_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+		VkPipelineVertexInputStateCreateInfo vertex_input_info = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
 
 		// build the actual pipeline
-		VkGraphicsPipelineCreateInfo pipeline_info = { .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+		VkGraphicsPipelineCreateInfo pipeline_info = {.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
 		// connect the renderinfo to the pNext extension mechanism
 		pipeline_info.pNext = &render_info_;
 
@@ -75,16 +77,17 @@ namespace lc {
 		pipeline_info.layout = pipeline_layout_;
 
 		// setting up dynamic state
-		VkDynamicState state[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+		VkDynamicState state[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
-		VkPipelineDynamicStateCreateInfo dynamicState = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+		VkPipelineDynamicStateCreateInfo dynamicState = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
 		dynamicState.pDynamicStates = &state[0];
 		dynamicState.dynamicStateCount = 2;
 
 		pipeline_info.pDynamicState = &dynamicState;
 
 		VkPipeline new_pipeline;
-		if (vkCreateGraphicsPipelines(device, cache, 1, &pipeline_info, nullptr, &new_pipeline) != VK_SUCCESS) {
+		if (vkCreateGraphicsPipelines(device, cache, 1, &pipeline_info, nullptr, &new_pipeline) != VK_SUCCESS)
+		{
 			fmt::print("failed to create pipeline\n");
 			return VK_NULL_HANDLE;
 		}
@@ -105,7 +108,7 @@ namespace lc {
 			vkinit::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
 	}
 
-	void PipelineBuilder::SetShaders(lc::ShaderEffect* effect)
+	void PipelineBuilder::SetShaders(lc::ShaderEffect *effect)
 	{
 		shader_stages_.clear();
 		effect->FillStage(shader_stages_);
@@ -203,7 +206,7 @@ namespace lc {
 		color_blend_attachment_.alphaBlendOp = VK_BLEND_OP_ADD;
 	}
 
-	//outColor = srcColor * srcColorBlendFactor <op> dstColor * dstColorBlendFactor;
+	// outColor = srcColor * srcColorBlendFactor <op> dstColor * dstColorBlendFactor;
 
 	void PipelineBuilder::EnableBlendingAlphablend()
 	{
@@ -220,11 +223,13 @@ namespace lc {
 	PipelineCache::PipelineCache(VkDevice device, const std::string cache_file_path)
 		: device_(device), cache_file_path_(cache_file_path)
 	{
-		if (!LoadPipelineCache()) {
+		if (!LoadPipelineCache())
+		{
 			LOGI("Creating new pipeline cache");
 			CreatePipelineCache();
 		}
-		else {
+		else
+		{
 			LOGI("Loaded pipeline cache from file: {}", cache_file_path_);
 		}
 	}
@@ -232,26 +237,28 @@ namespace lc {
 	PipelineCache::~PipelineCache()
 	{
 		vkDestroyPipelineCache(device_, cache_, nullptr);
-
 	}
 
 	void PipelineCache::SaveCache()
 	{
 		size_t cache_size = 0;
 		VkResult result = vkGetPipelineCacheData(device_, cache_, &cache_size, nullptr);
-		if (result != VK_SUCCESS || cache_size == 0) {
+		if (result != VK_SUCCESS || cache_size == 0)
+		{
 			return;
 		}
 
 		std::vector<char> cache_data(cache_size);
 		result = vkGetPipelineCacheData(device_, cache_, &cache_size, cache_data.data());
-		if (result != VK_SUCCESS) {
+		if (result != VK_SUCCESS)
+		{
 			return;
 		}
 
 		// 将缓存数据写入到文件
 		std::ofstream file(cache_file_path_, std::ios::binary);
-		if (file.is_open()) {
+		if (file.is_open())
+		{
 			file.write(cache_data.data(), cache_data.size());
 		}
 
@@ -262,7 +269,8 @@ namespace lc {
 	bool PipelineCache::LoadPipelineCache()
 	{
 		std::ifstream file(cache_file_path_, std::ios::binary | std::ios::ate);
-		if (!file.is_open()) {
+		if (!file.is_open())
+		{
 			LOGI("Failed to open pipeline cache file: {}", cache_file_path_);
 			return false;
 		}
@@ -271,7 +279,8 @@ namespace lc {
 		std::streamsize size = file.tellg();
 		file.seekg(0, std::ios::beg);
 		std::vector<char> cacheData(size);
-		if (!file.read(cacheData.data(), size)) {
+		if (!file.read(cacheData.data(), size))
+		{
 			return false;
 		}
 
@@ -295,5 +304,3 @@ namespace lc {
 		VK_CHECK(vkCreatePipelineCache(device_, &cache_create_info, nullptr, &cache_));
 	}
 }
-
-
