@@ -492,6 +492,53 @@ namespace lc
 			async_loader->Update();
 		}
 	}
+	void AsynchronousLoader::Init()
+	{
+
+		for (uint32_t idx = 0; idx < kFRAME_OVERLAP; ++idx)
+		{
+			VkCommandPoolCreateInfo cmd_pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+			cmd_pool_info.queueFamilyIndex = VulkanEngine::Get().transfer_queue_family_;
+			cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+			vkCreateCommandPool(VulkanEngine::Get().device_, &cmd_pool_info, nullptr, &command_pool[idx]);
+
+			VkCommandBufferAllocateInfo cmd_buffer_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+			cmd_buffer_info.commandPool = command_pool[idx];
+			cmd_buffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			cmd_buffer_info.commandBufferCount = 1;
+
+			vkAllocateCommandBuffers(VulkanEngine::Get().device_, &cmd_buffer_info, &command_buffer[idx]);
+		}
+
+		staging_buffer = VulkanEngine::Get().CreateBuffer(kSTAGING_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+		VkSemaphoreCreateInfo semaphore_create_info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		vkCreateSemaphore(VulkanEngine::Get().device_, &semaphore_create_info, nullptr, &transfer_complete_semaphore);
+
+		VkFenceCreateInfo fence_create_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+		fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		vkCreateFence(VulkanEngine::Get().device_, &fence_create_info, nullptr, &transfer_fence);
+	}
+	void AsynchronousLoader::Update()
+	{
+		if (cpu_buffer_ready.index != kInvalidIndex && gpu_buffer_ready.index != kInvalidIndex)
+		{
+			assert(completed != nullptr);
+			(*completed)++;
+
+			cpu_buffer_ready = kInvalidBufferHandle;
+			gpu_buffer_ready = kInvalidBufferHandle;
+			completed = nullptr;
+		}
+
+		texture_ready.index = kInvalidTextureHandle.index;
+
+		// Process upload request
+		if (upload_requests.size())
+		{
+
+		}
+	}
 }
 
 

@@ -20,6 +20,24 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
+static const uint32_t kInvalidIndex = UINT32_MAX;
+
+typedef uint32_t ResourceHandle;
+
+struct BufferHandle {
+	ResourceHandle index;
+};
+
+struct TextureHandle {
+	ResourceHandle index;
+};
+
+
+// Invaild handles
+static BufferHandle kInvalidBufferHandle = { kInvalidIndex };
+static TextureHandle kInvalidTextureHandle = { kInvalidIndex };
+
+
 struct AllocatedBufferUntyped {
 	VkBuffer buffer{};
 	VmaAllocation allocation{};

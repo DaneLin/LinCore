@@ -424,7 +424,7 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
 
 	VmaAllocationCreateInfo vmaallocInfo = {};
 	vmaallocInfo.usage = memoryUsage;
-	vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT;
 	AllocatedBuffer newBuffer;
 
 	// allocate the buffer
