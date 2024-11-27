@@ -26,58 +26,34 @@ namespace vkutils {
 
 struct ComputePushConstants {
 	glm::vec4 data1;
-
 	glm::vec4 data2;
-
 	glm::vec4 data3;
-
 	glm::vec4 data4;
 };
 
 struct ComputeEffect {
 	const char* name;
-
 	VkPipeline pipeline;
-
 	lc::ShaderDescriptorBinder descriptor_binder;
-
 	VkPipelineLayout layout;
-
 	ComputePushConstants data;
-};
-
-struct MeshRenderPass
-{
-	const char* name;
-
-	VkPipeline pipeline;
-
-	VkPipelineLayout layout;
 };
 
 
 struct FrameData {
 	VkCommandPool command_pool;
-
 	VkCommandBuffer main_command_buffer;
-
 	VkSemaphore swapchain_semaphore, render_semaphore;
-
 	VkFence render_fence;
-
 	DeletionQueue deletion_queue;
-
 	class lc::DescriptorAllocatorGrowable frame_descriptors;
 };
 
-
 struct GLTFMetallic_Roughness {
 	MaterialPipeline opaque_pipeline;
-
 	MaterialPipeline transparent_pipeline;
-
 	VkDescriptorSetLayout material_layout;
-
+	
 	struct MaterialConstants {
 		glm::vec4 color_factors;
 		glm::vec4 metal_rough_factors;
@@ -122,6 +98,7 @@ struct RenderObjectBatch
 	std::vector<IndirectBatch> transparent_batches;
 	AllocatedBufferUntyped indirect_buffer;
 	AllocatedBufferUntyped transform_buffer;
+	VkDeviceAddress transform_buffer_address;
 };
 
 struct RenderObject {
@@ -163,9 +140,6 @@ struct EngineStats {
 
 	float mesh_draw_time;
 };
-
-
-
 
 class VulkanEngine {
 public:
@@ -233,8 +207,6 @@ public:
 	std::vector<ComputeEffect> background_effects_;
 
 	int current_background_effect_{ 0 };
-
-	MeshRenderPass mesh_renderpass_;
 
 	GPUSceneData scene_data_;
 

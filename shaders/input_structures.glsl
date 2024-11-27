@@ -13,6 +13,7 @@ layout(set = 1, binding = 0) uniform GLTFMaterialData {
     vec4 metal_rough_factors;
     uint colorTexID;      // 改为textureID 
     uint metalRoughTexID; // 改为textureID
+    uint padding[2];
 } materialData;
 
 // 全局bindless texture数组

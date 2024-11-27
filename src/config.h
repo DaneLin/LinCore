@@ -1,6 +1,13 @@
 // config.h
 #ifndef CONFIG_H
 #define CONFIG_H
+
+#if NDEBUG
+constexpr bool bUseValidationLayers = false;
+#else
+constexpr bool bUseValidationLayers = true;
+#endif
+
 // Should we enable vertical sync during presentation? Worth setting to 0 when doing perf profiling to avoid GPU downclock during idle
 #define CONFIG_VSYNC 1
 
@@ -21,5 +28,7 @@ const std::string cache_file_path = "pipeline_cache_data.bin";
 inline constexpr uint32_t kSTAGING_BUFFER_SIZE = 64 * 1024 * 1024;
 
 inline constexpr uint32_t kMAX_DRAW_INDIRECT_COUNT = 1024;
+
+#define LC_DRAW_INDIRECT 0
 
 #endif

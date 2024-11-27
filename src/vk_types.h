@@ -70,9 +70,9 @@ struct DeletionQueue
 
 struct AllocatedBufferUntyped
 {
-	VkBuffer buffer;
-	VmaAllocation allocation;
-	VmaAllocationInfo info;
+	VkBuffer buffer{ VK_NULL_HANDLE };
+	VmaAllocation allocation{};
+	VmaAllocationInfo info{};
 	VkDeviceSize size{ 0 };
 	VkDescriptorBufferInfo GetInfo(VkDeviceSize offset = 0) const;
 };
@@ -134,6 +134,12 @@ struct alignas(16) GPUDrawPushConstants
 	VkDeviceAddress vertex_buffer_address;
 };
 
+struct alignas(16) GPUDrawIndirectPushConstants
+{
+	VkDeviceAddress render_matrix_buffer_address;
+	VkDeviceAddress vertex_buffer_address;
+};
+
 /// <summary>
 /// This is the structs we need for the material data.
 /// MaterialInstance will hold a raw pointer (non owning) into its MaterialPipeline which contains the real pipeline.
@@ -164,7 +170,7 @@ struct DrawContext;
 
 class IRenderable
 {
-	virtual void Draw(const glm::mat4 &topMatrix, DrawContext &ctx) = 0;
+	virtual void Draw(const glm::mat4 &top_matrix, DrawContext &ctx) = 0;
 };
 
 struct Node : public IRenderable
