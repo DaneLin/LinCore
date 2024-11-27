@@ -246,9 +246,9 @@ namespace lc
 			constants.metal_rough_factors.x = mat.pbrData.metallicFactor;
 			constants.metal_rough_factors.y = mat.pbrData.roughnessFactor;
 
-			MaterialPass pass_type = MaterialPass::kMainColor;
+			MeshPassType pass_type = MeshPassType::kMainColor;
 			if (mat.alphaMode == fastgltf::AlphaMode::Blend) {
-				pass_type = MaterialPass::kTransparent;
+				pass_type = MeshPassType::kTransparent;
 			}
 
 			GLTFMetallic_Roughness::MaterialResources material_resources;

@@ -12,7 +12,7 @@ uint32_t vkutils::PushBuffer::Push(void *data, size_t size)
 	return offset;
 }
 
-void vkutils::PushBuffer::Init(VmaAllocator &allocator, AllocatedBuffer sourceBuffer, uint32_t alignment)
+void vkutils::PushBuffer::Init(VmaAllocator &allocator, AllocatedBufferUntyped sourceBuffer, uint32_t alignment)
 {
 	align = alignment;
 	source = sourceBuffer;

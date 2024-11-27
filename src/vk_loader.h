@@ -51,7 +51,7 @@ namespace lc
 
 		VkCommandPool command_pool[kFRAME_OVERLAP];
 		VkCommandBuffer command_buffer[kFRAME_OVERLAP];
-		AllocatedBuffer staging_buffer;
+		AllocatedBufferUntyped staging_buffer;
 		VkSemaphore transfer_complete_semaphore;
 		VkFence transfer_fence;
 	};
@@ -142,6 +142,36 @@ namespace lc
 		GPUMeshBuffers mesh_buffers;
 	};
 
+	template<typename T>
+	struct PerPassData
+	{
+	public:
+		T& operator[](MeshPassType pass)
+		{
+			switch (pass)
+			{
+			case MeshPassType::kMainColor:
+				return data[0];
+			case MeshPassType::kTransparent:
+				return data[1];
+			case MeshPassType::kDirectionalShadow:
+				return data[2];
+			}
+			assert(false);
+			return data[0];
+		}
+
+		void Clear(T&& val)
+		{
+			for (int i = 0; i < 3; i++)
+			{
+				data[i] = val;
+			}
+		}
+	private:
+		std::array<T, 3> data;
+	};
+
 	struct LoadedGLTF : public IRenderable {
 		// storage for all the data on a given glTF file
 		std::unordered_map<std::string, std::shared_ptr<MeshAsset>> meshes;
@@ -156,7 +186,7 @@ namespace lc
 
 		lc::DescriptorAllocatorGrowable descriptor_pool;
 
-		AllocatedBuffer material_data_buffer;
+		AllocatedBufferUntyped material_data_buffer;
 
 		VulkanEngine* creator;
 

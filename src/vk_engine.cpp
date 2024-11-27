@@ -210,7 +210,7 @@ void VulkanEngine::Draw()
 	VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
 	// begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know it may be recorded only once
-	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT );
+	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	draw_extent_.width = static_cast<uint32_t>(std::min(swapchain_extent_.width, draw_image_.extent.width) * render_scale_);
 	draw_extent_.height = static_cast<uint32_t>(std::min(swapchain_extent_.height, draw_image_.extent.height) * render_scale_);
@@ -244,7 +244,7 @@ void VulkanEngine::Draw()
 
 		vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
-	
+
 
 	// finish recording the command buffer
 	VK_CHECK(vkEndCommandBuffer(cmd));
@@ -347,13 +347,13 @@ void VulkanEngine::Run()
 
 		ImGui::Separator();
 
-		for (auto &[k,v] : profiler_->timing_) {
+		for (auto& [k, v] : profiler_->timing_) {
 			ImGui::Text("%s: %f ms", k.c_str(), v);
 		}
 
 		ImGui::Separator();
 
-		for (auto &[k,v] : profiler_->stats_) {
+		for (auto& [k, v] : profiler_->stats_) {
 			ImGui::Text("%s: %i", k.c_str(), v);
 		}
 
@@ -413,7 +413,7 @@ void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& fu
 	VK_CHECK(vkWaitForFences(device_, 1, &imm_fence_, VK_TRUE, UINT64_MAX));
 }
 
-AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+AllocatedBufferUntyped VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
 {
 	// allocate buffer
 	VkBufferCreateInfo bufferInfo = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -425,7 +425,7 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
 	VmaAllocationCreateInfo vmaallocInfo = {};
 	vmaallocInfo.usage = memoryUsage;
 	vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT;
-	AllocatedBuffer newBuffer;
+	AllocatedBufferUntyped newBuffer;
 
 	// allocate the buffer
 	VK_CHECK(vmaCreateBuffer(allocator_, &bufferInfo, &vmaallocInfo, &newBuffer.buffer, &newBuffer.allocation, &newBuffer.info));
@@ -433,7 +433,7 @@ AllocatedBuffer VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags 
 	return newBuffer;
 }
 
-void VulkanEngine::DestroyBuffer(const AllocatedBuffer& buffer)
+void VulkanEngine::DestroyBuffer(const AllocatedBufferUntyped& buffer)
 {
 	vmaDestroyBuffer(allocator_, buffer.buffer, buffer.allocation);
 }
@@ -457,7 +457,7 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
 	// create index buffer
 	new_surface.index_buffer = CreateBuffer(index_buffer_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 
-	AllocatedBuffer staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+	AllocatedBufferUntyped staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
 	void* data = staging.allocation->GetMappedData();
 
@@ -520,7 +520,7 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
 {
 	size_t dataSize = size.depth * size.width * size.height * 4;
-	AllocatedBuffer uploadBuffer = CreateBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	AllocatedBufferUntyped uploadBuffer = CreateBuffer(dataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	memcpy(uploadBuffer.info.pMappedData, data, dataSize);
 
@@ -655,7 +655,7 @@ void VulkanEngine::InitVulkan()
 	};
 	features.dynamicRendering = true;
 	features.synchronization2 = true;
-	
+
 
 	//vulkan 1.2 features
 	VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
@@ -964,7 +964,7 @@ void VulkanEngine::InitBackgounrdPipelines()
 	gradient.data = {};
 	gradient.data.data1 = glm::vec4(1, 0, 0, 1);
 	gradient.data.data2 = glm::vec4(0, 0, 1, 1);
-	gradient.pipeline = builder.BuildPipeline(device_,global_pipeline_cache_->GetCache());
+	gradient.pipeline = builder.BuildPipeline(device_, global_pipeline_cache_->GetCache());
 	gradient.layout = gradientEffect->built_layout_;
 
 	gradient.descriptor_binder.SetShader(gradientEffect);
@@ -1121,7 +1121,7 @@ void VulkanEngine::InitDefaultData()
 	materialResources.metal_rought_sampler = default_samplers_.linear;
 
 	// set the uniform buffer for the material data
-	AllocatedBuffer materialConstants = CreateBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	AllocatedBufferUntyped materialConstants = CreateBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// write the buffer
 	GLTFMetallic_Roughness::MaterialConstants* sceneUniformData = (GLTFMetallic_Roughness::MaterialConstants*)materialConstants.allocation->GetMappedData();
@@ -1135,7 +1135,7 @@ void VulkanEngine::InitDefaultData()
 	materialResources.data_buffer = materialConstants.buffer;
 	materialResources.data_buffer_offset = 0;
 
-	dafault_data_ = metal_rough_material_.WriteMaterial(device_, MaterialPass::kMainColor, materialResources, global_descriptor_allocator_);
+	dafault_data_ = metal_rough_material_.WriteMaterial(device_, MeshPassType::kMainColor, materialResources, global_descriptor_allocator_);
 
 
 }
@@ -1292,7 +1292,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
 
 	//allocate a new uniform buffer for the scene data
-	AllocatedBuffer gpuSceneDataBuffer = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	AllocatedBufferUntyped gpuSceneDataBuffer = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	//add it to the deletion queue of this frame so it gets deleted once its been used
 	GetCurrentFrame().deletion_queue.PushFunction([=, this]() {
@@ -1317,7 +1317,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	MaterialInstance* lastMaterial = nullptr;
 	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
 
-	
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &globalDescriptor, 0, nullptr);
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
 	auto Draw = [&](const RenderObject& r) {
 		if (r.material != lastMaterial) {
@@ -1327,8 +1327,8 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 			if (r.material->pipeline != lastPipeline) {
 				lastPipeline = r.material->pipeline;
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->pipeline);
-				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 0, 1, &globalDescriptor, 0, nullptr);
 				
+
 
 				// set dynamic viewport and scissor
 				VkViewport viewport = {};
@@ -1349,7 +1349,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 			}
 
 			// bind the material descriptor set
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 1, 1, &r.material->set, 0, nullptr);
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &r.material->set, 0, nullptr);
 		}
 		// rebind index buffer if needed
 		if (r.index_buffer != lastIndexBuffer) {
@@ -1393,6 +1393,249 @@ const std::string VulkanEngine::GetAssetPath(const std::string& path) const
 	return std::string("../../" + path);
 }
 
+void VulkanEngine::BuildBatches()
+{
+	// clear the current batches
+	render_batch_.opaque_batches.clear();
+	render_batch_.transparent_batches.clear();
+
+	std::unordered_map<uint64_t, size_t> batch_map;
+
+	// process opaque objects
+	for (const auto& obj : main_draw_context_.opaque_surfaces)
+	{
+		uint64_t key = reinterpret_cast<uint64_t>(obj.material);
+		key |= (reinterpret_cast<uint64_t>(obj.index_buffer) << 32);
+
+		auto it = batch_map.find(key);
+		if (it == batch_map.end())
+		{
+			// new batch
+			IndirectBatch new_batch;
+			new_batch.command.indexCount = obj.index_count;
+			new_batch.command.instanceCount = 1;
+			new_batch.command.firstIndex = obj.first_index;
+			new_batch.command.vertexOffset = 0;
+			new_batch.command.firstInstance = 0;
+
+			new_batch.material = obj.material;
+			new_batch.index_buffer = obj.index_buffer;
+			new_batch.vertex_buffer_address = obj.vertex_buffer_address;
+			new_batch.transforms.push_back(obj.transform);
+
+			batch_map[key] = render_batch_.opaque_batches.size();
+			render_batch_.opaque_batches.push_back(new_batch);
+		}
+		else
+		{
+			// add to existing batch
+			IndirectBatch& batch = render_batch_.opaque_batches[it->second];
+			batch.command.instanceCount++;
+			batch.transforms.push_back(obj.transform);
+		}
+	}
+
+	// process transparent objects
+	batch_map.clear();
+	for (const auto& obj : main_draw_context_.transparent_surfaces)
+	{
+		uint64_t key = reinterpret_cast<uint64_t>(obj.material);
+		key |= (reinterpret_cast<uint64_t>(obj.index_buffer) << 32);
+
+		auto it = batch_map.find(key);
+		if (it == batch_map.end())
+		{
+			// new batch
+			IndirectBatch new_batch;
+			new_batch.command.indexCount = obj.index_count;
+			new_batch.command.instanceCount = 1;
+			new_batch.command.firstIndex = obj.first_index;
+			new_batch.command.vertexOffset = 0;
+			new_batch.command.firstInstance = 0;
+
+			new_batch.material = obj.material;
+			new_batch.index_buffer = obj.index_buffer;
+			new_batch.vertex_buffer_address = obj.vertex_buffer_address;
+			new_batch.transforms.push_back(obj.transform);
+
+			batch_map[key] = render_batch_.transparent_batches.size();
+			render_batch_.transparent_batches.push_back(new_batch);
+		}
+		else
+		{
+			// add to existing batch
+			IndirectBatch& batch = render_batch_.transparent_batches[it->second];
+			batch.command.instanceCount++;
+			batch.transforms.push_back(obj.transform);
+		}
+	}
+
+	// update indirect draw buffer and transform buffer
+	size_t total_batches = render_batch_.opaque_batches.size() + render_batch_.transparent_batches.size();
+	size_t total_instances = 0;
+
+	for (const auto& batch : render_batch_.opaque_batches)
+	{
+		total_instances += batch.transforms.size();
+	}
+
+	for (const auto& batch : render_batch_.transparent_batches)
+	{
+		total_instances += batch.transforms.size();
+	}
+
+	// reallocate buffer if needed
+	if (!render_batch_.indirect_buffer.buffer || render_batch_.indirect_buffer.info.size < total_batches * sizeof(VkDrawIndexedIndirectCommand))
+	{
+		if (render_batch_.indirect_buffer.buffer)
+		{
+			DestroyBuffer(render_batch_.indirect_buffer);
+		}
+
+		render_batch_.indirect_buffer = CreateBuffer(total_batches * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	}
+
+	if (!render_batch_.transform_buffer.buffer || render_batch_.transform_buffer.info.size < total_instances * sizeof(glm::mat4))
+	{
+		if (render_batch_.transform_buffer.buffer)
+		{
+			DestroyBuffer(render_batch_.transform_buffer);
+		}
+
+		render_batch_.transform_buffer = CreateBuffer(total_instances * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	}
+
+	VkDrawIndexedIndirectCommand* cmd_buffer = (VkDrawIndexedIndirectCommand*)render_batch_.indirect_buffer.allocation->GetMappedData();
+	glm::mat4* transform_buffer = (glm::mat4*)render_batch_.transform_buffer.allocation->GetMappedData();
+
+	size_t cmd_offset = 0;
+	size_t transform_offset = 0;
+
+	for (auto& batch : render_batch_.opaque_batches)
+	{
+		cmd_buffer[cmd_offset++] = batch.command;
+		memcpy(transform_buffer + transform_offset,
+			batch.transforms.data(),
+			batch.transforms.size() * sizeof(glm::mat4));
+		transform_offset += batch.transforms.size();
+	}
+
+	for (auto& batch : render_batch_.transparent_batches)
+	{
+		cmd_buffer[cmd_offset++] = batch.command;
+		memcpy(transform_buffer + transform_offset,
+			batch.transforms.data(),
+			batch.transforms.size() * sizeof(glm::mat4));
+		transform_offset += batch.transforms.size();
+	}
+}
+
+void VulkanEngine::DrawBatches(VkCommandBuffer cmd, VkDescriptorSet& global_set)
+{
+	MaterialPipeline* last_pipeline = nullptr;
+	MaterialInstance* last_material = nullptr;
+	VkBuffer last_index_buffer = VK_NULL_HANDLE;
+
+	size_t transform_offset = 0;
+	size_t indirect_offset = 0;
+
+	// draw opaque
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &global_set, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
+	for (const auto& batch : render_batch_.opaque_batches)
+	{
+		if (batch.material != last_material)
+		{
+			last_material = batch.material;
+
+			if (batch.material->pipeline != last_pipeline)
+			{
+				last_pipeline = batch.material->pipeline;
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, last_pipeline->pipeline);
+
+				VkViewport viewport = {};
+				viewport.x = 0;
+				viewport.y = 0;
+				viewport.width = static_cast<float>(draw_extent_.width);
+				viewport.height = static_cast<float>(draw_extent_.height);
+				viewport.minDepth = 0.f;
+				viewport.maxDepth = 1.f;
+				vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+				VkRect2D scissor = {};
+				scissor.offset = { 0, 0 };
+				scissor.extent = draw_extent_;
+				vkCmdSetScissor(cmd, 0, 1, &scissor);
+			}
+
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &batch.material->set, 0, nullptr);
+		}
+		if (batch.index_buffer != last_index_buffer)
+		{
+			last_index_buffer = batch.index_buffer;
+			vkCmdBindIndexBuffer(cmd, batch.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+
+		GPUDrawPushConstants push_constants;
+		push_constants.vertex_buffer_address = batch.vertex_buffer_address;
+		push_constants.world_matrix = batch.transforms[transform_offset];
+		vkCmdPushConstants(cmd, last_pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+
+		vkCmdDrawIndexedIndirect(cmd, render_batch_.indirect_buffer.buffer,
+			indirect_offset, 1, sizeof(VkDrawIndexedIndirectCommand));
+
+		transform_offset += batch.transforms.size();
+		indirect_offset += sizeof(VkDrawIndexedIndirectCommand);
+	}
+
+	// draw transparent
+	/*for (const auto& batch : render_batch_.transparent_batches)
+	{
+		if (batch.material != last_material)
+		{
+			last_material = batch.material;
+
+			if (batch.material->pipeline != last_pipeline)
+			{
+				last_pipeline = batch.material->pipeline;
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, last_pipeline->pipeline);
+
+				VkViewport viewport = {};
+				viewport.x = 0;
+				viewport.y = 0;
+				viewport.width = static_cast<float>(draw_extent_.width);
+				viewport.height = static_cast<float>(draw_extent_.height);
+				viewport.minDepth = 0.f;
+				viewport.maxDepth = 1.f;
+				vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+				VkRect2D scissor = {};
+				scissor.offset = { 0, 0 };
+				scissor.extent = draw_extent_;
+				vkCmdSetScissor(cmd, 0, 1, &scissor);
+			}
+
+			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &batch.material->set, 0, nullptr);
+		}
+		if (batch.index_buffer != last_index_buffer)
+		{
+			last_index_buffer = batch.index_buffer;
+			vkCmdBindIndexBuffer(cmd, batch.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+
+		GPUDrawPushConstants push_constants;
+		push_constants.vertex_buffer_address = batch.vertex_buffer_address;
+		push_constants.world_matrix = batch.transforms[transform_offset];
+		vkCmdPushConstants(cmd, last_pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+
+		vkCmdDrawIndexedIndirect(cmd, render_batch_.indirect_buffer.buffer,
+			indirect_offset, 1, sizeof(VkDrawIndexedIndirectCommand));
+
+		transform_offset += batch.transforms.size();
+		indirect_offset += sizeof(VkDrawIndexedIndirectCommand);
+	}*/
+}
+
 void VulkanEngine::UpdateScene()
 {
 	engine_stats_.scene_update_time = 0;
@@ -1400,6 +1643,7 @@ void VulkanEngine::UpdateScene()
 	auto start = std::chrono::system_clock::now();
 
 	main_draw_context_.opaque_surfaces.clear();
+	main_draw_context_.transparent_surfaces.clear();
 
 	main_camera_.Update();
 
@@ -1474,7 +1718,7 @@ void GLTFMetallic_Roughness::BuildPipelines(VulkanEngine* engine)
 	// use the triangle layout we created
 	//pipelineBuilder._pipelineLayout = meshEffect->built_layout_;
 	opaque_pipeline.layout = engine->mesh_pipeline_layout_;
-	opaque_pipeline.pipeline = pipelineBuilder.BuildPipeline(engine->device_,engine->global_pipeline_cache_->GetCache());
+	opaque_pipeline.pipeline = pipelineBuilder.BuildPipeline(engine->device_, engine->global_pipeline_cache_->GetCache());
 
 	// create the transparent variant
 	pipelineBuilder.EnableBlendingAdditive();
@@ -1482,9 +1726,9 @@ void GLTFMetallic_Roughness::BuildPipelines(VulkanEngine* engine)
 	pipelineBuilder.EnableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
 	transparent_pipeline.layout = engine->mesh_pipeline_layout_;
-	transparent_pipeline.pipeline = pipelineBuilder.BuildPipeline(engine->device_,engine->global_pipeline_cache_->GetCache());
+	transparent_pipeline.pipeline = pipelineBuilder.BuildPipeline(engine->device_, engine->global_pipeline_cache_->GetCache());
 
-	
+
 }
 
 void GLTFMetallic_Roughness::ClearResources(VkDevice device)
@@ -1496,11 +1740,11 @@ void GLTFMetallic_Roughness::ClearResources(VkDevice device)
 	vkDestroyPipeline(device, opaque_pipeline.pipeline, nullptr);
 }
 
-MaterialInstance GLTFMetallic_Roughness::WriteMaterial(VkDevice device, MaterialPass pass, const MaterialResources& resources, lc::DescriptorAllocatorGrowable& descriptor_allocator)
+MaterialInstance GLTFMetallic_Roughness::WriteMaterial(VkDevice device, MeshPassType pass, const MaterialResources& resources, lc::DescriptorAllocatorGrowable& descriptor_allocator)
 {
 	MaterialInstance matData;
 	matData.pass_type = pass;
-	if (pass == MaterialPass::kTransparent) {
+	if (pass == MeshPassType::kTransparent) {
 		matData.pipeline = &transparent_pipeline;
 	}
 	else
@@ -1534,7 +1778,7 @@ void MeshNode::Draw(const glm::mat4& top_matrix, DrawContext& ctx)
 			def.transform = node_matrix;
 			def.vertex_buffer_address = mesh->mesh_buffers.vertex_buffer_address;
 
-			if (s.material->data.pass_type == MaterialPass::kTransparent)
+			if (s.material->data.pass_type == MeshPassType::kTransparent)
 				ctx.transparent_surfaces.push_back(def);
 			else
 				ctx.opaque_surfaces.push_back(def);

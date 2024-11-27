@@ -104,7 +104,24 @@ struct GLTFMetallic_Roughness {
 
 	void ClearResources(VkDevice device);
 
-	MaterialInstance WriteMaterial(VkDevice device, MaterialPass pass, const MaterialResources& resources, lc::DescriptorAllocatorGrowable& descriptor_allocator);
+	MaterialInstance WriteMaterial(VkDevice device, MeshPassType pass, const MaterialResources& resources, lc::DescriptorAllocatorGrowable& descriptor_allocator);
+};
+
+struct IndirectBatch
+{
+	VkDrawIndexedIndirectCommand command;
+	MaterialInstance* material; 
+	VkBuffer index_buffer;     
+	VkDeviceAddress vertex_buffer_address; 
+	std::vector<glm::mat4> transforms;
+};
+
+struct RenderObjectBatch
+{
+	std::vector<IndirectBatch> opaque_batches;
+	std::vector<IndirectBatch> transparent_batches;
+	AllocatedBufferUntyped indirect_buffer;
+	AllocatedBufferUntyped transform_buffer;
 };
 
 struct RenderObject {
@@ -258,6 +275,8 @@ public:
 	enki::TaskSchedulerConfig task_config_;
 	enki::TaskScheduler task_scheduler_;
 
+	RenderObjectBatch render_batch_;
+
 public:
 
 	static VulkanEngine& Get();
@@ -278,9 +297,9 @@ public:
 
 	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
-	AllocatedBuffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+	AllocatedBufferUntyped CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 
-	void DestroyBuffer(const AllocatedBuffer& buffer);
+	void DestroyBuffer(const AllocatedBufferUntyped& buffer);
 
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
@@ -326,6 +345,9 @@ private:
 	void DrawGeometry(VkCommandBuffer cmd);
 
 	const std::string GetAssetPath(const std::string& path) const;
+
+	void BuildBatches();
+	void DrawBatches(VkCommandBuffer cmd, VkDescriptorSet& global_set);
 
 private:
 	// swapchain stuff

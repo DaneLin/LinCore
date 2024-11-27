@@ -67,17 +67,36 @@ struct DeletionQueue
 		deletors.clear();
 	}
 };
-/// <summary>
-/// We will use this structure to hold the data for a given buffer.
-/// We have the VkBuffer which is the vulkan handle,
-/// and the VmaAllocation and VmaAllocationInfo wich contains metadata about the buffer and its allocation,
-/// needed to be able to free the buffer.
-/// </summary>
-struct AllocatedBuffer
+
+struct AllocatedBufferUntyped
 {
 	VkBuffer buffer;
 	VmaAllocation allocation;
 	VmaAllocationInfo info;
+	VkDeviceSize size{ 0 };
+	VkDescriptorBufferInfo GetInfo(VkDeviceSize offset = 0) const;
+};
+
+inline VkDescriptorBufferInfo AllocatedBufferUntyped::GetInfo(VkDeviceSize offset) const
+{
+	return VkDescriptorBufferInfo{ .buffer=buffer,.offset = offset, .range = size };
+}
+
+template<typename T>
+struct AllocatedBuffer : public AllocatedBufferUntyped {
+	void operator=(const AllocatedBufferUntyped& other) {
+		buffer = other.buffer;
+		allocation = other.allocation;
+		info = other.info;
+		size = other.size;
+	}
+	AllocatedBuffer(AllocatedBufferUntyped& other) {
+		buffer = other.buffer;
+		allocation = other.allocation;
+		info = other.info;
+		size = other.size;
+	}
+	AllocatedBuffer() = default;
 };
 
 // Mesh buffers on GPU
@@ -103,8 +122,8 @@ struct GPUSceneData
 // holds the resources needed for a mesh
 struct GPUMeshBuffers
 {
-	AllocatedBuffer index_buffer;
-	AllocatedBuffer vertex_buffer;
+	AllocatedBuffer<uint32_t> index_buffer;
+	AllocatedBuffer<Vertex> vertex_buffer;
 	VkDeviceAddress vertex_buffer_address;
 };
 
@@ -120,7 +139,7 @@ struct alignas(16) GPUDrawPushConstants
 /// MaterialInstance will hold a raw pointer (non owning) into its MaterialPipeline which contains the real pipeline.
 /// It holds a descriptor set too.
 /// </summary>
-enum class MaterialPass : uint8_t
+enum class MeshPassType : uint8_t
 {
 	kMainColor,
 	kTransparent,
@@ -138,7 +157,7 @@ struct MaterialInstance
 {
 	MaterialPipeline *pipeline;
 	VkDescriptorSet set;
-	MaterialPass pass_type;
+	MeshPassType pass_type;
 };
 
 struct DrawContext;

@@ -11,12 +11,12 @@ namespace vkutils
 
 		uint32_t Push(void *data, size_t size);
 
-		void Init(VmaAllocator &allocator, AllocatedBuffer sourceBuffer, uint32_t alignment);
+		void Init(VmaAllocator &allocator, AllocatedBufferUntyped sourceBuffer, uint32_t alignment);
 		void Reset();
 
 		uint32_t PadUniformBufferSize(uint32_t originalSize);
 
-		AllocatedBuffer source;
+		AllocatedBufferUntyped source;
 
 		uint32_t align;
 		uint32_t current_offset;
