@@ -64,15 +64,15 @@ VkSemaphoreCreateInfo vkinit::SemaphoreCreateInfo(VkSemaphoreCreateFlags flags /
 //> init_submit
 VkSemaphoreSubmitInfo vkinit::SemaphoreSubmitInfo(VkPipelineStageFlags2 stage_mask, VkSemaphore semaphore)
 {
-    VkSemaphoreSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-    submitInfo.pNext = nullptr;
-    submitInfo.semaphore = semaphore;
-    submitInfo.stageMask = stage_mask;
-    submitInfo.deviceIndex = 0;
-    submitInfo.value = 1;
+    VkSemaphoreSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+    submit_info.pNext = nullptr;
+    submit_info.semaphore = semaphore;
+    submit_info.stageMask = stage_mask;
+    submit_info.deviceIndex = 0;
+    submit_info.value = 1;
 
-    return submitInfo;
+    return submit_info;
 }
 
 VkCommandBufferSubmitInfo vkinit::CommandBufferSubmitInfo(VkCommandBuffer cmd)
@@ -162,31 +162,31 @@ VkRenderingAttachmentInfo vkinit::DepthAttachmentInfo(
 VkRenderingInfo vkinit::RenderingInfo(VkExtent2D renderExtent, VkRenderingAttachmentInfo *color_attachment,
                                       VkRenderingAttachmentInfo *depth_attachment)
 {
-    VkRenderingInfo renderInfo{};
-    renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderInfo.pNext = nullptr;
+    VkRenderingInfo render_info{};
+    render_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    render_info.pNext = nullptr;
 
-    renderInfo.renderArea = VkRect2D{VkOffset2D{0, 0}, renderExtent};
-    renderInfo.layerCount = 1;
-    renderInfo.colorAttachmentCount = 1;
-    renderInfo.pColorAttachments = color_attachment;
-    renderInfo.pDepthAttachment = depth_attachment;
-    renderInfo.pStencilAttachment = nullptr;
+    render_info.renderArea = VkRect2D{VkOffset2D{0, 0}, renderExtent};
+    render_info.layerCount = 1;
+    render_info.colorAttachmentCount = 1;
+    render_info.pColorAttachments = color_attachment;
+    render_info.pDepthAttachment = depth_attachment;
+    render_info.pStencilAttachment = nullptr;
 
-    return renderInfo;
+    return render_info;
 }
 //< render_info
 //> subresource
 VkImageSubresourceRange vkinit::ImageSubresourceRange(VkImageAspectFlags aspect_mask)
 {
-    VkImageSubresourceRange subImage{};
-    subImage.aspectMask = aspect_mask;
-    subImage.baseMipLevel = 0;
-    subImage.levelCount = VK_REMAINING_MIP_LEVELS;
-    subImage.baseArrayLayer = 0;
-    subImage.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    VkImageSubresourceRange image_sub_range{};
+    image_sub_range.aspectMask = aspect_mask;
+    image_sub_range.baseMipLevel = 0;
+    image_sub_range.levelCount = VK_REMAINING_MIP_LEVELS;
+    image_sub_range.baseArrayLayer = 0;
+    image_sub_range.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    return subImage;
+    return image_sub_range;
 }
 //< subresource
 
@@ -251,11 +251,11 @@ VkWriteDescriptorSet vkinit::WriteDescriptorBuffer(VkDescriptorType type, VkDesc
 
 VkDescriptorBufferInfo vkinit::BufferInfo(VkBuffer buffer, VkDeviceSize offset, VkDeviceSize range)
 {
-    VkDescriptorBufferInfo binfo{};
-    binfo.buffer = buffer;
-    binfo.offset = offset;
-    binfo.range = range;
-    return binfo;
+    VkDescriptorBufferInfo buf_info{};
+    buf_info.buffer = buffer;
+    buf_info.offset = offset;
+    buf_info.range = range;
+    return buf_info;
 }
 
 //> image_set

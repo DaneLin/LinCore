@@ -164,24 +164,24 @@ namespace lc
 	}
 	VkDescriptorPool DescriptorAllocatorGrowable::CreatePool(VkDevice device, uint32_t set_count, std::span<PoolSizeRatio> pool_ratios)
 	{
-		std::vector<VkDescriptorPoolSize> poolSizes;
+		std::vector<VkDescriptorPoolSize> pool_sizes;
 		for (PoolSizeRatio ratio : pool_ratios)
 		{
-			poolSizes.push_back(VkDescriptorPoolSize{
+			pool_sizes.push_back(VkDescriptorPoolSize{
 				.type = ratio.type,
 				.descriptorCount = static_cast<uint32_t>(ratio.ratio * set_count)});
 		}
 
-		VkDescriptorPoolCreateInfo poolInfo = {};
-		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		VkDescriptorPoolCreateInfo pool_info = {};
+		pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		// Add flag for bindless support
-		poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-		poolInfo.maxSets = set_count;
-		poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-		poolInfo.pPoolSizes = poolSizes.data();
+		pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+		pool_info.maxSets = set_count;
+		pool_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+		pool_info.pPoolSizes = pool_sizes.data();
 
 		VkDescriptorPool new_pool;
-		vkCreateDescriptorPool(device, &poolInfo, nullptr, &new_pool);
+		vkCreateDescriptorPool(device, &pool_info, nullptr, &new_pool);
 		return new_pool;
 	}
 
@@ -223,7 +223,7 @@ namespace lc
 
 	void DescriptorWriter::WriteImageArray(int binding, uint32_t dst_array_element, const std::vector<VkDescriptorImageInfo> &image_info_array, VkDescriptorType type)
 	{
-		size_t startIdx = image_infos_.size();
+		size_t start_idx = image_infos_.size();
 		for (const auto &info : image_info_array)
 		{
 			image_infos_.push_back(info);
@@ -235,14 +235,14 @@ namespace lc
 		write.dstSet = VK_NULL_HANDLE;
 		write.descriptorCount = static_cast<uint32_t>(image_info_array.size());
 		write.descriptorType = type;
-		write.pImageInfo = &image_infos_[startIdx];
+		write.pImageInfo = &image_infos_[start_idx];
 
 		writes_.push_back(write);
 	}
 
 	void DescriptorWriter::WriteBufferArray(int binding, uint32_t dst_array_element, const std::vector<VkDescriptorBufferInfo> &bufferInfoArray, VkDescriptorType type)
 	{
-		size_t startIdx = buffer_infos_.size();
+		size_t start_idx = buffer_infos_.size();
 		for (const auto &info : bufferInfoArray)
 		{
 			buffer_infos_.push_back(info);
@@ -254,7 +254,7 @@ namespace lc
 		write.dstSet = VK_NULL_HANDLE;
 		write.descriptorCount = static_cast<uint32_t>(bufferInfoArray.size());
 		write.descriptorType = type;
-		write.pBufferInfo = &buffer_infos_[startIdx];
+		write.pBufferInfo = &buffer_infos_[start_idx];
 
 		writes_.push_back(write);
 	}

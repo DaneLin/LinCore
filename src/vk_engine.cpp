@@ -507,17 +507,17 @@ AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkIma
 
 	VK_CHECK(vmaCreateImage(allocator_, &imgInfo, &allocInfo, &new_image.image, &new_image.allocation, nullptr));
 
-	VkImageAspectFlags aspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
+	VkImageAspectFlags aspect_flag = VK_IMAGE_ASPECT_COLOR_BIT;
 	if (format == VK_FORMAT_D32_SFLOAT)
 	{
-		aspectFlag = VK_IMAGE_ASPECT_DEPTH_BIT;
+		aspect_flag = VK_IMAGE_ASPECT_DEPTH_BIT;
 	}
 
 	// build a image-view for the image
-	VkImageViewCreateInfo viewInfo = vkinit::ImageViewCreateInfo(format, new_image.image, aspectFlag);
-	viewInfo.subresourceRange.levelCount = imgInfo.mipLevels;
+	VkImageViewCreateInfo view_info = vkinit::ImageViewCreateInfo(format, new_image.image, aspect_flag);
+	view_info.subresourceRange.levelCount = imgInfo.mipLevels;
 
-	VK_CHECK(vkCreateImageView(device_, &viewInfo, nullptr, &new_image.view));
+	VK_CHECK(vkCreateImageView(device_, &view_info, nullptr, &new_image.view));
 
 	return new_image;
 }
@@ -601,20 +601,20 @@ void VulkanEngine::InitVulkan()
 	SDL_Vulkan_CreateSurface(window_, instance_, &surface_);
 
 	// 获取物理设备数量
-	uint32_t deviceCount = 0;
-	vkEnumeratePhysicalDevices(instance_, &deviceCount, nullptr);
+	uint32_t device_count = 0;
+	vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
 
-	if (deviceCount == 0)
+	if (device_count == 0)
 	{
 		LOGE("Failed to find GPUs with Vulkan support!");
 		vkDestroyInstance(instance_, nullptr);
 		return;
 	}
 	// 获取所有物理设备
-	std::vector<VkPhysicalDevice> devices(deviceCount);
-	vkEnumeratePhysicalDevices(instance_, &deviceCount, devices.data());
+	std::vector<VkPhysicalDevice> devices(device_count);
+	vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
 
-	LOGI("Found {} GPU(s) with Vulkan support:", deviceCount);
+	LOGI("Found {} GPU(s) with Vulkan support:", device_count);
 
 	// 输出每个设备的信息以及其支持的扩展
 	for (const auto &device : devices)
@@ -672,20 +672,21 @@ void VulkanEngine::InitVulkan()
 	features.synchronization2 = true;
 
 	// vulkan 1.2 features
-	VkPhysicalDeviceVulkan12Features features12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-	features12.bufferDeviceAddress = true;
-	features12.descriptorIndexing = true;
-	features12.descriptorBindingPartiallyBound = true;
-	features12.descriptorBindingSampledImageUpdateAfterBind = true;
-	features12.descriptorBindingUniformBufferUpdateAfterBind = true;
-	features12.runtimeDescriptorArray = true;
-	features12.descriptorBindingVariableDescriptorCount = true;
-	features12.hostQueryReset = true;
+	VkPhysicalDeviceVulkan12Features features_12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+	features_12.bufferDeviceAddress = true;
+	features_12.descriptorIndexing = true;
+	features_12.descriptorBindingPartiallyBound = true;
+	features_12.descriptorBindingSampledImageUpdateAfterBind = true;
+	features_12.descriptorBindingUniformBufferUpdateAfterBind = true;
+	features_12.runtimeDescriptorArray = true;
+	features_12.descriptorBindingVariableDescriptorCount = true;
+	features_12.hostQueryReset = true;
 
 	// Enable pipelineStatisticsQuery in the physical device features
-	VkPhysicalDeviceFeatures features10{};
-	features10.pipelineStatisticsQuery = true;
-	features10.multiDrawIndirect = true;
+	VkPhysicalDeviceFeatures features_10{};
+	features_10.pipelineStatisticsQuery = true;
+	features_10.multiDrawIndirect = true;
+	features_10.geometryShader = true;
 
 	// use vkbootstrap to select a gpu
 	// we want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
@@ -693,8 +694,8 @@ void VulkanEngine::InitVulkan()
 	vkb::PhysicalDevice physical_device = selector
 											  .set_minimum_version(1, 3)
 											  .set_required_features_13(features)
-											  .set_required_features_12(features12)
-											  .set_required_features(features10)
+											  .set_required_features_12(features_12)
+											  .set_required_features(features_10)
 											  .set_surface(surface_)
 											  .add_required_extensions(required_extensions)
 											  .select()
@@ -709,10 +710,10 @@ void VulkanEngine::InitVulkan()
 		LOGE("Failed to create Vulkan device: {}", device_build_ret.error().message());
 		return;
 	}
-	vkb::Device vkbDevice = device_build_ret.value();
+	vkb::Device vkb_device = device_build_ret.value();
 
 	// get the vkdevice handle used in the rest of a vulkan application
-	device_ = vkbDevice.device;
+	device_ = vkb_device.device;
 	volkLoadDevice(device_);
 	chosen_gpu_ = physical_device.physical_device;
 	gpu_properties_ = physical_device.properties;
@@ -725,16 +726,16 @@ void VulkanEngine::InitVulkan()
 		 VK_VERSION_MINOR(device_properties.apiVersion),
 		 VK_VERSION_PATCH(device_properties.apiVersion));
 
-	auto graphics_queue_ret = vkbDevice.get_queue(vkb::QueueType::graphics);
+	auto graphics_queue_ret = vkb_device.get_queue(vkb::QueueType::graphics);
 	if (!graphics_queue_ret.has_value())
 	{
 		LOGE("Failed to find a graphics queue!");
 		return;
 	}
 	main_queue_ = graphics_queue_ret.value();
-	main_queue_family_ = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+	main_queue_family_ = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
 
-	auto transfer_queue_ret = vkbDevice.get_queue(vkb::QueueType::transfer);
+	auto transfer_queue_ret = vkb_device.get_queue(vkb::QueueType::transfer);
 	if (!transfer_queue_ret.has_value())
 	{
 		LOGE("Failed to find a transfer queue!");
@@ -742,19 +743,19 @@ void VulkanEngine::InitVulkan()
 	}
 
 	transfer_queue_ = transfer_queue_ret.value();
-	transfer_queue_family_ = vkbDevice.get_queue_index(vkb::QueueType::transfer).value();
+	transfer_queue_family_ = vkb_device.get_queue_index(vkb::QueueType::transfer).value();
 
-	VmaVulkanFunctions vulkanFunctions = {};
-	vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-	vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+	VmaVulkanFunctions vulkan_functions = {};
+	vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+	vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 	// Init the memory allocator
-	VmaAllocatorCreateInfo allocatorInfo = {};
-	allocatorInfo.physicalDevice = chosen_gpu_;
-	allocatorInfo.device = device_;
-	allocatorInfo.instance = instance_;
-	allocatorInfo.pVulkanFunctions = &vulkanFunctions;
-	allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-	vmaCreateAllocator(&allocatorInfo, &allocator_);
+	VmaAllocatorCreateInfo allocator_create_info = {};
+	allocator_create_info.physicalDevice = chosen_gpu_;
+	allocator_create_info.device = device_;
+	allocator_create_info.instance = instance_;
+	allocator_create_info.pVulkanFunctions = &vulkan_functions;
+	allocator_create_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+	vmaCreateAllocator(&allocator_create_info, &allocator_);
 
 	main_deletion_queue_.PushFunction([&]()
 									  { vmaDestroyAllocator(allocator_); });
@@ -1508,7 +1509,7 @@ void VulkanEngine::BuildBatches()
 			DestroyBuffer(render_batch_.indirect_buffer);
 		}
 
-		render_batch_.indirect_buffer = CreateBuffer(total_batches * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+		render_batch_.indirect_buffer = CreateBuffer(total_batches * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 		main_deletion_queue_.PushFunction([=]()
 										  { DestroyBuffer(render_batch_.indirect_buffer); });
 	}
@@ -1520,13 +1521,13 @@ void VulkanEngine::BuildBatches()
 			DestroyBuffer(render_batch_.transform_buffer);
 		}
 
-		render_batch_.transform_buffer = CreateBuffer(total_instances * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+		render_batch_.transform_buffer = CreateBuffer(total_instances * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 		main_deletion_queue_.PushFunction([=]()
 										  { DestroyBuffer(render_batch_.transform_buffer); });
 	}
 
-	VkDrawIndexedIndirectCommand *cmd_buffer = (VkDrawIndexedIndirectCommand *)render_batch_.indirect_buffer.info.pMappedData;
-	glm::mat4 *transform_buffer = (glm::mat4 *)render_batch_.transform_buffer.info.pMappedData;
+	VkDrawIndexedIndirectCommand *cmd_buffer = (VkDrawIndexedIndirectCommand *)render_batch_.indirect_buffer.allocation->GetMappedData();
+	glm::mat4 *transform_buffer = (glm::mat4 *)render_batch_.transform_buffer.allocation->GetMappedData();
 
 	size_t cmd_offset = 0;
 	size_t transform_offset = 0;
@@ -1538,7 +1539,7 @@ void VulkanEngine::BuildBatches()
 		memcpy(transform_buffer + transform_offset,
 			   batch.transforms.data(),
 			   batch.transforms.size() * sizeof(glm::mat4));
-		transform_offset += batch.transforms.size();
+		transform_offset += batch.transforms.size() ;
 	}
 
 	for (auto &batch : render_batch_.transparent_batches)
@@ -1688,7 +1689,7 @@ void VulkanEngine::UpdateScene()
 	scene_data_.sunlight_color = glm::vec4(1.f);
 	scene_data_.sunlight_direction = glm::vec4(0, 1, 0.5, 1.f);
 
-	loaded_scenes_["structure"]->Draw(glm::mat4{1.f}, main_draw_context_);
+	loaded_scenes_["structure"]->Draw(glm::mat4{1.0f}, main_draw_context_);
 #if LC_DRAW_INDIRECT
 	BuildBatches();
 #endif

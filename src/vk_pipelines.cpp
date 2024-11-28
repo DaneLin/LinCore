@@ -79,11 +79,11 @@ namespace lc
 		// setting up dynamic state
 		VkDynamicState state[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
-		VkPipelineDynamicStateCreateInfo dynamicState = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
-		dynamicState.pDynamicStates = &state[0];
-		dynamicState.dynamicStateCount = 2;
+		VkPipelineDynamicStateCreateInfo dynamic_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+		dynamic_state.pDynamicStates = &state[0];
+		dynamic_state.dynamicStateCount = 2;
 
-		pipeline_info.pDynamicState = &dynamicState;
+		pipeline_info.pDynamicState = &dynamic_state;
 
 		VkPipeline new_pipeline;
 		if (vkCreateGraphicsPipelines(device, cache, 1, &pipeline_info, nullptr, &new_pipeline) != VK_SUCCESS)
@@ -285,12 +285,12 @@ namespace lc
 		}
 
 		// 使用缓存数据创建 Pipeline Cache
-		VkPipelineCacheCreateInfo cacheCreateInfo = {};
-		cacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-		cacheCreateInfo.initialDataSize = cacheData.size();
-		cacheCreateInfo.pInitialData = cacheData.data();
+		VkPipelineCacheCreateInfo cache_create_info = {};
+		cache_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		cache_create_info.initialDataSize = cacheData.size();
+		cache_create_info.pInitialData = cacheData.data();
 
-		VkResult result = vkCreatePipelineCache(device_, &cacheCreateInfo, nullptr, &cache_);
+		VkResult result = vkCreatePipelineCache(device_, &cache_create_info, nullptr, &cache_);
 		return result == VK_SUCCESS;
 	}
 

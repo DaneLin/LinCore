@@ -72,9 +72,9 @@ void vkutils::GenerateMipmaps(VkCommandBuffer cmd, VkImage image, VkExtent2D ima
 	int mip_levels = int(std::floor(std::log2(std::max(image_size.width, image_size.height)))) + 1;
 	for (int mip = 0; mip < mip_levels; ++mip)
 	{
-		VkExtent2D halfSize = image_size;
-		halfSize.width /= 2;
-		halfSize.height /= 2;
+		VkExtent2D half_size = image_size;
+		half_size.width /= 2;
+		half_size.height /= 2;
 
 		VkImageMemoryBarrier2 image_barrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, .pNext = nullptr};
 
@@ -105,8 +105,8 @@ void vkutils::GenerateMipmaps(VkCommandBuffer cmd, VkImage image, VkExtent2D ima
 			blit_region.srcOffsets[1].y = image_size.height;
 			blit_region.srcOffsets[1].z = 1;
 
-			blit_region.dstOffsets[1].x = halfSize.width;
-			blit_region.dstOffsets[1].y = halfSize.height;
+			blit_region.dstOffsets[1].x = half_size.width;
+			blit_region.dstOffsets[1].y = half_size.height;
 			blit_region.dstOffsets[1].z = 1;
 
 			blit_region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -130,7 +130,7 @@ void vkutils::GenerateMipmaps(VkCommandBuffer cmd, VkImage image, VkExtent2D ima
 
 			vkCmdBlitImage2(cmd, &blitInfo);
 
-			image_size = halfSize;
+			image_size = half_size;
 		}
 	}
 	// transition all mip levels into the final read_only layout
