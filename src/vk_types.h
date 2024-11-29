@@ -124,6 +124,7 @@ struct GPUMeshBuffers
 {
 	AllocatedBuffer<uint32_t> index_buffer;
 	AllocatedBuffer<Vertex> vertex_buffer;
+	size_t indirect_index;
 	VkDeviceAddress vertex_buffer_address;
 };
 

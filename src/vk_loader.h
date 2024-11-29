@@ -137,7 +137,7 @@ namespace lc
 
 	struct MeshAsset {
 		std::string name;
-
+		
 		std::vector<GeoSurface> surfaces;
 		GPUMeshBuffers mesh_buffers;
 	};

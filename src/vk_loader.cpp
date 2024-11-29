@@ -304,6 +304,7 @@ namespace lc
 		// use the same vectors for all meshes so that the memory doesnt reallocate as often
 		std::vector<uint32_t> indices;
 		std::vector<Vertex> vertices;
+		int mesh_index = 0;
 
 		for (fastgltf::Mesh& mesh : gltf.meshes) {
 			std::shared_ptr<MeshAsset> new_mesh = std::make_shared<MeshAsset>();
@@ -404,8 +405,8 @@ namespace lc
 
 				new_mesh->surfaces.push_back(new_surface);
 			}
-
 			new_mesh->mesh_buffers = engine->UploadMesh(indices, vertices);
+			new_mesh->mesh_buffers.indirect_index = engine->global_mesh_buffer_.indirect_commands.size();
 			AddMeshBufferToGlobalBuffers(indices, vertices);
 		}
 

@@ -90,6 +90,8 @@ struct RenderObject {
 
 	VkBuffer index_buffer;
 
+	size_t indirect_draw_index;
+
 	MaterialInstance* material;
 
 	lc::Bounds bounds;
@@ -114,10 +116,10 @@ struct MeshNode : public Node {
 struct GlobalMeshBuffer {
 	AllocatedBuffer<Vertex> vertex_buffer;
 	AllocatedBuffer<uint32_t> index_buffer;
+	AllocatedBuffer<VkDrawIndexedIndirectCommand> indirect_command_buffer;
 
 	std::vector<Vertex> vertex_data;
 	std::vector<uint32_t> index_data;
-
 	std::vector<VkDrawIndexedIndirectCommand> indirect_commands;
 
 	void UploadToGPU(VulkanEngine* engine);

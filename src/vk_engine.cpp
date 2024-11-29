@@ -136,6 +136,7 @@ void VulkanEngine::Init()
 	main_deletion_queue_.PushFunction([=]() {
 		DestroyBuffer(global_mesh_buffer_.vertex_buffer);
 		DestroyBuffer(global_mesh_buffer_.index_buffer);
+		DestroyBuffer(global_mesh_buffer_.indirect_command_buffer);
 		});
 
 	loaded_scenes_["structure"] = *structure_file;
@@ -687,6 +688,7 @@ void VulkanEngine::InitVulkan()
 	features_12.runtimeDescriptorArray = true;
 	features_12.descriptorBindingVariableDescriptorCount = true;
 	features_12.hostQueryReset = true;
+	features_12.drawIndirectCount = true;
 
 	// Enable pipelineStatisticsQuery in the physical device features
 	VkPhysicalDeviceFeatures features_10{};
@@ -1328,18 +1330,16 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 		lc::DescriptorWriter writer;
 		writer.WriteBuffer(0, gpu_scene_data_buffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 #if LC_DRAW_INDIRECT
-		write.WriteBuffer(1, global_mesh_buffer_.vertex_buffer, sizeof(Vertex) * global_mesh_buffer_.vertex_count, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-#endif
+		writer.WriteBuffer(1, global_mesh_buffer_.vertex_buffer.buffer, sizeof(Vertex) * global_mesh_buffer_.vertex_data.size(), 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+#endif // LC_DRAW_INDIRECT
 		writer.UpdateSet(device_, global_descriptor);
 	}
-	// TODO: Draw Indirect
+
 #if LC_DRAW_INDIRECT
 	{
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(cmd, 0, 1, &global_mesh_buffer_.vertex_buffer, offsets);
-		vkCmdBindIndexBuffer(cmd, global_mesh_buffer_.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindIndexBuffer(cmd, global_mesh_buffer_.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	}
-#else
+#endif // LC_DRAW_INDIRECT
 	// this is the state we will try to skip
 	MaterialPipeline *last_pipeline = nullptr;
 	MaterialInstance *last_material = nullptr;
@@ -1380,16 +1380,16 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 			// bind the material descriptor set
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &r.material->set, 0, nullptr);
 		}
-		// rebind index buffer if needed
-
+		
 #if LC_DRAW_INDIRECT
 		GPUDrawIndirectPushConstants gpu_draw_indirect_push_constants;
 		gpu_draw_indirect_push_constants.world_matrix = r.transform;
 
 		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &gpu_draw_indirect_push_constants);
 
-		vkCmdDrawIndexedIndirect(cmd, global_mesh_buffer_.indirect_buffer, 0, r.indirect_count, sizeof(VkDrawIndexedIndirectCommand));
+		vkCmdDrawIndexedIndirect(cmd,global_mesh_buffer_.indirect_command_buffer.buffer,r.indirect_draw_index * sizeof(VkDrawIndexedIndirectCommand), 1, sizeof(VkDrawIndexedIndirectCommand));
 #else
+		// rebind index buffer if needed
 		if (r.index_buffer != last_index_buffer)
 		{
 			last_index_buffer = r.index_buffer;
@@ -1402,8 +1402,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &gpu_draw_push_constants);
 
 		vkCmdDrawIndexed(cmd, r.index_count, 1, r.first_index, 0, 0);
-#endif
-		
+#endif // LC_DRAW_INDIRECT
 
 		engine_stats_.drawcall_count++;
 		engine_stats_.triangle_count += r.index_count / 3;
@@ -1418,7 +1417,6 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	{
 		Draw(r);
 	}
-#endif
 
 	vkCmdEndRendering(cmd);
 
@@ -1463,9 +1461,6 @@ void VulkanEngine::UpdateScene()
 	scene_data_.sunlight_direction = glm::vec4(0, 1, 0.5, 1.f);
 
 	loaded_scenes_["structure"]->Draw(glm::mat4{1.0f}, main_draw_context_);
-#if LC_DRAW_INDIRECT
-	BuildBatches();
-#endif
 
 	auto end = std::chrono::system_clock::now();
 
@@ -1481,7 +1476,7 @@ void GLTFMetallic_Roughness::BuildPipelines(VulkanEngine *engine)
 	meshEffect->AddStage(engine->shader_cache_.GetShader("shaders/mesh_indirect.vert.spv"), VK_SHADER_STAGE_VERTEX_BIT);
 #else
 	meshEffect->AddStage(engine->shader_cache_.GetShader("shaders/mesh.vert.spv"), VK_SHADER_STAGE_VERTEX_BIT);
-#endif
+#endif // LC_DRAW_INDIRECT
 	meshEffect->AddStage(engine->shader_cache_.GetShader("shaders/mesh.frag.spv"), VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	lc::DescriptorLayoutBuilder layoutBuilder;
@@ -1500,7 +1495,7 @@ void GLTFMetallic_Roughness::BuildPipelines(VulkanEngine *engine)
 	matrixRange.size = sizeof(GPUDrawIndirectPushConstants);
 #else
 	matrixRange.size = sizeof(GPUDrawPushConstants);
-#endif
+#endif // LC_DRAW_INDIRECT
 	matrixRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	VkPipelineLayoutCreateInfo meshLayoutInfo = vkinit::PipelineLayoutCreateInfo();
@@ -1526,8 +1521,6 @@ void GLTFMetallic_Roughness::BuildPipelines(VulkanEngine *engine)
 	pipelineBuilder.SetDepthFormat(engine->depth_image_.format);
 	pipelineBuilder.pipeline_layout_ = engine->mesh_pipeline_layout_;
 
-	// use the triangle layout we created
-	// pipelineBuilder._pipelineLayout = meshEffect->built_layout_;
 	opaque_pipeline.layout = engine->mesh_pipeline_layout_;
 	opaque_pipeline.pipeline = pipelineBuilder.BuildPipeline(engine->device_, engine->global_pipeline_cache_->GetCache());
 
@@ -1586,6 +1579,7 @@ void MeshNode::Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
 			def.material = &s.material->data;
 			def.bounds = s.bounds;
 			def.transform = node_matrix;
+			def.indirect_draw_index = mesh->mesh_buffers.indirect_index;
 			def.vertex_buffer_address = mesh->mesh_buffers.vertex_buffer_address;
 
 			if (s.material->data.pass_type == MeshPassType::kTransparent)
@@ -1604,7 +1598,7 @@ void GlobalMeshBuffer::UploadToGPU(VulkanEngine* engine)
 	size_t index_buffer_size = index_data.size() * sizeof(uint32_t);
 
 	vertex_buffer = engine->CreateBuffer(vertex_buffer_size,
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		VMA_MEMORY_USAGE_GPU_ONLY);
 
 	index_buffer = engine->CreateBuffer(index_buffer_size,
@@ -1633,6 +1627,30 @@ void GlobalMeshBuffer::UploadToGPU(VulkanEngine* engine)
 		index_copy.size = index_buffer_size;
 
 		vkCmdCopyBuffer(cmd, staging_buffer.buffer, index_buffer.buffer, 1, &index_copy);
+		});
+
+	engine->DestroyBuffer(staging_buffer);
+
+	size_t command_buffer_size = indirect_commands.size() * sizeof(VkDrawIndexedIndirectCommand);
+
+	indirect_command_buffer = engine->CreateBuffer(command_buffer_size,
+		VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	staging_buffer = engine->CreateBuffer(command_buffer_size,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY);
+
+	data = staging_buffer.allocation->GetMappedData();
+	memcpy(data, indirect_commands.data(), command_buffer_size);
+
+	engine->ImmediateSubmit([&](VkCommandBuffer cmd) {
+		VkBufferCopy copy_region{};
+		copy_region.srcOffset = 0;
+		copy_region.dstOffset = 0;
+		copy_region.size = command_buffer_size;
+
+		vkCmdCopyBuffer(cmd, staging_buffer.buffer, indirect_command_buffer.buffer, 1, &copy_region);
 		});
 
 	engine->DestroyBuffer(staging_buffer);
