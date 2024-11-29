@@ -138,6 +138,26 @@ namespace lc
 		}
 	}
 
+	void AddMeshBufferToGlobalBuffers(std::span<uint32_t> indices, std::span<Vertex> vertices)
+	{
+		VulkanEngine* engine = &VulkanEngine::Get();
+
+		uint32_t vertex_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.vertex_data.size());
+		uint32_t index_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.index_data.size());
+
+		engine->global_mesh_buffer_.vertex_data.insert(engine->global_mesh_buffer_.vertex_data.end(), vertices.begin(), vertices.end());
+		engine->global_mesh_buffer_.index_data.insert(engine->global_mesh_buffer_.index_data.end(), indices.begin(), indices.end());
+
+		VkDrawIndexedIndirectCommand cmd = {};
+		cmd.firstIndex = index_offset;
+		cmd.indexCount = static_cast<uint32_t>(indices.size());
+		cmd.vertexOffset = vertex_offset;
+		cmd.instanceCount = 1;
+		cmd.firstInstance = 0;
+
+		engine->global_mesh_buffer_.indirect_commands.push_back(cmd);
+	}
+
 	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine* engine, std::string_view file_path)
 	{
 		LOGI("Loading GLTF: {}", file_path);
@@ -386,7 +406,7 @@ namespace lc
 			}
 
 			new_mesh->mesh_buffers = engine->UploadMesh(indices, vertices);
-
+			AddMeshBufferToGlobalBuffers(indices, vertices);
 		}
 
 		// load all nodes and their meshes

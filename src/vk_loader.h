@@ -199,7 +199,7 @@ namespace lc
 		void ClearAll();
 	};
 
-
+	void AddMeshBufferToGlobalBuffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
 	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine* engine, std::string_view file_path);
 } // namespace lc
 

@@ -1,5 +1,6 @@
 ﻿#include <vk_descriptors.h>
 #include <vk_loader.h>
+#include <logging.h>
 
 namespace lc
 {

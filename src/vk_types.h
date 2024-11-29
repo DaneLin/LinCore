@@ -127,6 +127,8 @@ struct GPUMeshBuffers
 	VkDeviceAddress vertex_buffer_address;
 };
 
+
+
 // push constants for our mesh object draws
 struct alignas(16) GPUDrawPushConstants
 {
@@ -136,8 +138,7 @@ struct alignas(16) GPUDrawPushConstants
 
 struct alignas(16) GPUDrawIndirectPushConstants
 {
-	VkDeviceAddress render_matrix_buffer_address;
-	VkDeviceAddress vertex_buffer_address;
+	glm::mat4 world_matrix;
 };
 
 /// <summary>
@@ -200,13 +201,3 @@ struct Node : public IRenderable
 	}
 };
 
-#define VK_CHECK(x)                                                          \
-	do                                                                       \
-	{                                                                        \
-		VkResult err = x;                                                    \
-		if (err)                                                             \
-		{                                                                    \
-			fmt::println("Detected Vulkan error: {}", string_VkResult(err)); \
-			abort();                                                         \
-		}                                                                    \
-	} while (0)

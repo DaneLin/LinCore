@@ -18,30 +18,31 @@ struct Vertex{
 	vec4 color;
 };
 
-layout (buffer_reference, std430) readonly buffer RenderMatrixBuffer {
-	mat4 render_matrix[];
-};
-
-layout (buffer_reference, std430) readonly buffer VertexBuffer {
+layout(std140, set = 0, binding = 1) readonly buffer GlobalVertexBuffer{
 	Vertex vertices[];
 };
 
 // push constants block
 layout (push_constant) uniform constants {
-    RenderMatrixBuffer renderMatrixBuffer;
-	VertexBuffer vertexBuffer;
+    mat4 render_matrix;
 }PushConstants;
 
 void main()
 {
-    Vertex v = PushConstants.vertexBuffer.vertices[gl_VertexIndex];
+    // 从全局缓冲区获取顶点数据
+    Vertex v = vertices[gl_VertexIndex];
 
-	vec4 position = vec4(v.position, 1.0);
+    // 计算顶点位置
+    vec4 position = vec4(v.position, 1.0);
+    gl_Position = sceneData.viewproj * PushConstants.render_matrix * position;
 
-	gl_Position = sceneData.viewproj * PushConstants.renderMatrixBuffer.render_matrix[gl_InstanceIndex] * position;
+    // 计算法线
+    outNormal = (PushConstants.render_matrix * vec4(v.normal, 0.0)).xyz;
 
-	outNormal = (PushConstants.renderMatrixBuffer.render_matrix[gl_InstanceIndex] * vec4(v.normal, 0.f)).xyz;
-	outColor = v.color.xyz * materialData.colorFactors.xyz;	
-	outUV.x = v.uv_x;
-	outUV.y = v.uv_y;
+    // 顶点颜色与材质混合
+    outColor = v.color.xyz * materialData.colorFactors.xyz;
+
+    // UV 坐标
+    outUV.x = v.uv_x;
+    outUV.y = v.uv_y;
 }

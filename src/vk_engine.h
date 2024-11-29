@@ -83,24 +83,6 @@ struct GLTFMetallic_Roughness {
 	MaterialInstance WriteMaterial(VkDevice device, MeshPassType pass, const MaterialResources& resources, lc::DescriptorAllocatorGrowable& descriptor_allocator);
 };
 
-struct IndirectBatch
-{
-	VkDrawIndexedIndirectCommand command;
-	MaterialInstance* material; 
-	VkBuffer index_buffer;     
-	VkDeviceAddress vertex_buffer_address; 
-	std::vector<glm::mat4> transforms;
-};
-
-struct RenderObjectBatch
-{
-	std::vector<IndirectBatch> opaque_batches;
-	std::vector<IndirectBatch> transparent_batches;
-	AllocatedBufferUntyped indirect_buffer;
-	AllocatedBufferUntyped transform_buffer;
-	VkDeviceAddress transform_buffer_address;
-};
-
 struct RenderObject {
 	uint32_t index_count;
 
@@ -127,6 +109,18 @@ struct MeshNode : public Node {
 	std::shared_ptr<lc::MeshAsset> mesh;
 
 	virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) override;
+};
+
+struct GlobalMeshBuffer {
+	AllocatedBuffer<Vertex> vertex_buffer;
+	AllocatedBuffer<uint32_t> index_buffer;
+
+	std::vector<Vertex> vertex_data;
+	std::vector<uint32_t> index_data;
+
+	std::vector<VkDrawIndexedIndirectCommand> indirect_commands;
+
+	void UploadToGPU(VulkanEngine* engine);
 };
 
 struct EngineStats {
@@ -247,7 +241,7 @@ public:
 	enki::TaskSchedulerConfig task_config_;
 	enki::TaskScheduler task_scheduler_;
 
-	RenderObjectBatch render_batch_;
+	GlobalMeshBuffer global_mesh_buffer_;
 
 public:
 
@@ -317,9 +311,6 @@ private:
 	void DrawGeometry(VkCommandBuffer cmd);
 
 	const std::string GetAssetPath(const std::string& path) const;
-
-	void BuildBatches();
-	void DrawBatches(VkCommandBuffer cmd, VkDescriptorSet& global_set);
 
 private:
 	// swapchain stuff

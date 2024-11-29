@@ -132,6 +132,12 @@ void VulkanEngine::Init()
 
 	assert(structure_file.has_value());
 
+	global_mesh_buffer_.UploadToGPU(this);
+	main_deletion_queue_.PushFunction([=]() {
+		DestroyBuffer(global_mesh_buffer_.vertex_buffer);
+		DestroyBuffer(global_mesh_buffer_.index_buffer);
+		});
+
 	loaded_scenes_["structure"] = *structure_file;
 
 	// everything went fine
@@ -940,6 +946,9 @@ void VulkanEngine::InitDescriptors()
 	{
 		lc::DescriptorLayoutBuilder builder;
 		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+#if LC_DRAW_INDIRECT
+		builder.AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+#endif
 		gpu_scene_data_descriptor_layout_ = builder.Build(device_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
 		main_deletion_queue_.PushFunction([&]()
@@ -1318,11 +1327,18 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	{
 		lc::DescriptorWriter writer;
 		writer.WriteBuffer(0, gpu_scene_data_buffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+#if LC_DRAW_INDIRECT
+		write.WriteBuffer(1, global_mesh_buffer_.vertex_buffer, sizeof(Vertex) * global_mesh_buffer_.vertex_count, 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+#endif
 		writer.UpdateSet(device_, global_descriptor);
 	}
-
+	// TODO: Draw Indirect
 #if LC_DRAW_INDIRECT
-	DrawBatches(cmd, global_descriptor);
+	{
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(cmd, 0, 1, &global_mesh_buffer_.vertex_buffer, offsets);
+		vkCmdBindIndexBuffer(cmd, global_mesh_buffer_.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+	}
 #else
 	// this is the state we will try to skip
 	MaterialPipeline *last_pipeline = nullptr;
@@ -1365,6 +1381,15 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &r.material->set, 0, nullptr);
 		}
 		// rebind index buffer if needed
+
+#if LC_DRAW_INDIRECT
+		GPUDrawIndirectPushConstants gpu_draw_indirect_push_constants;
+		gpu_draw_indirect_push_constants.world_matrix = r.transform;
+
+		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &gpu_draw_indirect_push_constants);
+
+		vkCmdDrawIndexedIndirect(cmd, global_mesh_buffer_.indirect_buffer, 0, r.indirect_count, sizeof(VkDrawIndexedIndirectCommand));
+#else
 		if (r.index_buffer != last_index_buffer)
 		{
 			last_index_buffer = r.index_buffer;
@@ -1377,6 +1402,8 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &gpu_draw_push_constants);
 
 		vkCmdDrawIndexed(cmd, r.index_count, 1, r.first_index, 0, 0);
+#endif
+		
 
 		engine_stats_.drawcall_count++;
 		engine_stats_.triangle_count += r.index_count / 3;
@@ -1408,260 +1435,6 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 const std::string VulkanEngine::GetAssetPath(const std::string &path) const
 {
 	return std::string("../../" + path);
-}
-
-void VulkanEngine::BuildBatches()
-{
-	// clear the current batches
-	render_batch_.opaque_batches.clear();
-	render_batch_.transparent_batches.clear();
-
-	std::unordered_map<uint64_t, size_t> batch_map;
-
-	// process opaque objects
-	for (const auto &obj : main_draw_context_.opaque_surfaces)
-	{
-		uint64_t key = reinterpret_cast<uint64_t>(obj.material);
-		key |= (reinterpret_cast<uint64_t>(obj.index_buffer) << 32);
-
-		auto it = batch_map.find(key);
-		if (it == batch_map.end())
-		{
-			// new batch
-			IndirectBatch new_batch;
-			new_batch.command.indexCount = obj.index_count;
-			new_batch.command.instanceCount = 1;
-			new_batch.command.firstIndex = obj.first_index;
-			new_batch.command.vertexOffset = 0;
-			new_batch.command.firstInstance = 0;
-
-			new_batch.material = obj.material;
-			new_batch.index_buffer = obj.index_buffer;
-			new_batch.vertex_buffer_address = obj.vertex_buffer_address;
-			new_batch.transforms.push_back(obj.transform);
-
-			batch_map[key] = render_batch_.opaque_batches.size();
-			render_batch_.opaque_batches.push_back(new_batch);
-		}
-		else
-		{
-			// add to existing batch
-			IndirectBatch &batch = render_batch_.opaque_batches[it->second];
-			batch.command.instanceCount++;
-			batch.transforms.push_back(obj.transform);
-		}
-	}
-
-	// process transparent objects
-	batch_map.clear();
-	for (const auto &obj : main_draw_context_.transparent_surfaces)
-	{
-		uint64_t key = reinterpret_cast<uint64_t>(obj.material);
-		key |= (reinterpret_cast<uint64_t>(obj.index_buffer) << 32);
-
-		auto it = batch_map.find(key);
-		if (it == batch_map.end())
-		{
-			// new batch
-			IndirectBatch new_batch;
-			new_batch.command.indexCount = obj.index_count;
-			new_batch.command.instanceCount = 1;
-			new_batch.command.firstIndex = obj.first_index;
-			new_batch.command.vertexOffset = 0;
-			new_batch.command.firstInstance = 0;
-
-			new_batch.material = obj.material;
-			new_batch.index_buffer = obj.index_buffer;
-			new_batch.vertex_buffer_address = obj.vertex_buffer_address;
-			new_batch.transforms.push_back(obj.transform);
-
-			batch_map[key] = render_batch_.transparent_batches.size();
-			render_batch_.transparent_batches.push_back(new_batch);
-		}
-		else
-		{
-			// add to existing batch
-			IndirectBatch &batch = render_batch_.transparent_batches[it->second];
-			batch.command.instanceCount++;
-			batch.transforms.push_back(obj.transform);
-		}
-	}
-
-	// update indirect draw buffer and transform buffer
-	size_t total_batches = render_batch_.opaque_batches.size() + render_batch_.transparent_batches.size();
-	size_t total_instances = 0;
-
-	for (const auto &batch : render_batch_.opaque_batches)
-	{
-		total_instances += batch.transforms.size();
-	}
-
-	for (const auto &batch : render_batch_.transparent_batches)
-	{
-		total_instances += batch.transforms.size();
-	}
-
-	// reallocate buffer if needed
-	if (render_batch_.indirect_buffer.buffer == VK_NULL_HANDLE || render_batch_.indirect_buffer.info.size < total_batches * sizeof(VkDrawIndexedIndirectCommand))
-	{
-		if (render_batch_.indirect_buffer.allocation != nullptr)
-		{
-			DestroyBuffer(render_batch_.indirect_buffer);
-		}
-
-		render_batch_.indirect_buffer = CreateBuffer(total_batches * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-		main_deletion_queue_.PushFunction([=]()
-										  { DestroyBuffer(render_batch_.indirect_buffer); });
-	}
-
-	if (render_batch_.transform_buffer.buffer == VK_NULL_HANDLE || render_batch_.transform_buffer.info.size < total_instances * sizeof(glm::mat4))
-	{
-		if (render_batch_.transform_buffer.buffer)
-		{
-			DestroyBuffer(render_batch_.transform_buffer);
-		}
-
-		render_batch_.transform_buffer = CreateBuffer(total_instances * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
-		main_deletion_queue_.PushFunction([=]()
-										  { DestroyBuffer(render_batch_.transform_buffer); });
-	}
-
-	VkDrawIndexedIndirectCommand *cmd_buffer = (VkDrawIndexedIndirectCommand *)render_batch_.indirect_buffer.allocation->GetMappedData();
-	glm::mat4 *transform_buffer = (glm::mat4 *)render_batch_.transform_buffer.allocation->GetMappedData();
-
-	size_t cmd_offset = 0;
-	size_t transform_offset = 0;
-
-	for (auto &batch : render_batch_.opaque_batches)
-	{
-		batch.command.firstInstance = static_cast<uint32_t>(transform_offset);
-		cmd_buffer[cmd_offset++] = batch.command;
-		memcpy(transform_buffer + transform_offset,
-			   batch.transforms.data(),
-			   batch.transforms.size() * sizeof(glm::mat4));
-		transform_offset += batch.transforms.size() ;
-	}
-
-	for (auto &batch : render_batch_.transparent_batches)
-	{
-		batch.command.firstInstance = static_cast<uint32_t>(transform_offset);
-		cmd_buffer[cmd_offset++] = batch.command;
-		memcpy(transform_buffer + transform_offset,
-			   batch.transforms.data(),
-			   batch.transforms.size() * sizeof(glm::mat4));
-		transform_offset += batch.transforms.size();
-	}
-
-	VkBufferDeviceAddressInfo deviceAddressInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = render_batch_.transform_buffer.buffer};
-	render_batch_.transform_buffer_address = vkGetBufferDeviceAddress(device_, &deviceAddressInfo);
-}
-
-void VulkanEngine::DrawBatches(VkCommandBuffer cmd, VkDescriptorSet &global_set)
-{
-	MaterialPipeline *last_pipeline = nullptr;
-	MaterialInstance *last_material = nullptr;
-	VkBuffer last_index_buffer = VK_NULL_HANDLE;
-
-	size_t transform_offset = 0;
-	size_t indirect_offset = 0;
-
-	// draw opaque
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &global_set, 0, nullptr);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
-	for (const auto &batch : render_batch_.opaque_batches)
-	{
-		if (batch.material != last_material)
-		{
-			last_material = batch.material;
-
-			if (batch.material->pipeline != last_pipeline)
-			{
-				last_pipeline = batch.material->pipeline;
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, last_pipeline->pipeline);
-
-				VkViewport viewport = {};
-				viewport.x = 0;
-				viewport.y = 0;
-				viewport.width = static_cast<float>(draw_extent_.width);
-				viewport.height = static_cast<float>(draw_extent_.height);
-				viewport.minDepth = 0.f;
-				viewport.maxDepth = 1.f;
-				vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-				VkRect2D scissor = {};
-				scissor.offset = {0, 0};
-				scissor.extent = draw_extent_;
-				vkCmdSetScissor(cmd, 0, 1, &scissor);
-			}
-
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &batch.material->set, 0, nullptr);
-		}
-		if (batch.index_buffer != last_index_buffer)
-		{
-			last_index_buffer = batch.index_buffer;
-			vkCmdBindIndexBuffer(cmd, batch.index_buffer, 0, VK_INDEX_TYPE_UINT32);
-		}
-
-		GPUDrawIndirectPushConstants push_constants;
-		push_constants.vertex_buffer_address = batch.vertex_buffer_address;
-		push_constants.render_matrix_buffer_address = render_batch_.transform_buffer_address;
-		vkCmdPushConstants(cmd, last_pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &push_constants);
-
-		vkCmdDrawIndexedIndirect(cmd, render_batch_.indirect_buffer.buffer,
-								 indirect_offset, 1, sizeof(VkDrawIndexedIndirectCommand));
-
-		transform_offset += batch.transforms.size();
-		indirect_offset += sizeof(VkDrawIndexedIndirectCommand);
-		engine_stats_.drawcall_count++;
-	}
-
-	// draw transparent
-	for (const auto &batch : render_batch_.transparent_batches)
-	{
-		if (batch.material != last_material)
-		{
-			last_material = batch.material;
-
-			if (batch.material->pipeline != last_pipeline)
-			{
-				last_pipeline = batch.material->pipeline;
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, last_pipeline->pipeline);
-
-				VkViewport viewport = {};
-				viewport.x = 0;
-				viewport.y = 0;
-				viewport.width = static_cast<float>(draw_extent_.width);
-				viewport.height = static_cast<float>(draw_extent_.height);
-				viewport.minDepth = 0.f;
-				viewport.maxDepth = 1.f;
-				vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-				VkRect2D scissor = {};
-				scissor.offset = {0, 0};
-				scissor.extent = draw_extent_;
-				vkCmdSetScissor(cmd, 0, 1, &scissor);
-			}
-
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &batch.material->set, 0, nullptr);
-		}
-		if (batch.index_buffer != last_index_buffer)
-		{
-			last_index_buffer = batch.index_buffer;
-			vkCmdBindIndexBuffer(cmd, batch.index_buffer, 0, VK_INDEX_TYPE_UINT32);
-		}
-
-		GPUDrawIndirectPushConstants push_constants;
-		push_constants.vertex_buffer_address = batch.vertex_buffer_address;
-		push_constants.render_matrix_buffer_address = render_batch_.transform_buffer_address;
-		vkCmdPushConstants(cmd, last_pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &push_constants);
-
-		vkCmdDrawIndexedIndirect(cmd, render_batch_.indirect_buffer.buffer,
-								 indirect_offset, 1, sizeof(VkDrawIndexedIndirectCommand));
-
-		transform_offset += batch.transforms.size();
-		indirect_offset += sizeof(VkDrawIndexedIndirectCommand);
-		engine_stats_.drawcall_count++;
-	}
 }
 
 void VulkanEngine::UpdateScene()
@@ -1823,4 +1596,44 @@ void MeshNode::Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
 	}
 
 	Node::Draw(top_matrix, ctx);
+}
+
+void GlobalMeshBuffer::UploadToGPU(VulkanEngine* engine)
+{
+	size_t vertex_buffer_size = vertex_data.size() * sizeof(Vertex);
+	size_t index_buffer_size = index_data.size() * sizeof(uint32_t);
+
+	vertex_buffer = engine->CreateBuffer(vertex_buffer_size,
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	index_buffer = engine->CreateBuffer(index_buffer_size,
+		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY);
+
+	AllocatedBufferUntyped staging_buffer = engine->CreateBuffer(vertex_buffer_size + index_buffer_size,
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY);
+
+	void* data = staging_buffer.allocation->GetMappedData();
+	memcpy(data, vertex_data.data(), vertex_buffer_size);
+	memcpy((char*)data + vertex_buffer_size, index_data.data(), index_buffer_size);
+
+	engine->ImmediateSubmit([&](VkCommandBuffer cmd) {
+		VkBufferCopy vertex_copy{ 0 };
+		vertex_copy.dstOffset = 0;
+		vertex_copy.srcOffset = 0;
+		vertex_copy.size = vertex_buffer_size;
+
+		vkCmdCopyBuffer(cmd, staging_buffer.buffer, vertex_buffer.buffer, 1, &vertex_copy);
+
+		VkBufferCopy index_copy{ 0 };
+		index_copy.dstOffset = 0;
+		index_copy.srcOffset = vertex_buffer_size;
+		index_copy.size = index_buffer_size;
+
+		vkCmdCopyBuffer(cmd, staging_buffer.buffer, index_buffer.buffer, 1, &index_copy);
+		});
+
+	engine->DestroyBuffer(staging_buffer);
 }
