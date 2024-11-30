@@ -147,15 +147,6 @@ namespace lc
 
 		engine->global_mesh_buffer_.vertex_data.insert(engine->global_mesh_buffer_.vertex_data.end(), vertices.begin(), vertices.end());
 		engine->global_mesh_buffer_.index_data.insert(engine->global_mesh_buffer_.index_data.end(), indices.begin(), indices.end());
-
-		VkDrawIndexedIndirectCommand cmd = {};
-		cmd.firstIndex = index_offset;
-		cmd.indexCount = static_cast<uint32_t>(indices.size());
-		cmd.vertexOffset = vertex_offset;
-		cmd.instanceCount = 1;
-		cmd.firstInstance = 0;
-
-		engine->global_mesh_buffer_.indirect_commands.push_back(cmd);
 	}
 
 	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine* engine, std::string_view file_path)
@@ -315,6 +306,8 @@ namespace lc
 			// clear the mesh arrays each mesh, we dont want to merge them by error
 			indices.clear();
 			vertices.clear();
+			size_t global_index_offset = engine->global_mesh_buffer_.index_data.size();
+			size_t global_vertex_offset = engine->global_mesh_buffer_.vertex_data.size();
 
 			for (auto&& p : mesh.primitives) {
 				GeoSurface new_surface;
@@ -403,10 +396,19 @@ namespace lc
 				auto halfExtents = new_surface.bounds.extents;
 				new_surface.bounds.sphere_radius = glm::max(glm::max(halfExtents.x, halfExtents.y), halfExtents.z);
 
+				VkDrawIndexedIndirectCommand cmd = {};
+				cmd.firstIndex = new_surface.start_index + global_index_offset;
+				cmd.indexCount = new_surface.count;
+				cmd.vertexOffset = global_vertex_offset;
+				cmd.instanceCount = 1;
+				cmd.firstInstance = 0;
+
+				new_surface.indirect_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.indirect_commands.size());
+				engine->global_mesh_buffer_.indirect_commands.push_back(cmd);
+				
 				new_mesh->surfaces.push_back(new_surface);
 			}
 			new_mesh->mesh_buffers = engine->UploadMesh(indices, vertices);
-			new_mesh->mesh_buffers.indirect_index = engine->global_mesh_buffer_.indirect_commands.size();
 			AddMeshBufferToGlobalBuffers(indices, vertices);
 		}
 

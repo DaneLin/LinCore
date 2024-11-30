@@ -132,12 +132,13 @@ namespace lc
 		uint32_t start_index;
 		uint32_t count;
 		Bounds bounds;
+		uint32_t indirect_offset;
 		std::shared_ptr<GLTFMaterial> material;
 	};
 
 	struct MeshAsset {
 		std::string name;
-		
+
 		std::vector<GeoSurface> surfaces;
 		GPUMeshBuffers mesh_buffers;
 	};

@@ -1579,7 +1579,7 @@ void MeshNode::Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
 			def.material = &s.material->data;
 			def.bounds = s.bounds;
 			def.transform = node_matrix;
-			def.indirect_draw_index = mesh->mesh_buffers.indirect_index;
+			def.indirect_draw_index = s.indirect_offset;
 			def.vertex_buffer_address = mesh->mesh_buffers.vertex_buffer_address;
 
 			if (s.material->data.pass_type == MeshPassType::kTransparent)

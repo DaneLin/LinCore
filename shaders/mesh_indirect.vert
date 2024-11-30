@@ -1,4 +1,4 @@
-#version 450
+#version 460
 
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
@@ -20,7 +20,7 @@ struct Vertex{
 
 layout(std140, set = 0, binding = 1) readonly buffer GlobalVertexBuffer{
 	Vertex vertices[];
-};
+}vertexBuffer;
 
 // push constants block
 layout (push_constant) uniform constants {
@@ -29,7 +29,7 @@ layout (push_constant) uniform constants {
 
 void main()
 {
-    Vertex v = vertices[gl_VertexIndex];
+    Vertex v = vertexBuffer.vertices[gl_VertexIndex];
 
     vec4 position = vec4(v.position, 1.0);
     gl_Position = sceneData.viewproj * PushConstants.render_matrix * position;
