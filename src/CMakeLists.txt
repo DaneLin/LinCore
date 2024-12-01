@@ -5,8 +5,8 @@ add_executable (lincore
   vk_types.h
   vk_initializers.cpp
   vk_initializers.h
-  vk_images.h
-  vk_images.cpp 
+  
+   
   vk_descriptors.h
   vk_descriptors.cpp
   vk_pipelines.h
@@ -17,7 +17,7 @@ add_executable (lincore
   vk_loader.cpp
   camera.cpp
   camera.h
-  "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "config.h" "vk_shaders.h" "vk_shaders.cpp" "vk_scene.h" "vk_scene.cpp" "vk_profiler.h" "vk_profiler.cpp" )
+  "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "config.h" "vk_shaders.h" "vk_shaders.cpp" "vk_scene.h" "vk_scene.cpp" "vk_profiler.h" "vk_profiler.cpp"  "asynchronous_loader.h" "asynchronous_loader.cpp" "command_buffer.h" "command_buffer.cpp")
 
 set_property(TARGET lincore PROPERTY CXX_STANDARD 20)
 target_compile_definitions(lincore PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)

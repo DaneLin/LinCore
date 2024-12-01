@@ -165,7 +165,7 @@ VkRenderingInfo vkinit::RenderingInfo(VkExtent2D renderExtent, VkRenderingAttach
     VkRenderingInfo render_info{};
     render_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     render_info.pNext = nullptr;
-
+    
     render_info.renderArea = VkRect2D{VkOffset2D{0, 0}, renderExtent};
     render_info.layerCount = 1;
     render_info.colorAttachmentCount = 1;

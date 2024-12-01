@@ -24,7 +24,7 @@
 		VkResult err = x;                                                    \
 		if (err)                                                             \
 		{                                                                    \
-			fmt::println("Detected Vulkan error: {}", string_VkResult(err)); \
+			LOGE("Detected Vulkan error: {}", string_VkResult(err));		 \
 			abort();                                                         \
 		}                                                                    \
 	} while (0)

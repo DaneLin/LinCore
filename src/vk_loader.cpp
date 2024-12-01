@@ -1,18 +1,19 @@
 ﻿
 #include <vk_loader.h>
 
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <iostream>
 
 #include "vk_engine.h"
 #include "vk_initializers.h"
 #include "vk_types.h"
+
 #include <glm/gtx/quaternion.hpp>
 
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/core.hpp>
-
 
 #include "logging.h"
 
@@ -26,8 +27,8 @@ namespace lc
 			fastgltf::visitor{
 				[](auto& arg) {},
 				[&](fastgltf::sources::URI& file_path) {
-					assert(file_path.fileByteOffset == 0); // 不支持偏移
-					assert(file_path.uri.isLocalPath()); // 只支持本地文件
+					assert(file_path.fileByteOffset == 0); // not support offset
+					assert(file_path.uri.isLocalPath()); // only local file is allowed
 
 					const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
@@ -397,9 +398,9 @@ namespace lc
 				new_surface.bounds.sphere_radius = glm::max(glm::max(halfExtents.x, halfExtents.y), halfExtents.z);
 
 				VkDrawIndexedIndirectCommand cmd = {};
-				cmd.firstIndex = new_surface.start_index + global_index_offset;
+				cmd.firstIndex = static_cast<uint32_t>(new_surface.start_index + global_index_offset);
 				cmd.indexCount = new_surface.count;
-				cmd.vertexOffset = global_vertex_offset;
+				cmd.vertexOffset = static_cast<int32_t>(global_vertex_offset);
 				cmd.instanceCount = 1;
 				cmd.firstInstance = 0;
 
@@ -502,66 +503,7 @@ namespace lc
 		}
 
 	}
-	void RunPinnedTaskLoopTask::Execute()
-	{
-		task_scheduler->WaitForNewPinnedTasks();
-		// this thread will 'sleep' until there are new pinned tasks
-		task_scheduler->RunPinnedTasks();
-	}
-	void AsynchronousLoadTask::Execute()
-	{
-		while (execute)
-		{
-			async_loader->Update();
-		}
-	}
-	void AsynchronousLoader::Init()
-	{
-
-		for (uint32_t idx = 0; idx < kFRAME_OVERLAP; ++idx)
-		{
-			VkCommandPoolCreateInfo cmd_pool_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
-			cmd_pool_info.queueFamilyIndex = VulkanEngine::Get().transfer_queue_family_;
-			cmd_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-			vkCreateCommandPool(VulkanEngine::Get().device_, &cmd_pool_info, nullptr, &command_pool[idx]);
-
-			VkCommandBufferAllocateInfo cmd_buffer_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
-			cmd_buffer_info.commandPool = command_pool[idx];
-			cmd_buffer_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			cmd_buffer_info.commandBufferCount = 1;
-
-			vkAllocateCommandBuffers(VulkanEngine::Get().device_, &cmd_buffer_info, &command_buffer[idx]);
-		}
-
-		staging_buffer = VulkanEngine::Get().CreateBuffer(kSTAGING_BUFFER_SIZE, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-		VkSemaphoreCreateInfo semaphore_create_info = { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-		vkCreateSemaphore(VulkanEngine::Get().device_, &semaphore_create_info, nullptr, &transfer_complete_semaphore);
-
-		VkFenceCreateInfo fence_create_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
-		fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-		vkCreateFence(VulkanEngine::Get().device_, &fence_create_info, nullptr, &transfer_fence);
-	}
-	void AsynchronousLoader::Update()
-	{
-		if (cpu_buffer_ready.index != kInvalidIndex && gpu_buffer_ready.index != kInvalidIndex)
-		{
-			assert(completed != nullptr);
-			(*completed)++;
-
-			cpu_buffer_ready = kInvalidBufferHandle;
-			gpu_buffer_ready = kInvalidBufferHandle;
-			completed = nullptr;
-		}
-
-		texture_ready.index = kInvalidTextureHandle.index;
-
-		// Process upload request
-		if (upload_requests.size())
-		{
-
-		}
-	}
+	
 }
 
 

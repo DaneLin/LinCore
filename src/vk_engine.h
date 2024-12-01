@@ -19,6 +19,7 @@
 #include "vk_pipelines.h"
 #include "vk_loader.h"
 #include "TaskScheduler.h"
+#include <command_buffer.h>
 
 namespace vkutils {
 	class VulkanProfiler;
@@ -41,8 +42,8 @@ struct ComputeEffect {
 
 
 struct FrameData {
-	VkCommandPool command_pool;
-	VkCommandBuffer main_command_buffer;
+	/*VkCommandPool command_pool;
+	VkCommandBuffer main_command_buffer;*/
 	VkSemaphore swapchain_semaphore, render_semaphore;
 	VkFence render_fence;
 	DeletionQueue deletion_queue;
@@ -142,7 +143,7 @@ public:
 
 	bool is_initialized_{ false };
 
-	int frame_number{ 0 };
+	int frame_number_{ 0 };
 
 	bool freeze_rendering_{ false };
 
@@ -261,7 +262,7 @@ public:
 	//run main loop
 	void Run();
 
-	FrameData& GetCurrentFrame() { return frames_[frame_number % kFRAME_OVERLAP]; }
+	FrameData& GetCurrentFrame() { return frames_[frame_number_ % kFRAME_OVERLAP]; }
 
 	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
 
@@ -306,11 +307,11 @@ private:
 
 	void DestroySwapchain();
 
-	void DrawBackground(VkCommandBuffer cmd);
+	void DrawBackground(CommandBuffer* cmd);
 
-	void DrawImGui(VkCommandBuffer cmd, VkImageView target_image_view);
+	void DrawImGui(CommandBuffer* cmd, VkImageView target_image_view);
 
-	void DrawGeometry(VkCommandBuffer cmd);
+	void DrawGeometry(CommandBuffer* cmd);
 
 	const std::string GetAssetPath(const std::string& path) const;
 
@@ -326,10 +327,5 @@ private:
 
 	VkExtent2D swapchain_extent_;
 
-	// immediate submit structures
-	VkFence imm_fence_;
-
-	VkCommandBuffer imm_command_buffer_;
-
-	VkCommandPool imm_command_pool_;
+	CommandBufferManager command_buffer_manager_;
 };

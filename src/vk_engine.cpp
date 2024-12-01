@@ -7,10 +7,11 @@
 
 #include <vk_initializers.h>
 #include <vk_types.h>
-#include <vk_images.h>
 #include <vk_pipelines.h>
 #include <vk_profiler.h>
 #include <vk_loader.h>
+
+#include "asynchronous_loader.h"
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -31,12 +32,6 @@ AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
 VulkanEngine *loaded_engine = nullptr;
 
 VulkanEngine &VulkanEngine::Get() { return *loaded_engine; }
-
-const std::vector<const char *> required_extensions = {
-	VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-	VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-	VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-	VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME};
 
 bool is_visible(const RenderObject &obj, const glm::mat4 &viewproj)
 {
@@ -149,20 +144,19 @@ void VulkanEngine::CleanUp()
 {
 	if (is_initialized_)
 	{
-
 		// make sure the GPU has stopped doing its thing
 		vkDeviceWaitIdle(device_);
 
 		profiler_->CleanUp();
 		delete profiler_;
 
+		command_buffer_manager_.Shutdown();
+
 		shader_cache_.Clear();
 		loaded_scenes_.clear();
 
 		for (int i = 0; i < kFRAME_OVERLAP; i++)
 		{
-			vkDestroyCommandPool(device_, frames_[i].command_pool, nullptr);
-
 			vkDestroyFence(device_, frames_[i].render_fence, nullptr);
 			vkDestroySemaphore(device_, frames_[i].render_semaphore, nullptr);
 			vkDestroySemaphore(device_, frames_[i].swapchain_semaphore, nullptr);
@@ -208,51 +202,42 @@ void VulkanEngine::Draw()
 		return;
 	}
 
-	VkCommandBuffer cmd = GetCurrentFrame().main_command_buffer;
-
-	VK_CHECK(vkResetCommandBuffer(cmd, 0));
-
-	// begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know it may be recorded only once
-	VkCommandBufferBeginInfo cmd_begin_info = vkinit::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	//VkCommandBuffer cmd = GetCurrentFrame().main_command_buffer;
+	command_buffer_manager_.ResetPools(frame_number_ % kFRAME_OVERLAP);
+	CommandBuffer* cmd = command_buffer_manager_.GetCommandBuffer(frame_number_ % kFRAME_OVERLAP, 0, true);
 
 	draw_extent_.width = static_cast<uint32_t>(std::min(swapchain_extent_.width, draw_image_.extent.width) * render_scale_);
 	draw_extent_.height = static_cast<uint32_t>(std::min(swapchain_extent_.height, draw_image_.extent.height) * render_scale_);
 
-	VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));
-
 	{
-		profiler_->GrabQueries(cmd);
+		profiler_->GrabQueries(cmd->GetCommandBuffer());
 
-		vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		cmd->TransitionImage(draw_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 		DrawBackground(cmd);
 
-		// make the swapchain image into presentable mode
-		vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-		vkutils::TransitionImageLayout(cmd, depth_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		cmd->TransitionImage(draw_image_.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		cmd->TransitionImage(depth_image_.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 		DrawGeometry(cmd);
 
-		vkutils::TransitionImageLayout(cmd, draw_image_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-		vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		cmd->TransitionImage(draw_image_.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		cmd->TransitionImage(swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 		// execute a copy from the draw image into the swapchain
-		vkutils::CopyImageToImage(cmd, draw_image_.image, swapchain_images_[swapchain_image_index], draw_extent_, swapchain_extent_);
-
-		// transition the swapchain image to be ready for display
-		vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		cmd->CopyImageToImage(draw_image_.image, swapchain_images_[swapchain_image_index], draw_extent_, swapchain_extent_);
+		cmd->TransitionImage(swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 		// draw imgui into the swapchain image
 		DrawImGui(cmd, swapchain_image_views_[swapchain_image_index]);
 
-		vkutils::TransitionImageLayout(cmd, swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		cmd->TransitionImage(swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	}
 
-	// finish recording the command buffer
-	VK_CHECK(vkEndCommandBuffer(cmd));
+	cmd->End();
 
 	// prepare the submission to the queue
-	VkCommandBufferSubmitInfo cmd_info = vkinit::CommandBufferSubmitInfo(cmd);
+	VkCommandBufferSubmitInfo cmd_info = vkinit::CommandBufferSubmitInfo(cmd->command_buffer_);
 
 	VkSemaphoreSubmitInfo wait_info = vkinit::SemaphoreSubmitInfo(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, GetCurrentFrame().swapchain_semaphore);
 	VkSemaphoreSubmitInfo signal_info = vkinit::SemaphoreSubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, GetCurrentFrame().render_semaphore);
@@ -278,7 +263,7 @@ void VulkanEngine::Draw()
 		resize_requested_ = true;
 	}
 
-	frame_number++;
+	frame_number_++;
 }
 
 void VulkanEngine::Run()
@@ -402,25 +387,9 @@ void VulkanEngine::Run()
 
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)> &&function)
 {
-	VK_CHECK(vkResetFences(device_, 1, &imm_fence_));
-	VK_CHECK(vkResetCommandBuffer(imm_command_buffer_, 0));
-
-	VkCommandBuffer &cmd = imm_command_buffer_;
-
-	VkCommandBufferBeginInfo cmd_begin_info = vkinit::CommandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-	VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begin_info));
-
-	function(cmd);
-
-	VK_CHECK(vkEndCommandBuffer(cmd));
-
-	VkCommandBufferSubmitInfo cmd_info = vkinit::CommandBufferSubmitInfo(cmd);
-	VkSubmitInfo2 submit_info = vkinit::SubmitInfo(&cmd_info, nullptr, nullptr);
-
-	VK_CHECK(vkQueueSubmit2(main_queue_, 1, &submit_info, imm_fence_));
-
-	VK_CHECK(vkWaitForFences(device_, 1, &imm_fence_, VK_TRUE, UINT64_MAX));
+	command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd) {
+		function(cmd->GetCommandBuffer());
+		});
 }
 
 AllocatedBufferUntyped VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
@@ -538,32 +507,34 @@ AllocatedImage VulkanEngine::CreateImage(void *data, VkExtent3D size, VkFormat f
 
 	AllocatedImage new_image = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
 
-	ImmediateSubmit([&](VkCommandBuffer cmd)
-					{
-						vkutils::TransitionImageLayout(cmd, new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	command_buffer_manager_.ImmediateSubmit(([&](CommandBuffer* cmd)
+		{
+			cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-						VkBufferImageCopy copy_region{};
-						copy_region.bufferOffset = 0;
-						copy_region.bufferRowLength = 0;
-						copy_region.bufferImageHeight = 0;
+			VkBufferImageCopy copy_region{};
+			copy_region.bufferOffset = 0;
+			copy_region.bufferRowLength = 0;
+			copy_region.bufferImageHeight = 0;
 
-						copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-						copy_region.imageSubresource.mipLevel = 0;
-						copy_region.imageSubresource.baseArrayLayer = 0;
-						copy_region.imageSubresource.layerCount = 1;
-						copy_region.imageExtent = size;
+			copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			copy_region.imageSubresource.mipLevel = 0;
+			copy_region.imageSubresource.baseArrayLayer = 0;
+			copy_region.imageSubresource.layerCount = 1;
+			copy_region.imageExtent = size;
 
-						// copy the buffer into the image
-						vkCmdCopyBufferToImage(cmd, upload_buffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+			// copy the buffer into the image
+			vkCmdCopyBufferToImage(cmd->command_buffer_, upload_buffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-						if (mipmapped)
-						{
-							vkutils::GenerateMipmaps(cmd, new_image.image, VkExtent2D{new_image.extent.width, new_image.extent.height});
-						}
-						else
-						{
-							vkutils::TransitionImageLayout(cmd, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-						} });
+			if (mipmapped)
+			{
+				// vkutils::GenerateMipmaps(cmd, new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
+				cmd->GenerateMipmaps(new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
+			}
+			else
+			{
+				//vkutils::TransitionImageLayout(cmd, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+				cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			} }));
 
 	DestroyBuffer(upload_buffer);
 
@@ -607,7 +578,7 @@ void VulkanEngine::InitVulkan()
 
 	SDL_Vulkan_CreateSurface(window_, instance_, &surface_);
 
-	// 获取物理设备数量
+	// get the list of physical devices
 	uint32_t device_count = 0;
 	vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
 
@@ -617,27 +588,25 @@ void VulkanEngine::InitVulkan()
 		vkDestroyInstance(instance_, nullptr);
 		return;
 	}
-	// 获取所有物理设备
+
 	std::vector<VkPhysicalDevice> devices(device_count);
 	vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
 
 	LOGI("Found {} GPU(s) with Vulkan support:", device_count);
 
-	// 输出每个设备的信息以及其支持的扩展
+	// outputs the information of the available devices
 	for (const auto &device : devices)
 	{
 		VkPhysicalDeviceProperties device_properties;
 		vkGetPhysicalDeviceProperties(device, &device_properties);
 
-		// 输出设备名称和类型
+		// outputs the device info
 		LOGI("GPU: {}", device_properties.deviceName);
 		LOGI("    - Type: {}", device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated" : device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? "Discrete"
 																												   : device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU	? "Virtual"
 																												   : device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU			? "CPU"
 																																															: "Other");
 
-		// 输出该设备支持的扩展
-		// 获取设备支持的扩展数量
 		uint32_t extension_count = 0;
 		vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
 
@@ -647,7 +616,6 @@ void VulkanEngine::InitVulkan()
 			continue;
 		}
 
-		// 分配存储扩展属性的空间
 		std::vector<VkExtensionProperties> extensions(extension_count);
 		vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, extensions.data());
 
@@ -827,28 +795,8 @@ void VulkanEngine::InitSwapchain()
 
 void VulkanEngine::InitCommands()
 {
-	// create command pool for commands submitted to the graphics queue
-	VkCommandPoolCreateInfo cmd_pool_info = vkinit::CommandPoolCreateInfo(main_queue_family_, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-
-	for (int i = 0; i < kFRAME_OVERLAP; ++i)
-	{
-		VK_CHECK(vkCreateCommandPool(device_, &cmd_pool_info, nullptr, &frames_[i].command_pool));
-
-		// allocate the default command buffer that we will use for rendering
-		VkCommandBufferAllocateInfo cmd_alloc_info = vkinit::CommandBufferAllocateInfo(frames_[i].command_pool, 1);
-
-		VK_CHECK(vkAllocateCommandBuffers(device_, &cmd_alloc_info, &frames_[i].main_command_buffer));
-	}
-
-	VK_CHECK(vkCreateCommandPool(device_, &cmd_pool_info, nullptr, &imm_command_pool_));
-
-	// allocate the command buffer for immediate submits
-	VkCommandBufferAllocateInfo cmd_alloc_info = vkinit::CommandBufferAllocateInfo(imm_command_pool_, 1);
-
-	VK_CHECK(vkAllocateCommandBuffers(device_, &cmd_alloc_info, &imm_command_buffer_));
-
-	main_deletion_queue_.PushFunction([=]()
-									  { vkDestroyCommandPool(device_, imm_command_pool_, nullptr); });
+	// initialize commandbuffermanager, suppose to use 4 threads
+	command_buffer_manager_.Init(4);
 }
 
 void VulkanEngine::InitSyncStructures()
@@ -867,10 +815,6 @@ void VulkanEngine::InitSyncStructures()
 		VK_CHECK(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &frames_[i].render_semaphore));
 		VK_CHECK(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &frames_[i].swapchain_semaphore));
 	}
-
-	VK_CHECK(vkCreateFence(device_, &fence_create_info, nullptr, &imm_fence_));
-	main_deletion_queue_.PushFunction([=]()
-									  { vkDestroyFence(device_, imm_fence_, nullptr); });
 }
 
 void VulkanEngine::InitDescriptors()
@@ -885,7 +829,7 @@ void VulkanEngine::InitDescriptors()
 
 	{
 		lc::DescriptorLayoutBuilder builder;
-		// 确保绑定点11有足够的描述符数量
+		// make sure the binding number matches the shader layout
 		builder.AddBinding(kBINDLESS_TEXTURE_BINDING, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMAX_BINDLESS_RESOURCES);
 
 		bindless_texture_layout_ = builder.Build(device_,
@@ -893,7 +837,7 @@ void VulkanEngine::InitDescriptors()
 												 nullptr,
 												 VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 
-		// 分配描述符集时需要指定变长数组的大小
+		// allocate a descriptor set for our bindless textures
 		VkDescriptorSetVariableDescriptorCountAllocateInfo count_allocate_info = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
 			.descriptorSetCount = 1,
@@ -1024,8 +968,7 @@ PFN_vkVoidFunction imgui_load_func(const char *funtion_name, void *user_data)
 void VulkanEngine::InitImGui()
 {
 	// 1: create descriptor pool for IMGUI
-	//  the size of the pool is very oversize, but it's copied from imgui demo
-	//  itself.
+	//  the size of the pool is very oversize, but it's copied from imgui demo itself.
 	VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
 										 {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
 										 {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
@@ -1166,12 +1109,13 @@ void VulkanEngine::InitTaskSystem()
 	task_scheduler_.Initialize(task_config_);
 
 	// Create IO threads at the end
-	lc::RunPinnedTaskLoopTask run_pinned_task;
+	lc::tools::RunPinnedTaskLoopTask run_pinned_task;
 	run_pinned_task.threadNum = task_scheduler_.GetNumTaskThreads() - 1;
 	task_scheduler_.AddPinnedTask(&run_pinned_task);
 
-	// Send async load task to external thread
-	lc::AsynchronousLoadTask async_load_task;
+	// Create the actual task responsible for asynchronous loading
+	// associating it with the same thread as the pinned task
+	lc::tools::AsynchronousLoadTask async_load_task;
 	async_load_task.threadNum = run_pinned_task.threadNum;
 	task_scheduler_.AddPinnedTask(&async_load_task);
 }
@@ -1223,51 +1167,36 @@ void VulkanEngine::DestroySwapchain()
 	}
 }
 
-void VulkanEngine::DrawBackground(VkCommandBuffer cmd)
+void VulkanEngine::DrawBackground(CommandBuffer* cmd)
 {
-	vkutils::VulkanScopeTimer timer(cmd, profiler_, "Background");
-	vkutils::VulkanPipelineStatRecorder timers(cmd, profiler_, "Background Primitives");
-
-	// make a clear-color from frame number, this will flash with a 120 frame period
-	VkClearColorValue clearValue;
-	float flush = std::abs(std::sin(frame_number / 120.0f));
-	clearValue = {{0.0f, 0.0f, flush, 1.0f}};
-
-	VkImageSubresourceRange subresourceRange = vkinit::ImageSubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutils::VulkanScopeTimer timer(cmd->GetCommandBuffer(), profiler_, "Background");
+	vkutils::VulkanPipelineStatRecorder timers(cmd->GetCommandBuffer(), profiler_, "Background Primitives");
 
 	ComputeEffect &effect = background_effects_[current_background_effect_];
-
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-
-	/*DescriptorInfo drawImageDesc(draw_image_.view, VK_IMAGE_LAYOUT_GENERAL);
-	DescriptorInfo descs[] = { drawImageDesc };
-	vkCmdPushDescriptorSetWithTemplateKHR(cmd, effect.program.updateTemplate, effect.program.layout,0, descs);*/
-	effect.descriptor_binder.ApplyBinds(cmd, effect.layout);
-
-	vkCmdPushConstants(cmd, effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
-
-	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
-	vkCmdDispatch(cmd, static_cast<uint32_t>(std::ceil(draw_extent_.width / 16.0)), static_cast<uint32_t>(std::ceil(draw_extent_.height / 16.0)), 1);
+	cmd->BindPipeline(effect.pipeline, VK_PIPELINE_BIND_POINT_COMPUTE);
+	effect.descriptor_binder.ApplyBinds(cmd->command_buffer_, effect.layout);
+	cmd->PushConstants(effect.layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
+	cmd->Dispatch(static_cast<uint32_t>(std::ceil(draw_extent_.width / 16.0)), static_cast<uint32_t>(std::ceil(draw_extent_.height / 16.0)), 1);
 }
 
-void VulkanEngine::DrawImGui(VkCommandBuffer cmd, VkImageView target_image_view)
+void VulkanEngine::DrawImGui(CommandBuffer* cmd, VkImageView target_image_view)
 {
-	vkutils::VulkanScopeTimer timer(cmd, profiler_, "ImGui");
-	vkutils::VulkanPipelineStatRecorder timers(cmd, profiler_, "ImGui Primitives");
+	vkutils::VulkanScopeTimer timer(cmd->command_buffer_, profiler_, "ImGui");
+	vkutils::VulkanPipelineStatRecorder timers(cmd->command_buffer_, profiler_, "ImGui Primitives");
 	VkRenderingAttachmentInfo color_attachment = vkinit::AttachmentInfo(target_image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingInfo render_info = vkinit::RenderingInfo(swapchain_extent_, &color_attachment, nullptr);
 
-	vkCmdBeginRendering(cmd, &render_info);
+	cmd->BeginRendering(render_info);
 
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd->command_buffer_);
 
-	vkCmdEndRendering(cmd);
+	cmd->EndRendering();
 }
 
-void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
+void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 {
-	vkutils::VulkanScopeTimer timer(cmd, profiler_, "Geometry");
-	vkutils::VulkanPipelineStatRecorder timers(cmd, profiler_, "Geometry Primitives");
+	vkutils::VulkanScopeTimer timer(cmd->command_buffer_, profiler_, "Geometry");
+	vkutils::VulkanPipelineStatRecorder timers(cmd->command_buffer_, profiler_, "Geometry Primitives");
 	// reset counters
 	engine_stats_.drawcall_count = 0;
 	engine_stats_.triangle_count = 0;
@@ -1283,12 +1212,10 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	for (uint32_t i = 0; i < main_draw_context_.opaque_surfaces.size(); ++i)
 	{
 		RenderObject &obj = main_draw_context_.opaque_surfaces[i];
-		// if (frustum.isSphereVisible(obj.bounds.origin, obj.bounds.sphereRadius)) {
 		if (is_visible(obj, scene_data_.viewproj))
 		{
 			opaqueDraws.push_back(i);
 		}
-		//}
 	}
 
 	// sort the opaque surfaces by material and mesh
@@ -1307,10 +1234,9 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	VkRenderingAttachmentInfo color_attachment = vkinit::AttachmentInfo(draw_image_.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depth_attachment = vkinit::DepthAttachmentInfo(depth_image_.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
+	
 	VkRenderingInfo render_info = vkinit::RenderingInfo(draw_extent_, &color_attachment, &depth_attachment);
-	vkCmdBeginRendering(cmd, &render_info);
-
-	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _meshPipeline);
+	cmd->BeginRendering(render_info);
 
 	// allocate a new uniform buffer for the scene data
 	AllocatedBufferUntyped gpu_scene_data_buffer = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -1337,7 +1263,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 
 #if LC_DRAW_INDIRECT
 	{
-		vkCmdBindIndexBuffer(cmd, global_mesh_buffer_.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		cmd->BindIndexBuffer(global_mesh_buffer_.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	}
 #endif // LC_DRAW_INDIRECT
 	// this is the state we will try to skip
@@ -1345,8 +1271,9 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 	MaterialInstance *last_material = nullptr;
 	VkBuffer last_index_buffer = VK_NULL_HANDLE;
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &global_descriptor, 0, nullptr);
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
+	cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &global_descriptor, 0, nullptr);
+	cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
+	
 	auto Draw = [&](const RenderObject &r)
 	{
 		if (r.material != last_material)
@@ -1357,51 +1284,36 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 			if (r.material->pipeline != last_pipeline)
 			{
 				last_pipeline = r.material->pipeline;
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->pipeline);
-
-				// set dynamic viewport and scissor
-				VkViewport viewport = {};
-				viewport.x = 0;
-				viewport.y = 0;
-				viewport.width = static_cast<float>(draw_extent_.width);
-				viewport.height = static_cast<float>(draw_extent_.height);
-				viewport.minDepth = 0.f;
-				viewport.maxDepth = 1.f;
-				vkCmdSetViewport(cmd, 0, 1, &viewport);
-
-				VkRect2D scissor = {};
-				scissor.offset.x = 0;
-				scissor.offset.y = 0;
-				scissor.extent.width = draw_extent_.width;
-				scissor.extent.height = draw_extent_.height;
-				vkCmdSetScissor(cmd, 0, 1, &scissor);
+				cmd->BindPipeline(r.material->pipeline->pipeline);
+				cmd->SetViewport(0, 0, static_cast<float>(draw_extent_.width), static_cast<float>(draw_extent_.height), 0.f, 1.f);
+				cmd->SetScissor(0, 0, draw_extent_.width, draw_extent_.height);
 			}
 
 			// bind the material descriptor set
-			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &r.material->set, 0, nullptr);
+			cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &r.material->set, 0, nullptr);
+
 		}
 		
 #if LC_DRAW_INDIRECT
 		GPUDrawIndirectPushConstants gpu_draw_indirect_push_constants;
 		gpu_draw_indirect_push_constants.world_matrix = r.transform;
+		cmd->PushConstants(r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &gpu_draw_indirect_push_constants);
 
-		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &gpu_draw_indirect_push_constants);
-
-		vkCmdDrawIndexedIndirect(cmd,global_mesh_buffer_.indirect_command_buffer.buffer,r.indirect_draw_index * sizeof(VkDrawIndexedIndirectCommand), 1, sizeof(VkDrawIndexedIndirectCommand));
+		cmd->DrawIndexedIndirect(global_mesh_buffer_.indirect_command_buffer.buffer, r.indirect_draw_index * sizeof(VkDrawIndexedIndirectCommand), sizeof(VkDrawIndexedIndirectCommand));
 #else
 		// rebind index buffer if needed
 		if (r.index_buffer != last_index_buffer)
 		{
 			last_index_buffer = r.index_buffer;
-			vkCmdBindIndexBuffer(cmd, r.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+			cmd->BindIndexBuffer(r.index_buffer, 0, VK_INDEX_TYPE_UINT32);
 		}
 		// calculate final mesh matrix
 		GPUDrawPushConstants gpu_draw_push_constants;
 		gpu_draw_push_constants.vertex_buffer_address = r.vertex_buffer_address;
 		gpu_draw_push_constants.world_matrix = r.transform;
-		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &gpu_draw_push_constants);
+		cmd->PushConstants(r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &gpu_draw_push_constants);
 
-		vkCmdDrawIndexed(cmd, r.index_count, 1, r.first_index, 0, 0);
+		cmd->DrawIndexed(r.index_count, 1, r.first_index, 0, 0);
 #endif // LC_DRAW_INDIRECT
 
 		engine_stats_.drawcall_count++;
@@ -1418,7 +1330,7 @@ void VulkanEngine::DrawGeometry(VkCommandBuffer cmd)
 		Draw(r);
 	}
 
-	vkCmdEndRendering(cmd);
+	cmd->EndRendering();
 
 	auto end = std::chrono::system_clock::now();
 
@@ -1594,6 +1506,7 @@ void MeshNode::Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
 
 void GlobalMeshBuffer::UploadToGPU(VulkanEngine* engine)
 {
+	LOGI("Uploading mesh data to GPU");
 	size_t vertex_buffer_size = vertex_data.size() * sizeof(Vertex);
 	size_t index_buffer_size = index_data.size() * sizeof(uint32_t);
 

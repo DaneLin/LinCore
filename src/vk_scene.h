@@ -157,4 +157,34 @@ public:
 
     void RefreshPass(MeshPass* pass);
 
+    void BuildIndirectBatches(MeshPass* pass, std::vector<IndirectBatch>& out_batches, std::vector<RenderScene::RenderBatch>& in_objects);
+
+    RenderObject* GetObject(Handle<RenderObject> object_id);
+    DrawMesh* GetMesh(Handle<DrawMesh> object_id);
+
+    vkutils::Material* GetMaterial(Handle<vkutils::Material> object_id);
+
+    std::vector<RenderObject> renderables;
+    std::vector<DrawMesh> meshes;
+    std::vector<vkutils::Material*> materials;
+
+    std::vector<Handle<RenderObject>> dirty_objects;
+
+    MeshPass* GetMeshPass(MeshPassType name);
+
+    MeshPass forwars_pass;
+    MeshPass transparent_forward_pass;
+    MeshPass shadow_pass;
+
+	std::unordered_map<vkutils::Material*, Handle<vkutils::Material>> material_convert;
+    std::unordered_map<Mesh*, Handle<DrawMesh>> mesh_convert;
+
+
+    Handle<vkutils::Material> GetMaterialHandle(vkutils::Material* m);
+    Handle<DrawMesh> GetMeshHandle(Mesh* m);
+
+    AllocatedBuffer<Vertex> merged_vertex_buffer;
+    AllocatedBuffer<uint32_t> merged_index_buffer;
+
+    AllocatedBuffer<GPUObjectData> object_data_buffer;
 };

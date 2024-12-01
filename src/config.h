@@ -8,6 +8,12 @@ constexpr bool bUseValidationLayers = false;
 constexpr bool bUseValidationLayers = true;
 #endif
 
+const std::vector<const char*> required_extensions = {
+	VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+	VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+	VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+	VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME };
+
 // Should we enable vertical sync during presentation? Worth setting to 0 when doing perf profiling to avoid GPU downclock during idle
 #define CONFIG_VSYNC 1
 

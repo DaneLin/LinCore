@@ -6,7 +6,7 @@
 
 #include "input_structures.glsl"
 
-layout (location =0) out vec3 outNormal;
+layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
 
