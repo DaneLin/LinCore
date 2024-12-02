@@ -11,7 +11,7 @@ public:
 
 	float yaw_{ 0.f };
 
-	float speed_factor_{ 1.f };
+	float speed_factor_{ 0.1f };
 
 	glm::mat4 GetViewMatrix();
 

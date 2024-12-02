@@ -5,7 +5,7 @@
 #include "imgui.h"
 
 constexpr float MAX_MOVING_SPEED = 10.f;
-constexpr float MIN_MOVING_SPEED = 0.1f;
+constexpr float MIN_MOVING_SPEED = 0.01f;
 
 glm::mat4 Camera::GetViewMatrix()
 {
@@ -93,11 +93,11 @@ void Camera::ProcessSdlEvent(SDL_Event &e)
 	{
 		if (e.wheel.y > 0)
 		{																	  // 滚轮向上滚动，增加速度
-			speed_factor_ = std::min(MAX_MOVING_SPEED, speed_factor_ + 0.1f); // 确保速度不会超过 MAX_MOVING_SPEED
+			speed_factor_ = std::min(MAX_MOVING_SPEED, speed_factor_ + 0.01f); // 确保速度不会超过 MAX_MOVING_SPEED
 		}
 		else if (e.wheel.y < 0)
 		{																	  // 滚轮向下滚动，减少速度
-			speed_factor_ = std::max(MIN_MOVING_SPEED, speed_factor_ - 0.1f); // 确保速度不会低于 MIN_MOVING_SPEED
+			speed_factor_ = std::max(MIN_MOVING_SPEED, speed_factor_ - 0.01f); // 确保速度不会低于 MIN_MOVING_SPEED
 		}
 	}
 }

@@ -117,10 +117,10 @@ void VulkanEngine::Init()
 	InitTaskSystem();
 
 	main_camera_.velocity_ = glm::vec3(0.f);
-	main_camera_.position_ = glm::vec3(0, 0, 5);
+	main_camera_.position_ = glm::vec3(-10, 1, 0);
 
 	main_camera_.pitch_ = 0;
-	main_camera_.yaw_ = 0;
+	main_camera_.yaw_ = 1.5;
 
 	//std::string structure_path = GetAssetPath("assets/structure.glb");
 	std::string structure_path = GetAssetPath("assets/Sponza/glTF/Sponza.gltf");
@@ -329,6 +329,14 @@ void VulkanEngine::Run()
 			ImGui::InputFloat4("data2", (float *)&selected.data.data2);
 			ImGui::InputFloat4("data3", (float *)&selected.data.data3);
 			ImGui::InputFloat4("data4", (float *)&selected.data.data4);
+		}
+		ImGui::End();
+
+		if (ImGui::Begin("Camera Status"))
+		{
+			ImGui::Text("Camera Position: %f %f %f", main_camera_.position_.x, main_camera_.position_.y, main_camera_.position_.z);
+			ImGui::Text("Camera Pitch: %f", main_camera_.pitch_);
+			ImGui::Text("Camera Yaw: %f", main_camera_.yaw_);
 		}
 		ImGui::End();
 
