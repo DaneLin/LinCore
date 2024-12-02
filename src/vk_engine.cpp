@@ -122,14 +122,14 @@ void VulkanEngine::Init()
 	main_camera_.pitch_ = 0;
 	main_camera_.yaw_ = 0;
 
-	std::string structure_path = GetAssetPath("assets/structure.glb");
+	//std::string structure_path = GetAssetPath("assets/structure.glb");
+	std::string structure_path = GetAssetPath("assets/Sponza/glTF/Sponza.gltf");
 	auto structure_file = lc::LoadGltf(this, structure_path);
 
 	assert(structure_file.has_value());
 
 	global_mesh_buffer_.UploadToGPU(this);
-	main_deletion_queue_.PushFunction([=]()
-									  {
+	main_deletion_queue_.PushFunction([=](){
 		DestroyBuffer(global_mesh_buffer_.vertex_buffer);
 		DestroyBuffer(global_mesh_buffer_.index_buffer);
 		DestroyBuffer(global_mesh_buffer_.indirect_command_buffer); });
@@ -526,12 +526,10 @@ AllocatedImage VulkanEngine::CreateImage(void *data, VkExtent3D size, VkFormat f
 
 			if (mipmapped)
 			{
-				// vkutils::GenerateMipmaps(cmd, new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
 				cmd->GenerateMipmaps(new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
 			}
 			else
 			{
-				//vkutils::TransitionImageLayout(cmd, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 				cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			} }));
 

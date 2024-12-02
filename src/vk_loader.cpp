@@ -19,7 +19,7 @@
 
 namespace lc
 {
-	std::optional<AllocatedImage> LoadImage(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
+	std::optional<AllocatedImage> LoadImage(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image, const std::filesystem::path& gltf_parent_path)
 	{
 		auto promise = std::make_shared<std::promise<std::optional<AllocatedImage>>>();
 		auto future = promise->get_future();
@@ -34,7 +34,10 @@ namespace lc
 
 					const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
-					engine->async_loader_.RequestFileLoad(path.c_str(),
+                    std::filesystem::path relative_path(file_path.uri.path().begin(), file_path.uri.path().end());
+                    std::filesystem::path texture_path = gltf_parent_path / relative_path;
+
+					engine->async_loader_.RequestFileLoad(texture_path.string().c_str(),
 														  [promise](AllocatedImage image)
 														  {
 															  if (image.image != VK_NULL_HANDLE)
@@ -225,11 +228,15 @@ namespace lc
 		// load all textures
 		for (fastgltf::Image& image : gltf.images)
 		{
-			std::optional<AllocatedImage> img = LoadImage(engine, gltf, image);
+			std::optional<AllocatedImage> img = LoadImage(engine, gltf, image, path.parent_path());
 
 			if (img.has_value())
 			{
 				images.push_back(*img);
+				if (image.name.empty())
+				{
+					image.name = "image" + std::to_string(images.size());
+				}
 				file.images[image.name.c_str()] = *img;
 			}
 			else
@@ -658,7 +665,7 @@ namespace lc
 					1 };
 				upload_request.size = width * height * 4;
 				upload_request.format = VK_FORMAT_R8G8B8A8_UNORM;
-				upload_request.enable_mips = request.type == FileLoadRequestType::kURI;
+				upload_request.enable_mips = false;
 
 				// 包装回调以释放内存
 				upload_request.callback = [data, callback = std::move(request.callback)](AllocatedImage image)
