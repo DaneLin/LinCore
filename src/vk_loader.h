@@ -4,33 +4,160 @@
 #include <unordered_map>
 #include <filesystem>
 #include "config.h"
+#include <TaskScheduler.h>
+#include <future>
+#include <logging.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#else
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sched.h>
+#endif
 
+namespace fastgltf
+{
+	class Asset;
+	struct Image;
+}
 
 class VulkanEngine;
 
 namespace lc
 {
+	enum class FileLoadRequestType
+	{
+		kURI,
+		kVector,
+		kBufferView
+	};
 
-	struct TextureID {
+	// file loading request
+	struct FileLoadRequest
+	{
+		FileLoadRequestType type;
+		char path[512];			 // URI type
+		const void *memory_data; // vector and bufferview type
+		size_t memory_size;
+		size_t buffer_offset; // buffer view
+		std::function<void(AllocatedImage)> callback;
+	};
+
+	// upload request
+	struct UploadRequest
+	{
+		void *data;
+		size_t size;
+		VkFormat format;
+		VkExtent3D extent;
+		bool enable_mips;
+		std::function<void(AllocatedImage)> callback;
+	};
+
+	class AsyncLoader
+	{
+	public:
+		void Init(enki::TaskScheduler *task_scheduler);
+		void Shutdown();
+
+		void Update();
+
+		void RequestFileLoad(const char *path, std::function<void(AllocatedImage)> callback);
+		void RequestImageUpload(void *data, VkExtent3D extent, VkFormat format, std::function<void(AllocatedImage)> callback);
+
+		void RequestVectorLoad(const void* data, size_t size, std::function<void(AllocatedImage)> callback);
+
+		void RequestBufferViewLoad(const void* data, size_t size, size_t offset,
+			std::function<void(AllocatedImage)> callback);
+
+	private:
+		enki::TaskScheduler *task_scheduler_{nullptr};
+
+		std::vector<FileLoadRequest> file_load_requests_;
+		std::vector<UploadRequest> upload_requests_;
+
+		VkCommandPool command_pool_;
+		VkCommandBuffer transfer_cmd_;
+		VkFence transfer_fence_;
+
+		void ProcessFileRequests();
+		void ProcessUploadRequests();
+	};
+
+	// I/O thread task
+	struct RunPinnedTaskLoopTask : enki::IPinnedTask
+	{
+		void Execute() override
+		{
+#ifdef _WIN32
+			HANDLE thread = GetCurrentThread();
+			PROCESSOR_NUMBER procNumber;
+			GetCurrentProcessorNumberEx(&procNumber);
+			LOGI("IO Task Thread ID: {}, Running on Processor: Group {}, Number {}",
+				GetCurrentThreadId(),
+				procNumber.Group,
+				procNumber.Number);
+#else
+			pid_t tid = syscall(SYS_gettid);
+			int cpu = sched_getcpu();
+			LOGI("IO Task Thread ID: {}, Running on CPU: {}", tid, cpu);
+#endif
+			while (task_scheduler->GetIsRunning() && execute)
+			{
+				task_scheduler->WaitForNewPinnedTasks();
+				task_scheduler->RunPinnedTasks();
+			}
+		}
+
+		enki::TaskScheduler *task_scheduler;
+		std::atomic<bool> execute{true};
+	};
+
+	// Asynchronous loading task
+	struct AsyncLoadTask : enki::IPinnedTask
+	{
+		void Execute() override
+		{
+			while (execute)
+			{
+				async_loader->Update();
+			}
+		}
+
+		AsyncLoader *async_loader;
+		enki::TaskScheduler *task_scheduler;
+		std::atomic<bool> execute{true};
+	};
+
+	struct TextureID
+	{
 		uint32_t index;
 	};
 
-	class TextureCache {
+	class TextureCache
+	{
 	public:
-		void SetDescriptorSet(VkDescriptorSet bindless_set) {
+		void SetDescriptorSet(VkDescriptorSet bindless_set)
+		{
 			bindless_set_ = bindless_set;
 		}
 
-		TextureID AddTexture(VkDevice device, const VkImageView& image_view, VkSampler sampler) {
+		TextureID AddTexture(VkDevice device, const VkImageView &image_view, VkSampler sampler)
+		{
 			// 检查是否已存在
-			for (uint32_t i = 0; i < cache_.size(); i++) {
-				if (cache_[i].imageView == image_view && cache_[i].sampler == sampler) {
-					return TextureID{ i };
+			for (uint32_t i = 0; i < cache_.size(); i++)
+			{
+				if (cache_[i].imageView == image_view && cache_[i].sampler == sampler)
+				{
+					return TextureID{i};
 				}
 			}
 			// 检查是否超出最大数量
-			if (cache_.size() >= kMAX_BINDLESS_RESOURCES) {
+			if (cache_.size() >= kMAX_BINDLESS_RESOURCES)
+			{
 				throw std::runtime_error("Exceeded maximum bindless texture count");
 			}
 
@@ -40,16 +167,15 @@ namespace lc
 			VkDescriptorImageInfo image_info{
 				.sampler = sampler,
 				.imageView = image_view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
 			cache_.push_back(image_info);
 
 			// 更新bindless descriptor set
 			lc::DescriptorWriter writer;
-			writer.WriteImageArray(kBINDLESS_TEXTURE_BINDING, idx, { image_info }, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+			writer.WriteImageArray(kBINDLESS_TEXTURE_BINDING, idx, {image_info}, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 			writer.UpdateSet(device, bindless_set_);
 
-			return TextureID{ idx };
+			return TextureID{idx};
 		}
 
 	private:
@@ -57,17 +183,20 @@ namespace lc
 		VkDescriptorSet bindless_set_;
 	};
 
-	struct GLTFMaterial {
+	struct GLTFMaterial
+	{
 		MaterialInstance data;
 	};
 
-	struct Bounds {
+	struct Bounds
+	{
 		glm::vec3 origin;
 		float sphere_radius;
 		glm::vec3 extents;
 	};
 
-	struct GeoSurface {
+	struct GeoSurface
+	{
 		uint32_t start_index;
 		uint32_t count;
 		Bounds bounds;
@@ -75,18 +204,19 @@ namespace lc
 		std::shared_ptr<GLTFMaterial> material;
 	};
 
-	struct MeshAsset {
+	struct MeshAsset
+	{
 		std::string name;
 
 		std::vector<GeoSurface> surfaces;
 		GPUMeshBuffers mesh_buffers;
 	};
 
-	template<typename T>
+	template <typename T>
 	struct PerPassData
 	{
 	public:
-		T& operator[](MeshPassType pass)
+		T &operator[](MeshPassType pass)
 		{
 			switch (pass)
 			{
@@ -101,18 +231,20 @@ namespace lc
 			return data[0];
 		}
 
-		void Clear(T&& val)
+		void Clear(T &&val)
 		{
 			for (int i = 0; i < 3; i++)
 			{
 				data[i] = val;
 			}
 		}
+
 	private:
 		std::array<T, 3> data;
 	};
 
-	struct LoadedGLTF : public IRenderable {
+	struct LoadedGLTF : public IRenderable
+	{
 		// storage for all the data on a given glTF file
 		std::unordered_map<std::string, std::shared_ptr<MeshAsset>> meshes;
 		std::unordered_map<std::string, std::shared_ptr<Node>> nodes;
@@ -128,19 +260,19 @@ namespace lc
 
 		AllocatedBufferUntyped material_data_buffer;
 
-		VulkanEngine* creator;
+		VulkanEngine *creator;
 
-		~LoadedGLTF() {
+		~LoadedGLTF()
+		{
 			ClearAll();
 		}
 
-		virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) override;
+		virtual void Draw(const glm::mat4 &top_matrix, DrawContext &ctx) override;
+
 	private:
 		void ClearAll();
 	};
 
 	void AddMeshBufferToGlobalBuffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
-	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine* engine, std::string_view file_path);
+	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine *engine, std::string_view file_path);
 } // namespace lc
-
-

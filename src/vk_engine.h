@@ -243,6 +243,10 @@ public:
 
 	enki::TaskSchedulerConfig task_config_;
 	enki::TaskScheduler task_scheduler_;
+	lc::RunPinnedTaskLoopTask run_pinned_task;
+	lc::AsyncLoadTask async_load_task;
+
+	lc::AsyncLoader async_loader_;
 
 	GlobalMeshBuffer global_mesh_buffer_;
 

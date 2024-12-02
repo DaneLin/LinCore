@@ -19,97 +19,86 @@
 
 namespace lc
 {
-	std::optional<AllocatedImage> LoadImage(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image) {
-		AllocatedImage new_image{};
-		int width, height, channels;
+	std::optional<AllocatedImage> LoadImage(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
+	{
+		auto promise = std::make_shared<std::promise<std::optional<AllocatedImage>>>();
+		auto future = promise->get_future();
 
 		std::visit(
 			fastgltf::visitor{
 				[](auto& arg) {},
-				[&](fastgltf::sources::URI& file_path) {
-					assert(file_path.fileByteOffset == 0); // not support offset
-					assert(file_path.uri.isLocalPath()); // only local file is allowed
+				[&](fastgltf::sources::URI& file_path)
+				{
+					assert(file_path.fileByteOffset == 0);
+					assert(file_path.uri.isLocalPath());
 
 					const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
-
-					unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
-					if (data) {
-						VkExtent3D image_size;
-						image_size.width = width;
-						image_size.height = height;
-						image_size.depth = 1;
-
-						new_image = engine->CreateImage(data, image_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, true);
-						stbi_image_free(data);
-					}
-					 else {
-						LOGE("Failed to load image from file.");
-					}
+					engine->async_loader_.RequestFileLoad(path.c_str(),
+														  [promise](AllocatedImage image)
+														  {
+															  if (image.image != VK_NULL_HANDLE)
+															  {
+																  promise->set_value(std::move(image));
+															  }
+															  else
+															  {
+																  promise->set_value(std::nullopt);
+															  }
+														  });
 				},
-				[&](fastgltf::sources::Vector& vector) {
-					unsigned char* data = stbi_load_from_memory(
-						reinterpret_cast<const stbi_uc*>(vector.bytes.data()),
-						static_cast<int>(vector.bytes.size()),
-						&width, &height, &channels, 4
-					);
-					if (data) {
-						VkExtent3D image_size;
-						image_size.width = width;
-						image_size.height = height;
-						image_size.depth = 1;
-
-						new_image = engine->CreateImage(data, image_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false);
-						stbi_image_free(data);
-					}
-					else {
-						LOGE("Failed to load image from memory vector.");
-					}
+				[&](fastgltf::sources::Vector& vector)
+				{
+					engine->async_loader_.RequestVectorLoad(
+						vector.bytes.data(),
+						vector.bytes.size(),
+						[promise](AllocatedImage image)
+						{
+							if (image.image != VK_NULL_HANDLE)
+							{
+								promise->set_value(std::move(image));
+							}
+							else
+							{
+								promise->set_value(std::nullopt);
+							}
+						});
 				},
-				[&](fastgltf::sources::BufferView& view) {
+				[&](fastgltf::sources::BufferView& view)
+				{
 					auto& bufferView = asset.bufferViews[view.bufferViewIndex];
 					auto& buffer = asset.buffers[bufferView.bufferIndex];
 
-					std::visit(fastgltf::visitor {
-						[](auto& arg) {},
-						[&](fastgltf::sources::Array& vector) {
-							unsigned char* data = stbi_load_from_memory(
-								reinterpret_cast<const stbi_uc*>(vector.bytes.data() + bufferView.byteOffset),
-								static_cast<int>(bufferView.byteLength),
-								&width, &height, &channels, 4
-							);
-							if (data) {
+					std::visit(fastgltf::visitor{[](auto& arg) {},
+												 [&](fastgltf::sources::Array& vector)
+												 {
+													 engine->async_loader_.RequestBufferViewLoad(
+														 vector.bytes.data(),
+														 bufferView.byteLength,
+														 bufferView.byteOffset,
+														 [promise](AllocatedImage image)
+														 {
+															 if (image.image != VK_NULL_HANDLE)
+															 {
+																 promise->set_value(std::move(image));
+															 }
+															 else
+															 {
+																 promise->set_value(std::nullopt);
+															 }
+														 });
+												 }},
+							   buffer.data);
+				} },
+			image.data);
 
-								VkExtent3D image_size;
-								image_size.width = width;
-								image_size.height = height;
-								image_size.depth = 1;
-
-								new_image = engine->CreateImage(data, image_size, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT, false);
-								stbi_image_free(data);
-							}
-							else {
-								LOGE("Failed to load image from buffer view.");
-							}
-						}
-					}, buffer.data);
-				}
-			},
-			image.data
-		);
-
-		if (new_image.image == VK_NULL_HANDLE) {
-			LOGE("{} Image load failed, returning empty optional.", image.name);
-			return {};
-		}
-		else {
-			return new_image;
-		}
+		return future.get();
 	}
 
-
-	VkFilter ExtractFilter(fastgltf::Filter filter) {
-		switch (filter) {
+	VkFilter ExtractFilter(fastgltf::Filter filter)
+	{
+		switch (filter)
+		{
 			// nearest samplers
 		case fastgltf::Filter::Nearest:
 		case fastgltf::Filter::NearestMipMapNearest:
@@ -127,7 +116,8 @@ namespace lc
 
 	VkSamplerMipmapMode ExtractMipmapMode(fastgltf::Filter filter)
 	{
-		switch (filter) {
+		switch (filter)
+		{
 		case fastgltf::Filter::NearestMipMapNearest:
 		case fastgltf::Filter::LinearMipMapNearest:
 			return VK_SAMPLER_MIPMAP_MODE_NEAREST;
@@ -152,6 +142,7 @@ namespace lc
 
 	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine* engine, std::string_view file_path)
 	{
+		// TODO : load gltf in a separate thread
 		LOGI("Loading GLTF: {}", file_path);
 
 		std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
@@ -167,40 +158,48 @@ namespace lc
 		std::filesystem::path path = file_path;
 
 		auto type = fastgltf::determineGltfFileType(data.get());
-		if (type == fastgltf::GltfType::glTF) {
+		if (type == fastgltf::GltfType::glTF)
+		{
 			auto load = parser.loadGltf(data.get(), path.parent_path(), gltf_options);
-			if (load) {
+			if (load)
+			{
 				gltf = std::move(load.get());
 			}
-			else {
+			else
+			{
 				LOGE("Failed to load gltf: {}", fastgltf::to_underlying(load.error()));
 				return {};
 			}
 		}
-		else if (type == fastgltf::GltfType::GLB) {
+		else if (type == fastgltf::GltfType::GLB)
+		{
 			auto load = parser.loadGltfBinary(data.get(), path.parent_path(), gltf_options);
-			if (load) {
+			if (load)
+			{
 				gltf = std::move(load.get());
 			}
-			else {
+			else
+			{
 				LOGE("Failed to load gltf: {}", fastgltf::to_underlying(load.error()));
 				return {};
 			}
 		}
-		else {
+		else
+		{
 			LOGE("Failed to determine glTF container");
 			return {};
 		}
 
 		// we can stimate the descriptors we will need accurately
-		std::vector<lc::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 } };
+		std::vector<lc::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
+																			 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
+																			 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1} };
 
 		file.descriptor_pool.Init(engine->device_, static_cast<uint32_t>(gltf.materials.size()), sizes);
 
 		// load sampler
-		for (fastgltf::Sampler& sampler : gltf.samplers) {
+		for (fastgltf::Sampler& sampler : gltf.samplers)
+		{
 			VkSamplerCreateInfo sampler_create_info = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr };
 			sampler_create_info.maxLod = VK_LOD_CLAMP_NONE;
 			sampler_create_info.minLod = 0;
@@ -224,14 +223,17 @@ namespace lc
 		std::vector<std::shared_ptr<GLTFMaterial>> materials;
 
 		// load all textures
-		for (fastgltf::Image& image : gltf.images) {
+		for (fastgltf::Image& image : gltf.images)
+		{
 			std::optional<AllocatedImage> img = LoadImage(engine, gltf, image);
 
-			if (img.has_value()) {
+			if (img.has_value())
+			{
 				images.push_back(*img);
 				file.images[image.name.c_str()] = *img;
 			}
-			else {
+			else
+			{
 				// we failed to load, so lets give the slot a default white texture to not completely break loading
 				images.push_back(engine->default_images_.error_checker_board_image);
 				LOGW("gltf failed to load texture {}, fallint to default error texture", image.name);
@@ -244,7 +246,8 @@ namespace lc
 		int data_index = 0;
 		GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants*)file.material_data_buffer.info.pMappedData;
 
-		for (fastgltf::Material& mat : gltf.materials) {
+		for (fastgltf::Material& mat : gltf.materials)
+		{
 			std::shared_ptr<GLTFMaterial> new_mat = std::make_shared<GLTFMaterial>();
 			materials.push_back(new_mat);
 			file.materials[mat.name.c_str()] = new_mat;
@@ -259,7 +262,8 @@ namespace lc
 			constants.metal_rough_factors.y = mat.pbrData.roughnessFactor;
 
 			MeshPassType pass_type = MeshPassType::kMainColor;
-			if (mat.alphaMode == fastgltf::AlphaMode::Blend) {
+			if (mat.alphaMode == fastgltf::AlphaMode::Blend)
+			{
 				pass_type = MeshPassType::kTransparent;
 			}
 
@@ -274,7 +278,8 @@ namespace lc
 			material_resources.data_buffer_offset = data_index * sizeof(GLTFMetallic_Roughness::MaterialConstants);
 
 			// grab textures from gltf file
-			if (mat.pbrData.baseColorTexture.has_value()) {
+			if (mat.pbrData.baseColorTexture.has_value())
+			{
 				size_t img = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].imageIndex.value();
 				size_t sampler = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].samplerIndex.value();
 
@@ -298,7 +303,8 @@ namespace lc
 		std::vector<Vertex> vertices;
 		int mesh_index = 0;
 
-		for (fastgltf::Mesh& mesh : gltf.meshes) {
+		for (fastgltf::Mesh& mesh : gltf.meshes)
+		{
 			std::shared_ptr<MeshAsset> new_mesh = std::make_shared<MeshAsset>();
 			meshes.push_back(new_mesh);
 			file.meshes[mesh.name.c_str()] = new_mesh;
@@ -310,7 +316,8 @@ namespace lc
 			size_t global_index_offset = engine->global_mesh_buffer_.index_data.size();
 			size_t global_vertex_offset = engine->global_mesh_buffer_.vertex_data.size();
 
-			for (auto&& p : mesh.primitives) {
+			for (auto&& p : mesh.primitives)
+			{
 				GeoSurface new_surface;
 				new_surface.start_index = (uint32_t)indices.size();
 				new_surface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
@@ -323,7 +330,8 @@ namespace lc
 					indices.reserve(indices.size() + indexaccessor.count);
 
 					fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
-						[&](std::uint32_t idx) {
+						[&](std::uint32_t idx)
+						{
 							indices.push_back(static_cast<uint32_t>(idx + initial_vtx));
 						});
 				}
@@ -334,7 +342,8 @@ namespace lc
 					vertices.resize(vertices.size() + posAccessor.count);
 
 					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
-						[&](glm::vec3 v, size_t index) {
+						[&](glm::vec3 v, size_t index)
+						{
 							Vertex newvtx;
 							newvtx.position = v;
 							newvtx.normal = { 1, 0, 0 };
@@ -347,20 +356,24 @@ namespace lc
 
 				// load vertex normals
 				auto normals = p.findAttribute("NORMAL");
-				if (normals != p.attributes.end()) {
+				if (normals != p.attributes.end())
+				{
 
 					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).accessorIndex],
-						[&](glm::vec3 v, size_t index) {
+						[&](glm::vec3 v, size_t index)
+						{
 							vertices[initial_vtx + index].normal = v;
 						});
 				}
 
 				// load UVs
 				auto uv = p.findAttribute("TEXCOORD_0");
-				if (uv != p.attributes.end()) {
+				if (uv != p.attributes.end())
+				{
 
 					fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).accessorIndex],
-						[&](glm::vec2 v, size_t index) {
+						[&](glm::vec2 v, size_t index)
+						{
 							vertices[initial_vtx + index].uv_x = v.x;
 							vertices[initial_vtx + index].uv_y = v.y;
 						});
@@ -368,25 +381,30 @@ namespace lc
 
 				// load vertex colors
 				auto colors = p.findAttribute("COLOR_0");
-				if (colors != p.attributes.end()) {
+				if (colors != p.attributes.end())
+				{
 
 					fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).accessorIndex],
-						[&](glm::vec4 v, size_t index) {
+						[&](glm::vec4 v, size_t index)
+						{
 							vertices[initial_vtx + index].color = v;
 						});
 				}
 
-				if (p.materialIndex.has_value()) {
+				if (p.materialIndex.has_value())
+				{
 					new_surface.material = materials[p.materialIndex.value()];
 				}
-				else {
+				else
+				{
 					new_surface.material = materials[0];
 				}
 
 				// loop the vertice of this surface. find min/max bounds
 				glm::vec3 min_pos = vertices[initial_vtx].position;
 				glm::vec3 max_pos = vertices[initial_vtx].position;
-				for (size_t i = initial_vtx; i < vertices.size(); i++) {
+				for (size_t i = initial_vtx; i < vertices.size(); i++)
+				{
 					min_pos = glm::min(min_pos, vertices[i].position);
 					max_pos = glm::max(max_pos, vertices[i].position);
 				}
@@ -406,7 +424,7 @@ namespace lc
 
 				new_surface.indirect_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.indirect_commands.size());
 				engine->global_mesh_buffer_.indirect_commands.push_back(cmd);
-				
+
 				new_mesh->surfaces.push_back(new_surface);
 			}
 			new_mesh->mesh_buffers = engine->UploadMesh(indices, vertices);
@@ -414,14 +432,17 @@ namespace lc
 		}
 
 		// load all nodes and their meshes
-		for (fastgltf::Node& node : gltf.nodes) {
+		for (fastgltf::Node& node : gltf.nodes)
+		{
 			std::shared_ptr<Node> new_node;
 
-			if (node.meshIndex.has_value()) {
+			if (node.meshIndex.has_value())
+			{
 				new_node = std::make_shared<MeshNode>();
 				static_cast<MeshNode*>(new_node.get())->mesh = meshes[*node.meshIndex];
 			}
-			else {
+			else
+			{
 				new_node = std::make_shared<MeshNode>();
 			}
 
@@ -429,39 +450,45 @@ namespace lc
 
 			file.nodes[node.name.c_str()];
 
-			std::visit(fastgltf::visitor{ [&](fastgltf::math::fmat4x4 matrix) {
-											  memcpy(&new_node->local_transform, matrix.data(), sizeof(matrix));
-										  },
-						   [&](fastgltf::TRS transform) {
-							   glm::vec3 tl(transform.translation[0], transform.translation[1],
-								   transform.translation[2]);
-							   glm::quat rot(transform.rotation[3], transform.rotation[0], transform.rotation[1],
-								   transform.rotation[2]);
-							   glm::vec3 sc(transform.scale[0], transform.scale[1], transform.scale[2]);
+			std::visit(fastgltf::visitor{ [&](fastgltf::math::fmat4x4 matrix)
+										 {
+											 memcpy(&new_node->local_transform, matrix.data(), sizeof(matrix));
+										 },
+										 [&](fastgltf::TRS transform)
+										 {
+											 glm::vec3 tl(transform.translation[0], transform.translation[1],
+														  transform.translation[2]);
+											 glm::quat rot(transform.rotation[3], transform.rotation[0], transform.rotation[1],
+														   transform.rotation[2]);
+											 glm::vec3 sc(transform.scale[0], transform.scale[1], transform.scale[2]);
 
-							   glm::mat4 tm = glm::translate(glm::mat4(1.f), tl);
-							   glm::mat4 rm = glm::toMat4(rot);
-							   glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
+											 glm::mat4 tm = glm::translate(glm::mat4(1.f), tl);
+											 glm::mat4 rm = glm::toMat4(rot);
+											 glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
 
-							   new_node->local_transform = tm * rm * sm;
-						   } },
+											 new_node->local_transform = tm * rm * sm;
+										 } },
 				node.transform);
 		}
 
 		// run loop again to setup transform hierarchy
-		for (int i = 0; i < gltf.nodes.size(); ++i) {
+		for (int i = 0; i < gltf.nodes.size(); ++i)
+		{
 			fastgltf::Node& node = gltf.nodes[i];
 			std::shared_ptr<Node>& scene_node = nodes[i];
 
-			for (auto& c : node.children) {
+			for (auto& c : node.children)
+			{
 				scene_node->children.push_back(nodes[c]);
 				nodes[c]->parent = scene_node;
 			}
 		}
 
 		// find the top nodes, with no parents
-		for (auto& node : nodes) {
-			if (node->parent.lock() == nullptr) {
+		for (auto& node : nodes)
+		{
+			if (node->parent.lock() == nullptr)
+			{
 				file.top_nodes.push_back(node);
 				node->RefreshTransform(glm::mat4{ 1.f });
 			}
@@ -471,7 +498,8 @@ namespace lc
 
 	void LoadedGLTF::Draw(const glm::mat4& top_matrix, DrawContext& ctx)
 	{
-		for (auto& node : top_nodes) {
+		for (auto& node : top_nodes)
+		{
 			node->Draw(top_matrix, ctx);
 		}
 	}
@@ -483,27 +511,192 @@ namespace lc
 		descriptor_pool.DestroyPools(dv);
 		creator->DestroyBuffer(material_data_buffer);
 
-		for (auto& [k, v] : meshes) {
+		for (auto& [k, v] : meshes)
+		{
 
 			creator->DestroyBuffer(v->mesh_buffers.index_buffer);
 			creator->DestroyBuffer(v->mesh_buffers.vertex_buffer);
 		}
 
-		for (auto& [k, v] : images) {
+		for (auto& [k, v] : images)
+		{
 
-			if (v.image == creator->default_images_.error_checker_board_image.image) {
-				//dont destroy the default images
+			if (v.image == creator->default_images_.error_checker_board_image.image)
+			{
+				// dont destroy the default images
 				continue;
 			}
 			creator->DestroyImage(v);
 		}
 
-		for (auto& sampler : samplers) {
+		for (auto& sampler : samplers)
+		{
 			vkDestroySampler(dv, sampler, nullptr);
 		}
+	}
+
+	void AsyncLoader::Init(enki::TaskScheduler* task_scheduler)
+	{
+		task_scheduler_ = task_scheduler;
+
+		// create command pool and command buffer
+		VkCommandPoolCreateInfo pool_create_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+													.pNext = nullptr,
+													.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+													.queueFamilyIndex = VulkanEngine::Get().main_queue_family_ };
+		VK_CHECK(vkCreateCommandPool(VulkanEngine::Get().device_, &pool_create_info, nullptr, &command_pool_));
+
+		VkCommandBufferAllocateInfo alloc_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+												  .pNext = nullptr,
+												  .commandPool = command_pool_,
+												  .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+												  .commandBufferCount = 1 };
+		VK_CHECK(vkAllocateCommandBuffers(VulkanEngine::Get().device_, &alloc_info, &transfer_cmd_));
+
+		VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .pNext = nullptr, .flags = 0 };
+		VK_CHECK(vkCreateFence(VulkanEngine::Get().device_, &fence_info, nullptr, &transfer_fence_));
+	}
+
+	void AsyncLoader::Shutdown()
+	{
+		vkDestroyFence(VulkanEngine::Get().device_, transfer_fence_, nullptr);
+		vkDestroyCommandPool(VulkanEngine::Get().device_, command_pool_, nullptr);
+
+		file_load_requests_.clear();
+		upload_requests_.clear();
+
+		task_scheduler_->WaitforAllAndShutdown();
+	}
+
+	void AsyncLoader::Update()
+	{
+		ProcessFileRequests();
+		ProcessUploadRequests();
+	}
+
+	void AsyncLoader::RequestFileLoad(const char* path, std::function<void(AllocatedImage)> callback)
+	{
+		FileLoadRequest request;
+		request.type = FileLoadRequestType::kURI;
+		strcpy(request.path, path);
+		request.callback = std::move(callback);
+		file_load_requests_.push_back(request);
+	}
+
+	void AsyncLoader::RequestImageUpload(void* data, VkExtent3D extent, VkFormat format, std::function<void(AllocatedImage)> callback)
+	{
+		UploadRequest request{};
+		request.data = data;
+		request.size = extent.width * extent.height * 4; // Assuming 4 bytes per pixel
+		request.format = format;
+		request.extent = extent;
+		request.callback = std::move(callback);
+
+		upload_requests_.push_back(request);
+	}
+
+	void AsyncLoader::RequestVectorLoad(const void* data, size_t size, std::function<void(AllocatedImage)> callback)
+	{
+
+		FileLoadRequest request;
+		request.type = FileLoadRequestType::kVector;
+		request.memory_data = data;
+		request.memory_size = size;
+		request.callback = std::move(callback);
+		file_load_requests_.push_back(request);
 
 	}
-	
+
+	void AsyncLoader::RequestBufferViewLoad(const void* data, size_t size, size_t offset, std::function<void(AllocatedImage)> callback)
+	{
+
+		FileLoadRequest request;
+		request.type = FileLoadRequestType::kBufferView;
+		request.memory_data = data;
+		request.memory_size = size;
+		request.buffer_offset = offset;
+		request.callback = std::move(callback);
+		file_load_requests_.push_back(request);
+
+	}
+
+	void AsyncLoader::ProcessFileRequests()
+	{
+		for (auto& request : file_load_requests_)
+		{
+			int width, height, channels;
+			unsigned char* data = nullptr;
+
+			if (request.type == FileLoadRequestType::kURI)
+			{
+				data = stbi_load(request.path, &width, &height, &channels, 4);
+			}
+			else if (request.type == FileLoadRequestType::kVector)
+			{
+
+				data = stbi_load_from_memory(
+					static_cast<const stbi_uc*>(request.memory_data),
+					static_cast<int>(request.memory_size),
+					&width, &height, &channels, 4);
+			}
+			else if (request.type == FileLoadRequestType::kBufferView)
+			{
+				const auto* buffer_data = static_cast<const stbi_uc*>(request.memory_data) + request.buffer_offset;
+				data = stbi_load_from_memory(
+					buffer_data,
+					static_cast<int>(request.memory_size),
+					&width, &height, &channels, 4);
+			}
+
+			if (data)
+			{
+				UploadRequest upload_request{};
+				upload_request.data = data;
+				upload_request.extent = {
+					static_cast<uint32_t>(width),
+					static_cast<uint32_t>(height),
+					1 };
+				upload_request.size = width * height * 4;
+				upload_request.format = VK_FORMAT_R8G8B8A8_UNORM;
+				upload_request.enable_mips = request.type == FileLoadRequestType::kURI;
+
+				// 包装回调以释放内存
+				upload_request.callback = [data, callback = std::move(request.callback)](AllocatedImage image)
+					{
+						callback(image);
+						stbi_image_free(data);
+					};
+
+				upload_requests_.push_back(std::move(upload_request));
+			}
+			else
+			{
+				LOGE("Failed to load image. Type: {}", static_cast<int>(request.type));
+			}
+		}
+		file_load_requests_.clear();
+	}
+
+	void AsyncLoader::ProcessUploadRequests()
+	{
+		for (auto& request : upload_requests_)
+		{
+			AllocatedImage new_image = VulkanEngine::Get().CreateImage(
+				request.data,
+				request.extent,
+				request.format,
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+				request.enable_mips
+			);
+
+			request.callback(new_image);
+		}
+
+		if (!upload_requests_.empty())
+		{
+			LOGI("Processed {} upload requests", upload_requests_.size());
+			upload_requests_.clear();
+		}
+	}
+
 }
-
-

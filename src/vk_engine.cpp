@@ -11,8 +11,6 @@
 #include <vk_profiler.h>
 #include <vk_loader.h>
 
-#include "asynchronous_loader.h"
-
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_vulkan.h"
@@ -116,6 +114,8 @@ void VulkanEngine::Init()
 
 	InitDefaultData();
 
+	InitTaskSystem();
+
 	main_camera_.velocity_ = glm::vec3(0.f);
 	main_camera_.position_ = glm::vec3(0, 0, 5);
 
@@ -128,11 +128,11 @@ void VulkanEngine::Init()
 	assert(structure_file.has_value());
 
 	global_mesh_buffer_.UploadToGPU(this);
-	main_deletion_queue_.PushFunction([=]() {
+	main_deletion_queue_.PushFunction([=]()
+									  {
 		DestroyBuffer(global_mesh_buffer_.vertex_buffer);
 		DestroyBuffer(global_mesh_buffer_.index_buffer);
-		DestroyBuffer(global_mesh_buffer_.indirect_command_buffer);
-		});
+		DestroyBuffer(global_mesh_buffer_.indirect_command_buffer); });
 
 	loaded_scenes_["structure"] = *structure_file;
 
@@ -202,9 +202,9 @@ void VulkanEngine::Draw()
 		return;
 	}
 
-	//VkCommandBuffer cmd = GetCurrentFrame().main_command_buffer;
+	// VkCommandBuffer cmd = GetCurrentFrame().main_command_buffer;
 	command_buffer_manager_.ResetPools(frame_number_ % kFRAME_OVERLAP);
-	CommandBuffer* cmd = command_buffer_manager_.GetCommandBuffer(frame_number_ % kFRAME_OVERLAP, 0, true);
+	CommandBuffer *cmd = command_buffer_manager_.GetCommandBuffer(frame_number_ % kFRAME_OVERLAP, 0, true);
 
 	draw_extent_.width = static_cast<uint32_t>(std::min(swapchain_extent_.width, draw_image_.extent.width) * render_scale_);
 	draw_extent_.height = static_cast<uint32_t>(std::min(swapchain_extent_.height, draw_image_.extent.height) * render_scale_);
@@ -387,9 +387,8 @@ void VulkanEngine::Run()
 
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)> &&function)
 {
-	command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd) {
-		function(cmd->GetCommandBuffer());
-		});
+	command_buffer_manager_.ImmediateSubmit([&](CommandBuffer *cmd)
+											{ function(cmd->GetCommandBuffer()); });
 }
 
 AllocatedBufferUntyped VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
@@ -507,8 +506,8 @@ AllocatedImage VulkanEngine::CreateImage(void *data, VkExtent3D size, VkFormat f
 
 	AllocatedImage new_image = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
 
-	command_buffer_manager_.ImmediateSubmit(([&](CommandBuffer* cmd)
-		{
+	command_buffer_manager_.ImmediateSubmit(([&](CommandBuffer *cmd)
+											 {
 			cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 			VkBufferImageCopy copy_region{};
@@ -1104,20 +1103,32 @@ void VulkanEngine::InitDefaultData()
 
 void VulkanEngine::InitTaskSystem()
 {
-	task_config_.numTaskThreadsToCreate = 4;
-
+	enki::TaskSchedulerConfig config;
+	// In this example we create more threads than the hardware can run,
+	// because the IO thread will spend most of it's time idle or blocked
+	// and therefore not scheduled for CPU time by the OS
+	config.numTaskThreadsToCreate += 1;
 	task_scheduler_.Initialize(task_config_);
 
+	async_loader_.Init(&task_scheduler_);
 	// Create IO threads at the end
-	lc::tools::RunPinnedTaskLoopTask run_pinned_task;
+
 	run_pinned_task.threadNum = task_scheduler_.GetNumTaskThreads() - 1;
+	run_pinned_task.task_scheduler = &task_scheduler_;
 	task_scheduler_.AddPinnedTask(&run_pinned_task);
 
 	// Create the actual task responsible for asynchronous loading
 	// associating it with the same thread as the pinned task
-	lc::tools::AsynchronousLoadTask async_load_task;
 	async_load_task.threadNum = run_pinned_task.threadNum;
+	async_load_task.async_loader = &async_loader_;
+	async_load_task.task_scheduler = &task_scheduler_;
 	task_scheduler_.AddPinnedTask(&async_load_task);
+
+	main_deletion_queue_.PushFunction([&]()
+									  {
+		run_pinned_task.execute = false;
+		async_load_task.execute = false;
+		async_loader_.Shutdown(); });
 }
 
 void VulkanEngine::ResizeSwapchain()
@@ -1167,7 +1178,7 @@ void VulkanEngine::DestroySwapchain()
 	}
 }
 
-void VulkanEngine::DrawBackground(CommandBuffer* cmd)
+void VulkanEngine::DrawBackground(CommandBuffer *cmd)
 {
 	vkutils::VulkanScopeTimer timer(cmd->GetCommandBuffer(), profiler_, "Background");
 	vkutils::VulkanPipelineStatRecorder timers(cmd->GetCommandBuffer(), profiler_, "Background Primitives");
@@ -1179,7 +1190,7 @@ void VulkanEngine::DrawBackground(CommandBuffer* cmd)
 	cmd->Dispatch(static_cast<uint32_t>(std::ceil(draw_extent_.width / 16.0)), static_cast<uint32_t>(std::ceil(draw_extent_.height / 16.0)), 1);
 }
 
-void VulkanEngine::DrawImGui(CommandBuffer* cmd, VkImageView target_image_view)
+void VulkanEngine::DrawImGui(CommandBuffer *cmd, VkImageView target_image_view)
 {
 	vkutils::VulkanScopeTimer timer(cmd->command_buffer_, profiler_, "ImGui");
 	vkutils::VulkanPipelineStatRecorder timers(cmd->command_buffer_, profiler_, "ImGui Primitives");
@@ -1193,7 +1204,7 @@ void VulkanEngine::DrawImGui(CommandBuffer* cmd, VkImageView target_image_view)
 	cmd->EndRendering();
 }
 
-void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
+void VulkanEngine::DrawGeometry(CommandBuffer *cmd)
 {
 	vkutils::VulkanScopeTimer timer(cmd->command_buffer_, profiler_, "Geometry");
 	vkutils::VulkanPipelineStatRecorder timers(cmd->command_buffer_, profiler_, "Geometry Primitives");
@@ -1234,7 +1245,6 @@ void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 	VkRenderingAttachmentInfo color_attachment = vkinit::AttachmentInfo(draw_image_.view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depth_attachment = vkinit::DepthAttachmentInfo(depth_image_.view, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-	
 	VkRenderingInfo render_info = vkinit::RenderingInfo(draw_extent_, &color_attachment, &depth_attachment);
 	cmd->BeginRendering(render_info);
 
@@ -1273,7 +1283,7 @@ void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 
 	cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &global_descriptor, 0, nullptr);
 	cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
-	
+
 	auto Draw = [&](const RenderObject &r)
 	{
 		if (r.material != last_material)
@@ -1291,9 +1301,8 @@ void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 
 			// bind the material descriptor set
 			cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 1, 1, &r.material->set, 0, nullptr);
-
 		}
-		
+
 #if LC_DRAW_INDIRECT
 		GPUDrawIndirectPushConstants gpu_draw_indirect_push_constants;
 		gpu_draw_indirect_push_constants.world_matrix = r.transform;
@@ -1504,29 +1513,30 @@ void MeshNode::Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
 	Node::Draw(top_matrix, ctx);
 }
 
-void GlobalMeshBuffer::UploadToGPU(VulkanEngine* engine)
+void GlobalMeshBuffer::UploadToGPU(VulkanEngine *engine)
 {
 	LOGI("Uploading mesh data to GPU");
 	size_t vertex_buffer_size = vertex_data.size() * sizeof(Vertex);
 	size_t index_buffer_size = index_data.size() * sizeof(uint32_t);
 
 	vertex_buffer = engine->CreateBuffer(vertex_buffer_size,
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+										 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+										 VMA_MEMORY_USAGE_GPU_ONLY);
 
 	index_buffer = engine->CreateBuffer(index_buffer_size,
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+										VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+										VMA_MEMORY_USAGE_GPU_ONLY);
 
 	AllocatedBufferUntyped staging_buffer = engine->CreateBuffer(vertex_buffer_size + index_buffer_size,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VMA_MEMORY_USAGE_CPU_ONLY);
+																 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+																 VMA_MEMORY_USAGE_CPU_ONLY);
 
-	void* data = staging_buffer.allocation->GetMappedData();
+	void *data = staging_buffer.allocation->GetMappedData();
 	memcpy(data, vertex_data.data(), vertex_buffer_size);
-	memcpy((char*)data + vertex_buffer_size, index_data.data(), index_buffer_size);
+	memcpy((char *)data + vertex_buffer_size, index_data.data(), index_buffer_size);
 
-	engine->ImmediateSubmit([&](VkCommandBuffer cmd) {
+	engine->ImmediateSubmit([&](VkCommandBuffer cmd)
+							{
 		VkBufferCopy vertex_copy{ 0 };
 		vertex_copy.dstOffset = 0;
 		vertex_copy.srcOffset = 0;
@@ -1539,32 +1549,31 @@ void GlobalMeshBuffer::UploadToGPU(VulkanEngine* engine)
 		index_copy.srcOffset = vertex_buffer_size;
 		index_copy.size = index_buffer_size;
 
-		vkCmdCopyBuffer(cmd, staging_buffer.buffer, index_buffer.buffer, 1, &index_copy);
-		});
+		vkCmdCopyBuffer(cmd, staging_buffer.buffer, index_buffer.buffer, 1, &index_copy); });
 
 	engine->DestroyBuffer(staging_buffer);
 
 	size_t command_buffer_size = indirect_commands.size() * sizeof(VkDrawIndexedIndirectCommand);
 
 	indirect_command_buffer = engine->CreateBuffer(command_buffer_size,
-		VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+												   VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+												   VMA_MEMORY_USAGE_GPU_ONLY);
 
 	staging_buffer = engine->CreateBuffer(command_buffer_size,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VMA_MEMORY_USAGE_CPU_ONLY);
+										  VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+										  VMA_MEMORY_USAGE_CPU_ONLY);
 
 	data = staging_buffer.allocation->GetMappedData();
 	memcpy(data, indirect_commands.data(), command_buffer_size);
 
-	engine->ImmediateSubmit([&](VkCommandBuffer cmd) {
+	engine->ImmediateSubmit([&](VkCommandBuffer cmd)
+							{
 		VkBufferCopy copy_region{};
 		copy_region.srcOffset = 0;
 		copy_region.dstOffset = 0;
 		copy_region.size = command_buffer_size;
 
-		vkCmdCopyBuffer(cmd, staging_buffer.buffer, indirect_command_buffer.buffer, 1, &copy_region);
-		});
+		vkCmdCopyBuffer(cmd, staging_buffer.buffer, indirect_command_buffer.buffer, 1, &copy_region); });
 
 	engine->DestroyBuffer(staging_buffer);
 }
