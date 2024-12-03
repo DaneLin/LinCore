@@ -70,8 +70,7 @@ namespace lc
 
 		void RequestVectorLoad(const void* data, size_t size, std::function<void(AllocatedImage)> callback);
 
-		void RequestBufferViewLoad(const void* data, size_t size, size_t offset,
-			std::function<void(AllocatedImage)> callback);
+		void RequestBufferViewLoad(const void* data, size_t size, size_t offset, std::function<void(AllocatedImage)> callback);
 
 	private:
 		enki::TaskScheduler *task_scheduler_{nullptr};

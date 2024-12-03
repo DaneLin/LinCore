@@ -19,15 +19,15 @@
 
 namespace lc
 {
-	std::optional<AllocatedImage> LoadImage(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image, const std::filesystem::path& gltf_parent_path)
+	std::optional<AllocatedImage> LoadImage(VulkanEngine *engine, fastgltf::Asset &asset, fastgltf::Image &image, const std::filesystem::path &gltf_parent_path)
 	{
 		auto promise = std::make_shared<std::promise<std::optional<AllocatedImage>>>();
 		auto future = promise->get_future();
 
 		std::visit(
 			fastgltf::visitor{
-				[](auto& arg) {},
-				[&](fastgltf::sources::URI& file_path)
+				[](auto &arg) {},
+				[&](fastgltf::sources::URI &file_path)
 				{
 					assert(file_path.fileByteOffset == 0);
 					assert(file_path.uri.isLocalPath());
@@ -50,7 +50,7 @@ namespace lc
 															  }
 														  });
 				},
-				[&](fastgltf::sources::Vector& vector)
+				[&](fastgltf::sources::Vector &vector)
 				{
 					engine->async_loader_.RequestVectorLoad(
 						vector.bytes.data(),
@@ -67,13 +67,13 @@ namespace lc
 							}
 						});
 				},
-				[&](fastgltf::sources::BufferView& view)
+				[&](fastgltf::sources::BufferView &view)
 				{
-					auto& bufferView = asset.bufferViews[view.bufferViewIndex];
-					auto& buffer = asset.buffers[bufferView.bufferIndex];
+					auto &bufferView = asset.bufferViews[view.bufferViewIndex];
+					auto &buffer = asset.buffers[bufferView.bufferIndex];
 
-					std::visit(fastgltf::visitor{[](auto& arg) {},
-												 [&](fastgltf::sources::Array& vector)
+					std::visit(fastgltf::visitor{[](auto &arg) {},
+												 [&](fastgltf::sources::Array &vector)
 												 {
 													 engine->async_loader_.RequestBufferViewLoad(
 														 vector.bytes.data(),
@@ -92,7 +92,7 @@ namespace lc
 														 });
 												 }},
 							   buffer.data);
-				} },
+				}},
 			image.data);
 
 		return future.get();
@@ -134,7 +134,7 @@ namespace lc
 
 	void AddMeshBufferToGlobalBuffers(std::span<uint32_t> indices, std::span<Vertex> vertices)
 	{
-		VulkanEngine* engine = &VulkanEngine::Get();
+		VulkanEngine *engine = &VulkanEngine::Get();
 
 		uint32_t vertex_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.vertex_data.size());
 		uint32_t index_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.index_data.size());
@@ -143,14 +143,14 @@ namespace lc
 		engine->global_mesh_buffer_.index_data.insert(engine->global_mesh_buffer_.index_data.end(), indices.begin(), indices.end());
 	}
 
-	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine* engine, std::string_view file_path)
+	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine *engine, std::string_view file_path)
 	{
 		// TODO : load gltf in a separate thread
 		LOGI("Loading GLTF: {}", file_path);
 
 		std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
 		scene->creator = engine;
-		LoadedGLTF& file = *scene.get();
+		LoadedGLTF &file = *scene.get();
 
 		fastgltf::Parser parser{};
 
@@ -194,16 +194,16 @@ namespace lc
 		}
 
 		// we can stimate the descriptors we will need accurately
-		std::vector<lc::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
+		std::vector<lc::DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
 																			 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-																			 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1} };
+																			 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
 
 		file.descriptor_pool.Init(engine->device_, static_cast<uint32_t>(gltf.materials.size()), sizes);
 
 		// load sampler
-		for (fastgltf::Sampler& sampler : gltf.samplers)
+		for (fastgltf::Sampler &sampler : gltf.samplers)
 		{
-			VkSamplerCreateInfo sampler_create_info = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr };
+			VkSamplerCreateInfo sampler_create_info = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr};
 			sampler_create_info.maxLod = VK_LOD_CLAMP_NONE;
 			sampler_create_info.minLod = 0;
 
@@ -226,7 +226,7 @@ namespace lc
 		std::vector<std::shared_ptr<GLTFMaterial>> materials;
 
 		// load all textures
-		for (fastgltf::Image& image : gltf.images)
+		for (fastgltf::Image &image : gltf.images)
 		{
 			std::optional<AllocatedImage> img = LoadImage(engine, gltf, image, path.parent_path());
 
@@ -248,12 +248,12 @@ namespace lc
 		}
 
 		file.material_data_buffer = engine->CreateBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size(),
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VMA_MEMORY_USAGE_CPU_TO_GPU);
+														 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+														 VMA_MEMORY_USAGE_CPU_TO_GPU);
 		int data_index = 0;
-		GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants*)file.material_data_buffer.info.pMappedData;
+		GLTFMetallic_Roughness::MaterialConstants *sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants *)file.material_data_buffer.info.pMappedData;
 
-		for (fastgltf::Material& mat : gltf.materials)
+		for (fastgltf::Material &mat : gltf.materials)
 		{
 			std::shared_ptr<GLTFMaterial> new_mat = std::make_shared<GLTFMaterial>();
 			materials.push_back(new_mat);
@@ -310,7 +310,7 @@ namespace lc
 		std::vector<Vertex> vertices;
 		int mesh_index = 0;
 
-		for (fastgltf::Mesh& mesh : gltf.meshes)
+		for (fastgltf::Mesh &mesh : gltf.meshes)
 		{
 			std::shared_ptr<MeshAsset> new_mesh = std::make_shared<MeshAsset>();
 			meshes.push_back(new_mesh);
@@ -323,7 +323,7 @@ namespace lc
 			size_t global_index_offset = engine->global_mesh_buffer_.index_data.size();
 			size_t global_vertex_offset = engine->global_mesh_buffer_.vertex_data.size();
 
-			for (auto&& p : mesh.primitives)
+			for (auto &&p : mesh.primitives)
 			{
 				GeoSurface new_surface;
 				new_surface.start_index = (uint32_t)indices.size();
@@ -333,32 +333,32 @@ namespace lc
 
 				// load indexes
 				{
-					fastgltf::Accessor& indexaccessor = gltf.accessors[p.indicesAccessor.value()];
+					fastgltf::Accessor &indexaccessor = gltf.accessors[p.indicesAccessor.value()];
 					indices.reserve(indices.size() + indexaccessor.count);
 
 					fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
-						[&](std::uint32_t idx)
-						{
-							indices.push_back(static_cast<uint32_t>(idx + initial_vtx));
-						});
+															 [&](std::uint32_t idx)
+															 {
+																 indices.push_back(static_cast<uint32_t>(idx + initial_vtx));
+															 });
 				}
 
 				// load vertex positions
 				{
-					fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
+					fastgltf::Accessor &posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
 					vertices.resize(vertices.size() + posAccessor.count);
 
 					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
-						[&](glm::vec3 v, size_t index)
-						{
-							Vertex newvtx;
-							newvtx.position = v;
-							newvtx.normal = { 1, 0, 0 };
-							newvtx.color = glm::vec4{ 1.f };
-							newvtx.uv_x = 0;
-							newvtx.uv_y = 0;
-							vertices[initial_vtx + index] = newvtx;
-						});
+																  [&](glm::vec3 v, size_t index)
+																  {
+																	  Vertex newvtx;
+																	  newvtx.position = v;
+																	  newvtx.normal = {1, 0, 0};
+																	  newvtx.color = glm::vec4{1.f};
+																	  newvtx.uv_x = 0;
+																	  newvtx.uv_y = 0;
+																	  vertices[initial_vtx + index] = newvtx;
+																  });
 				}
 
 				// load vertex normals
@@ -367,10 +367,10 @@ namespace lc
 				{
 
 					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).accessorIndex],
-						[&](glm::vec3 v, size_t index)
-						{
-							vertices[initial_vtx + index].normal = v;
-						});
+																  [&](glm::vec3 v, size_t index)
+																  {
+																	  vertices[initial_vtx + index].normal = v;
+																  });
 				}
 
 				// load UVs
@@ -379,11 +379,11 @@ namespace lc
 				{
 
 					fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).accessorIndex],
-						[&](glm::vec2 v, size_t index)
-						{
-							vertices[initial_vtx + index].uv_x = v.x;
-							vertices[initial_vtx + index].uv_y = v.y;
-						});
+																  [&](glm::vec2 v, size_t index)
+																  {
+																	  vertices[initial_vtx + index].uv_x = v.x;
+																	  vertices[initial_vtx + index].uv_y = v.y;
+																  });
 				}
 
 				// load vertex colors
@@ -392,10 +392,10 @@ namespace lc
 				{
 
 					fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).accessorIndex],
-						[&](glm::vec4 v, size_t index)
-						{
-							vertices[initial_vtx + index].color = v;
-						});
+																  [&](glm::vec4 v, size_t index)
+																  {
+																	  vertices[initial_vtx + index].color = v;
+																  });
 				}
 
 				if (p.materialIndex.has_value())
@@ -439,14 +439,14 @@ namespace lc
 		}
 
 		// load all nodes and their meshes
-		for (fastgltf::Node& node : gltf.nodes)
+		for (fastgltf::Node &node : gltf.nodes)
 		{
 			std::shared_ptr<Node> new_node;
 
 			if (node.meshIndex.has_value())
 			{
 				new_node = std::make_shared<MeshNode>();
-				static_cast<MeshNode*>(new_node.get())->mesh = meshes[*node.meshIndex];
+				static_cast<MeshNode *>(new_node.get())->mesh = meshes[*node.meshIndex];
 			}
 			else
 			{
@@ -457,7 +457,7 @@ namespace lc
 
 			file.nodes[node.name.c_str()];
 
-			std::visit(fastgltf::visitor{ [&](fastgltf::math::fmat4x4 matrix)
+			std::visit(fastgltf::visitor{[&](fastgltf::math::fmat4x4 matrix)
 										 {
 											 memcpy(&new_node->local_transform, matrix.data(), sizeof(matrix));
 										 },
@@ -474,17 +474,17 @@ namespace lc
 											 glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
 
 											 new_node->local_transform = tm * rm * sm;
-										 } },
-				node.transform);
+										 }},
+					   node.transform);
 		}
 
 		// run loop again to setup transform hierarchy
 		for (int i = 0; i < gltf.nodes.size(); ++i)
 		{
-			fastgltf::Node& node = gltf.nodes[i];
-			std::shared_ptr<Node>& scene_node = nodes[i];
+			fastgltf::Node &node = gltf.nodes[i];
+			std::shared_ptr<Node> &scene_node = nodes[i];
 
-			for (auto& c : node.children)
+			for (auto &c : node.children)
 			{
 				scene_node->children.push_back(nodes[c]);
 				nodes[c]->parent = scene_node;
@@ -492,20 +492,20 @@ namespace lc
 		}
 
 		// find the top nodes, with no parents
-		for (auto& node : nodes)
+		for (auto &node : nodes)
 		{
 			if (node->parent.lock() == nullptr)
 			{
 				file.top_nodes.push_back(node);
-				node->RefreshTransform(glm::mat4{ 1.f });
+				node->RefreshTransform(glm::mat4{1.f});
 			}
 		}
 		return scene;
 	}
 
-	void LoadedGLTF::Draw(const glm::mat4& top_matrix, DrawContext& ctx)
+	void LoadedGLTF::Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
 	{
-		for (auto& node : top_nodes)
+		for (auto &node : top_nodes)
 		{
 			node->Draw(top_matrix, ctx);
 		}
@@ -518,14 +518,14 @@ namespace lc
 		descriptor_pool.DestroyPools(dv);
 		creator->DestroyBuffer(material_data_buffer);
 
-		for (auto& [k, v] : meshes)
+		for (auto &[k, v] : meshes)
 		{
 
 			creator->DestroyBuffer(v->mesh_buffers.index_buffer);
 			creator->DestroyBuffer(v->mesh_buffers.vertex_buffer);
 		}
 
-		for (auto& [k, v] : images)
+		for (auto &[k, v] : images)
 		{
 
 			if (v.image == creator->default_images_.error_checker_board_image.image)
@@ -536,13 +536,13 @@ namespace lc
 			creator->DestroyImage(v);
 		}
 
-		for (auto& sampler : samplers)
+		for (auto &sampler : samplers)
 		{
 			vkDestroySampler(dv, sampler, nullptr);
 		}
 	}
 
-	void AsyncLoader::Init(enki::TaskScheduler* task_scheduler)
+	void AsyncLoader::Init(enki::TaskScheduler *task_scheduler)
 	{
 		task_scheduler_ = task_scheduler;
 	}
@@ -561,7 +561,7 @@ namespace lc
 		ProcessUploadRequests();
 	}
 
-	void AsyncLoader::RequestFileLoad(const char* path, std::function<void(AllocatedImage)> callback)
+	void AsyncLoader::RequestFileLoad(const char *path, std::function<void(AllocatedImage)> callback)
 	{
 		FileLoadRequest request;
 		request.type = FileLoadRequestType::kURI;
@@ -570,7 +570,7 @@ namespace lc
 		file_load_requests_.push_back(request);
 	}
 
-	void AsyncLoader::RequestImageUpload(void* data, VkExtent3D extent, VkFormat format, std::function<void(AllocatedImage)> callback)
+	void AsyncLoader::RequestImageUpload(void *data, VkExtent3D extent, VkFormat format, std::function<void(AllocatedImage)> callback)
 	{
 		UploadRequest request{};
 		request.data = data;
@@ -582,7 +582,7 @@ namespace lc
 		upload_requests_.push_back(request);
 	}
 
-	void AsyncLoader::RequestVectorLoad(const void* data, size_t size, std::function<void(AllocatedImage)> callback)
+	void AsyncLoader::RequestVectorLoad(const void *data, size_t size, std::function<void(AllocatedImage)> callback)
 	{
 
 		FileLoadRequest request;
@@ -591,10 +591,9 @@ namespace lc
 		request.memory_size = size;
 		request.callback = std::move(callback);
 		file_load_requests_.push_back(request);
-
 	}
 
-	void AsyncLoader::RequestBufferViewLoad(const void* data, size_t size, size_t offset, std::function<void(AllocatedImage)> callback)
+	void AsyncLoader::RequestBufferViewLoad(const void *data, size_t size, size_t offset, std::function<void(AllocatedImage)> callback)
 	{
 
 		FileLoadRequest request;
@@ -604,15 +603,14 @@ namespace lc
 		request.buffer_offset = offset;
 		request.callback = std::move(callback);
 		file_load_requests_.push_back(request);
-
 	}
 
 	void AsyncLoader::ProcessFileRequests()
 	{
-		for (auto& request : file_load_requests_)
+		for (auto &request : file_load_requests_)
 		{
 			int width, height, channels;
-			unsigned char* data = nullptr;
+			unsigned char *data = nullptr;
 
 			if (request.type == FileLoadRequestType::kURI)
 			{
@@ -622,13 +620,13 @@ namespace lc
 			{
 
 				data = stbi_load_from_memory(
-					static_cast<const stbi_uc*>(request.memory_data),
+					static_cast<const stbi_uc *>(request.memory_data),
 					static_cast<int>(request.memory_size),
 					&width, &height, &channels, 4);
 			}
 			else if (request.type == FileLoadRequestType::kBufferView)
 			{
-				const auto* buffer_data = static_cast<const stbi_uc*>(request.memory_data) + request.buffer_offset;
+				const auto *buffer_data = static_cast<const stbi_uc *>(request.memory_data) + request.buffer_offset;
 				data = stbi_load_from_memory(
 					buffer_data,
 					static_cast<int>(request.memory_size),
@@ -642,17 +640,17 @@ namespace lc
 				upload_request.extent = {
 					static_cast<uint32_t>(width),
 					static_cast<uint32_t>(height),
-					1 };
+					1};
 				upload_request.size = width * height * 4;
 				upload_request.format = VK_FORMAT_R8G8B8A8_UNORM;
 				upload_request.enable_mips = false;
 
 				// 包装回调以释放内存
 				upload_request.callback = [data, callback = std::move(request.callback)](AllocatedImage image)
-					{
-						callback(image);
-						stbi_image_free(data);
-					};
+				{
+					callback(image);
+					stbi_image_free(data);
+				};
 
 				upload_requests_.push_back(std::move(upload_request));
 			}
@@ -666,15 +664,45 @@ namespace lc
 
 	void AsyncLoader::ProcessUploadRequests()
 	{
-		for (auto& request : upload_requests_)
+		for (auto &request : upload_requests_)
 		{
-			AllocatedImage new_image = VulkanEngine::Get().CreateImage(
-				request.data,
-				request.extent,
-				request.format,
-				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-				request.enable_mips
-			);
+			size_t data_size = request.extent.depth * request.extent.width * request.extent.height * 4;
+			AllocatedBufferUntyped upload_buffer = VulkanEngine::Get().CreateBuffer(data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+			memcpy(upload_buffer.info.pMappedData, request.data, data_size);
+
+			AllocatedImage new_image = VulkanEngine::Get().CreateImage(request.extent, request.format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, request.enable_mips);
+
+			VulkanEngine::Get().command_buffer_manager_.ImmediateSubmit(([&](CommandBuffer *cmd)
+				{
+					cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+					VkBufferImageCopy copy_region{};
+					copy_region.bufferOffset = 0;
+					copy_region.bufferRowLength = 0;
+					copy_region.bufferImageHeight = 0;
+
+					copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+					copy_region.imageSubresource.mipLevel = 0;
+					copy_region.imageSubresource.baseArrayLayer = 0;
+					copy_region.imageSubresource.layerCount = 1;
+					copy_region.imageExtent = request.extent;
+
+					// copy the buffer into the image
+					vkCmdCopyBufferToImage(cmd->command_buffer_, upload_buffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+
+					if (request.enable_mips)
+					{
+						cmd->GenerateMipmaps(new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
+					}
+					else
+					{
+						cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VulkanEngine::Get().transfer_queue_family_, VulkanEngine::Get().main_queue_family_);
+					} 
+				}),
+				VulkanEngine::Get().transfer_queue_);
+
+			VulkanEngine::Get().DestroyBuffer(upload_buffer);
 
 			request.callback(new_image);
 		}

@@ -204,6 +204,7 @@ public:
 	std::vector<ComputeEffect> background_effects_;
 
 	int current_background_effect_{ 0 };
+	int current_scene_{ 0 };
 
 	GPUSceneData scene_data_;
 
@@ -249,6 +250,8 @@ public:
 	lc::AsyncLoader async_loader_;
 
 	GlobalMeshBuffer global_mesh_buffer_;
+
+	CommandBufferManager command_buffer_manager_;
 
 public:
 
@@ -331,5 +334,5 @@ private:
 
 	VkExtent2D swapchain_extent_;
 
-	CommandBufferManager command_buffer_manager_;
+	
 };

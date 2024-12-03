@@ -122,19 +122,30 @@ void VulkanEngine::Init()
 	main_camera_.pitch_ = 0;
 	main_camera_.yaw_ = 1.5;
 
-	//std::string structure_path = GetAssetPath("assets/structure.glb");
-	std::string structure_path = GetAssetPath("assets/Sponza/glTF/Sponza.gltf");
-	auto structure_file = lc::LoadGltf(this, structure_path);
+	std::vector<std::string> structure_paths= {
+		GetAssetPath("assets/structure.glb"),
+		GetAssetPath("assets/Sponza/glTF/Sponza.gltf")
+	};
 
-	assert(structure_file.has_value());
+	std::vector<std::optional<std::shared_ptr<lc::LoadedGLTF>>> loaded_scenes;
+	for(auto &path : structure_paths)
+	{
+		auto scene = lc::LoadGltf(this, path);
+		assert(scene.has_value());
+		loaded_scenes.push_back(scene);
+	}
 
 	global_mesh_buffer_.UploadToGPU(this);
+
 	main_deletion_queue_.PushFunction([=](){
 		DestroyBuffer(global_mesh_buffer_.vertex_buffer);
 		DestroyBuffer(global_mesh_buffer_.index_buffer);
 		DestroyBuffer(global_mesh_buffer_.indirect_command_buffer); });
 
-	loaded_scenes_["structure"] = *structure_file;
+	for (size_t i = 0; i < loaded_scenes.size(); ++i)
+	{
+		loaded_scenes_[std::to_string(i)] = *loaded_scenes[i];
+	}
 
 	// everything went fine
 	is_initialized_ = true;
@@ -324,6 +335,7 @@ void VulkanEngine::Run()
 			ImGui::Text("Selected effect: ", selected.name);
 
 			ImGui::SliderInt("Effect Index: ", &current_background_effect_, 0, static_cast<int>(background_effects_.size() - 1));
+			ImGui::SliderInt("Scene Index: ", &current_scene_, 0, static_cast<int>(loaded_scenes_.size() - 1));
 
 			ImGui::InputFloat4("data1", (float *)&selected.data.data1);
 			ImGui::InputFloat4("data2", (float *)&selected.data.data2);
@@ -1387,7 +1399,11 @@ void VulkanEngine::UpdateScene()
 	scene_data_.sunlight_color = glm::vec4(1.f);
 	scene_data_.sunlight_direction = glm::vec4(0, 1, 0.5, 1.f);
 
-	loaded_scenes_["structure"]->Draw(glm::mat4{1.0f}, main_draw_context_);
+	std::string scene_name = std::to_string(current_scene_);
+	if (loaded_scenes_.find(scene_name) != loaded_scenes_.end())
+	{
+		loaded_scenes_[scene_name]->Draw(glm::mat4{1.0f}, main_draw_context_);
+	}
 
 	auto end = std::chrono::system_clock::now();
 
