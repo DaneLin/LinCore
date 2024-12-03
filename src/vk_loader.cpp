@@ -545,29 +545,53 @@ namespace lc
 	void AsyncLoader::Init(enki::TaskScheduler *task_scheduler)
 	{
 		task_scheduler_ = task_scheduler;
+		state_->state = AsyncLoaderState::State::Running;
 	}
 
 	void AsyncLoader::Shutdown()
 	{
-		file_load_requests_.clear();
-		upload_requests_.clear();
+		{
+			std::unique_lock<std::mutex> lock(state_->mutex);
+			if (state_->state != AsyncLoaderState::State::Running) return;
+			state_->state = AsyncLoaderState::State::Stopping;
+		}
+		state_->cv.notify_all();
 
-		task_scheduler_->WaitforAllAndShutdown();
+		while (true) {
+			std::unique_lock<std::mutex> lock(request_mutex_);
+			if (upload_requests_.empty() && file_load_requests_.empty()) {
+				state_->state = AsyncLoaderState::State::Stopped;
+				break;
+			}
+			state_->cv.wait_for(lock, std::chrono::milliseconds(100));
+		}
 	}
 
 	void AsyncLoader::Update()
 	{
+		if (state_->state != AsyncLoaderState::State::Running) return;
+
 		ProcessFileRequests();
 		ProcessUploadRequests();
+
+		if (file_load_requests_.empty() && upload_requests_.empty()) {
+			std::unique_lock<std::mutex> lock(state_->mutex);
+			state_->cv.wait_for(lock, std::chrono::milliseconds(16),
+				[this] { return state_->state != AsyncLoaderState::State::Running; });
+		}
 	}
 
 	void AsyncLoader::RequestFileLoad(const char *path, std::function<void(AllocatedImage)> callback)
 	{
+		if (state_->state != AsyncLoaderState::State::Running) return;
+
+		std::lock_guard<std::mutex> lock(request_mutex_);
 		FileLoadRequest request;
 		request.type = FileLoadRequestType::kURI;
 		strcpy(request.path, path);
 		request.callback = std::move(callback);
 		file_load_requests_.push_back(request);
+		state_->cv.notify_one();
 	}
 
 	void AsyncLoader::RequestImageUpload(void *data, VkExtent3D extent, VkFormat format, std::function<void(AllocatedImage)> callback)
@@ -584,18 +608,23 @@ namespace lc
 
 	void AsyncLoader::RequestVectorLoad(const void *data, size_t size, std::function<void(AllocatedImage)> callback)
 	{
+		if (state_->state != AsyncLoaderState::State::Running) return;
 
+		std::lock_guard<std::mutex> lock(request_mutex_);
 		FileLoadRequest request;
 		request.type = FileLoadRequestType::kVector;
 		request.memory_data = data;
 		request.memory_size = size;
 		request.callback = std::move(callback);
 		file_load_requests_.push_back(request);
+		state_->cv.notify_one();
 	}
 
 	void AsyncLoader::RequestBufferViewLoad(const void *data, size_t size, size_t offset, std::function<void(AllocatedImage)> callback)
 	{
+		if (state_->state != AsyncLoaderState::State::Running) return;
 
+		std::lock_guard<std::mutex> lock(request_mutex_);
 		FileLoadRequest request;
 		request.type = FileLoadRequestType::kBufferView;
 		request.memory_data = data;
@@ -603,114 +632,118 @@ namespace lc
 		request.buffer_offset = offset;
 		request.callback = std::move(callback);
 		file_load_requests_.push_back(request);
+		state_->cv.notify_one();
 	}
 
 	void AsyncLoader::ProcessFileRequests()
 	{
-		for (auto &request : file_load_requests_)
+		std::vector<FileLoadRequest> requests;
 		{
-			int width, height, channels;
-			unsigned char *data = nullptr;
+			std::lock_guard<std::mutex> lock(request_mutex_);
+			requests = std::move(file_load_requests_);
+		}
 
-			if (request.type == FileLoadRequestType::kURI)
-			{
+		for (auto& request : requests) {
+			if (state_->state != AsyncLoaderState::State::Running) break;
+
+			int width, height, channels;
+			unsigned char* data = nullptr;
+
+			if (request.type == FileLoadRequestType::kURI) {
 				data = stbi_load(request.path, &width, &height, &channels, 4);
 			}
-			else if (request.type == FileLoadRequestType::kVector)
-			{
-
+			else if (request.type == FileLoadRequestType::kVector) {
 				data = stbi_load_from_memory(
-					static_cast<const stbi_uc *>(request.memory_data),
+					static_cast<const stbi_uc*>(request.memory_data),
 					static_cast<int>(request.memory_size),
 					&width, &height, &channels, 4);
 			}
-			else if (request.type == FileLoadRequestType::kBufferView)
-			{
-				const auto *buffer_data = static_cast<const stbi_uc *>(request.memory_data) + request.buffer_offset;
+			else if (request.type == FileLoadRequestType::kBufferView) {
+				const auto* buffer_data = static_cast<const stbi_uc*>(request.memory_data) + request.buffer_offset;
 				data = stbi_load_from_memory(
 					buffer_data,
 					static_cast<int>(request.memory_size),
 					&width, &height, &channels, 4);
 			}
 
-			if (data)
-			{
+			if (data && state_->state == AsyncLoaderState::State::Running) {
+				std::lock_guard<std::mutex> lock(request_mutex_);
+
 				UploadRequest upload_request{};
 				upload_request.data = data;
 				upload_request.extent = {
 					static_cast<uint32_t>(width),
 					static_cast<uint32_t>(height),
-					1};
+					1 };
 				upload_request.size = width * height * 4;
 				upload_request.format = VK_FORMAT_R8G8B8A8_UNORM;
 				upload_request.enable_mips = false;
 
-				// 包装回调以释放内存
-				upload_request.callback = [data, callback = std::move(request.callback)](AllocatedImage image)
-				{
+				upload_request.callback = [data, callback = std::move(request.callback)](AllocatedImage image) {
 					callback(image);
 					stbi_image_free(data);
-				};
+					};
 
 				upload_requests_.push_back(std::move(upload_request));
 			}
-			else
-			{
+			else {
 				LOGE("Failed to load image. Type: {}", static_cast<int>(request.type));
 			}
 		}
-		file_load_requests_.clear();
 	}
 
 	void AsyncLoader::ProcessUploadRequests()
 	{
-		for (auto &request : upload_requests_)
+		if (upload_requests_.empty() || state_->state != AsyncLoaderState::State::Running) return;
+
+		std::vector<UploadRequest> requests;
 		{
+			std::lock_guard<std::mutex> lock(request_mutex_);
+			requests = std::move(upload_requests_);
+		}
+
+		for (auto& request : requests) {
+			if (state_->state != AsyncLoaderState::State::Running) break;
+
+			// Process upload as before...
 			size_t data_size = request.extent.depth * request.extent.width * request.extent.height * 4;
 			AllocatedBufferUntyped upload_buffer = VulkanEngine::Get().CreateBuffer(data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
 			memcpy(upload_buffer.info.pMappedData, request.data, data_size);
 
 			AllocatedImage new_image = VulkanEngine::Get().CreateImage(request.extent, request.format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, request.enable_mips);
 
-			VulkanEngine::Get().command_buffer_manager_.ImmediateSubmit(([&](CommandBuffer *cmd)
-				{
+			VulkanEngine::Get().command_buffer_manager_.ImmediateSubmit(
+				[&](CommandBuffer* cmd) {
+					// Command buffer operations...
 					cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 					VkBufferImageCopy copy_region{};
 					copy_region.bufferOffset = 0;
 					copy_region.bufferRowLength = 0;
 					copy_region.bufferImageHeight = 0;
-
 					copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 					copy_region.imageSubresource.mipLevel = 0;
 					copy_region.imageSubresource.baseArrayLayer = 0;
 					copy_region.imageSubresource.layerCount = 1;
 					copy_region.imageExtent = request.extent;
 
-					// copy the buffer into the image
-					vkCmdCopyBufferToImage(cmd->command_buffer_, upload_buffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+					vkCmdCopyBufferToImage(cmd->command_buffer_, upload_buffer.buffer, new_image.image,
+						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
 
-					if (request.enable_mips)
-					{
+					if (request.enable_mips) {
 						cmd->GenerateMipmaps(new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
 					}
-					else
-					{
-						cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VulkanEngine::Get().transfer_queue_family_, VulkanEngine::Get().main_queue_family_);
-					} 
-				}),
+					else {
+						cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+							VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+							VulkanEngine::Get().transfer_queue_family_,
+							VulkanEngine::Get().main_queue_family_);
+					}
+				},
 				VulkanEngine::Get().transfer_queue_);
 
 			VulkanEngine::Get().DestroyBuffer(upload_buffer);
-
 			request.callback(new_image);
-		}
-
-		if (!upload_requests_.empty())
-		{
-			LOGI("Processed {} upload requests", upload_requests_.size());
-			upload_requests_.clear();
 		}
 	}
 

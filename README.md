@@ -9,9 +9,11 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 - [x] 简易CVar系统 Simple CVar System
 - [x] 无绑定资源管理 Bindless Resource Management
 - [x] 管线缓存 Pipeline Cache
+- [x] 多线程记录命令 (Secondary command buffer) / Multi-threaded command recording (Secondary command buffer)
 
 # 待实现特性 (To-Do Features)
-- [ ] 多线程渲染 Multi-threaded Rendering
+- [ ] 帧图 Frame Graph
+- [ ] 异步计算 Async Compute
 - [ ] 阴影映射 Shadow Mapping
 - [ ] 全局光照 Global Illumination
 

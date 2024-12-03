@@ -138,6 +138,20 @@ struct EngineStats {
 	float mesh_draw_time;
 };
 
+struct RenderInfo
+{
+	MaterialPipeline* last_pipeline = nullptr;
+	MaterialInstance* last_material = nullptr;
+	VkBuffer last_index_buffer = VK_NULL_HANDLE;
+
+	void Clear()
+	{
+		last_pipeline = nullptr;
+		last_material = nullptr;
+		last_index_buffer = VK_NULL_HANDLE;
+	}
+};
+
 class VulkanEngine {
 public:
 
@@ -322,6 +336,8 @@ private:
 
 	const std::string GetAssetPath(const std::string& path) const;
 
+	void DrawObject(CommandBuffer* cmd, const RenderObject& r, RenderInfo& render_info);
+
 private:
 	// swapchain stuff
 	VkSwapchainKHR swapchain_;
@@ -333,6 +349,5 @@ private:
 	std::vector<VkImageView> swapchain_image_views_;
 
 	VkExtent2D swapchain_extent_;
-
 	
 };

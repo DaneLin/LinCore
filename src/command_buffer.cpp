@@ -1,4 +1,4 @@
-#include "command_buffer.h"
+﻿#include "command_buffer.h"
 #include "vk_engine.h"
 #include "logging.h"
 
@@ -35,6 +35,7 @@ void CommandBuffer::BeginSecondary(const CommandBufferInheritanceInfo& inheritan
 		inheritance_rendering_info.rasterizationSamples = VkSampleCountFlagBits(inheritance_info.samples);
 		inheritance_rendering_info.colorAttachmentCount = inheritance_info.color_attachment_count;
 		inheritance_rendering_info.pColorAttachmentFormats = inheritance_info.color_formats;
+		
 		if (inheritance_info.enable_depth)
 		{
 			inheritance_rendering_info.depthAttachmentFormat = inheritance_info.depth_format;
@@ -43,16 +44,18 @@ void CommandBuffer::BeginSecondary(const CommandBufferInheritanceInfo& inheritan
 		{
 			inheritance_rendering_info.stencilAttachmentFormat = inheritance_info.depth_format;
 		}
-
-		VkCommandBufferBeginInfo begin_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
-		begin_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+		
 
 		VkCommandBufferInheritanceInfo inheritance{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO };
 		inheritance.pNext = &inheritance_rendering_info;
 		inheritance.renderPass = VK_NULL_HANDLE;
 		inheritance.subpass = 0;
 		inheritance.framebuffer = VK_NULL_HANDLE;
+		inheritance.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
+
+		VkCommandBufferBeginInfo begin_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT };
 		begin_info.pInheritanceInfo = &inheritance;
+
 
 		VK_CHECK(vkBeginCommandBuffer(command_buffer_, &begin_info));
 		is_recording_ = true;
@@ -82,6 +85,21 @@ void CommandBuffer::Reset()
 
 void CommandBuffer::BeginRendering(const VkRenderingInfo& render_info)
 {
+	// 检查是否已处于渲染范围内，避免重复调用
+	if (state_.is_rendering)
+	{
+		LOGE("CommandBuffer::BeginRendering: Already in rendering scope.");
+		return;
+	}
+
+	// 主要针对次级命令缓冲区的逻辑
+	if (level_ == CommandBufferLevel::kSecondary)
+	{
+		LOGE("CommandBuffer::BeginRendering should not be called for secondary command buffers.");
+		return; // 防止次级命令缓冲区中错误调用
+	}
+
+	// 确保在主命令缓冲区中正确调用 BeginRendering
 	if (level_ == CommandBufferLevel::kPrimary)
 	{
 		vkCmdBeginRendering(command_buffer_, &render_info);

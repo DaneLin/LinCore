@@ -57,6 +57,18 @@ namespace lc
 		std::function<void(AllocatedImage)> callback;
 	};
 
+
+	struct AsyncLoaderState {
+		enum class State {
+			Running,
+			Stopping,
+			Stopped
+		};
+		std::atomic<State> state{ State::Stopped };
+		std::mutex mutex;
+		std::condition_variable cv;
+	};
+
 	class AsyncLoader
 	{
 	public:
@@ -72,9 +84,14 @@ namespace lc
 
 		void RequestBufferViewLoad(const void* data, size_t size, size_t offset, std::function<void(AllocatedImage)> callback);
 
+		std::shared_ptr<AsyncLoaderState> GetState() { return state_; }
+
 	private:
 		enki::TaskScheduler *task_scheduler_{nullptr};
+		std::shared_ptr<AsyncLoaderState> state_ = std::make_shared<AsyncLoaderState>();
 
+
+		std::mutex request_mutex_;
 		std::vector<FileLoadRequest> file_load_requests_;
 		std::vector<UploadRequest> upload_requests_;
 
@@ -100,7 +117,7 @@ namespace lc
 			int cpu = sched_getcpu();
 			LOGI("IO Task Thread ID: {}, Running on CPU: {}", tid, cpu);
 #endif
-			while (task_scheduler->GetIsRunning() && execute)
+			while (task_scheduler->GetIsRunning()&& execute)
 			{
 				task_scheduler->WaitForNewPinnedTasks();
 				task_scheduler->RunPinnedTasks();
@@ -108,7 +125,7 @@ namespace lc
 		}
 
 		enki::TaskScheduler *task_scheduler;
-		std::atomic<bool> execute{true};
+		std::atomic<bool> execute{ true };
 	};
 
 	// Asynchronous loading task
@@ -116,15 +133,22 @@ namespace lc
 	{
 		void Execute() override
 		{
-			while (execute)
-			{
-				async_loader->Update();
+			while (state->state == AsyncLoaderState::State::Running) {
+				{
+					std::unique_lock<std::mutex> lock(state->mutex);
+					state->cv.wait_for(lock, std::chrono::milliseconds(16),
+						[this] { return state->state != AsyncLoaderState::State::Running; });
+				}
+
+				if (state->state == AsyncLoaderState::State::Running) {
+					async_loader->Update();
+				}
 			}
 		}
 
 		AsyncLoader *async_loader;
 		enki::TaskScheduler *task_scheduler;
-		std::atomic<bool> execute{true};
+		std::shared_ptr<AsyncLoaderState> state;
 	};
 
 	struct TextureID
