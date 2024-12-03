@@ -176,6 +176,12 @@ void CommandBuffer::PipelineBarrier2(const VkDependencyInfo& dep_info)
 	vkCmdPipelineBarrier2(command_buffer_, &dep_info);
 }
 
+void CommandBuffer::UploadTextureData(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+{
+	AllocatedImage image = VulkanEngine::Get().CreateImage(data, size, format, usage, mipmapped);
+	TransitionImage(image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
 void CommandBuffer::TransitionImage(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout)
 {
 	VkImageMemoryBarrier2 barrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
@@ -401,6 +407,23 @@ void CommandBufferManager::Init(uint32_t num_threads)
 	VkFenceCreateInfo fence_info{ .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 	VK_CHECK(vkCreateFence(VulkanEngine::Get().device_, &fence_info, nullptr, &immediate_fence_));
+
+	// Initialize transfer queue resources
+	VkCommandPoolCreateInfo transfer_pool_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+	transfer_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	transfer_pool_info.queueFamilyIndex = VulkanEngine::Get().transfer_queue_family_;
+
+	VK_CHECK(vkCreateCommandPool(VulkanEngine::Get().device_, &transfer_pool_info, nullptr, &transfer_pool_));
+
+	VkCommandBufferAllocateInfo transfer_alloc_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+	transfer_alloc_info.commandPool = transfer_pool_;
+	transfer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	transfer_alloc_info.commandBufferCount = 1;
+
+	VK_CHECK(vkAllocateCommandBuffers(VulkanEngine::Get().device_, &transfer_alloc_info, &transfer_buffer_.command_buffer_));
+	transfer_buffer_.Init(CommandBufferLevel::kPrimary);
+
+	VK_CHECK(vkCreateFence(VulkanEngine::Get().device_, &fence_info, nullptr, &transfer_fence_));
 }
 
 void CommandBufferManager::Shutdown()
@@ -412,6 +435,9 @@ void CommandBufferManager::Shutdown()
 
 	vkDestroyCommandPool(VulkanEngine::Get().device_, immediate_pool_, nullptr);
 	vkDestroyFence(VulkanEngine::Get().device_, immediate_fence_, nullptr);
+
+	vkDestroyCommandPool(VulkanEngine::Get().device_, transfer_pool_, nullptr);
+	vkDestroyFence(VulkanEngine::Get().device_, transfer_fence_, nullptr);
 }
 
 void CommandBufferManager::ResetPools(uint32_t frame_index)
@@ -456,24 +482,27 @@ CommandBuffer* CommandBufferManager::GetSecondaryCommandBuffer(uint32_t frame, u
 	return cmd;
 }
 
-void CommandBufferManager::ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function)
+void CommandBufferManager::ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue)
 {
 	// Wait for any pending immediate submits to complete
-	VK_CHECK(vkWaitForFences(VulkanEngine::Get().device_, 1, &immediate_fence_, VK_TRUE, UINT64_MAX));
-	VK_CHECK(vkResetFences(VulkanEngine::Get().device_, 1, &immediate_fence_));
+	VkFence fence = queue == VulkanEngine::Get().transfer_queue_ ? transfer_fence_ : immediate_fence_;
+	CommandBuffer& cmd_buffer = queue == VulkanEngine::Get().transfer_queue_ ? transfer_buffer_ : immediate_buffer_;
 
-	// Reset the immediate command buffer
-	immediate_buffer_.Reset();
-	immediate_buffer_.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+	VK_CHECK(vkWaitForFences(VulkanEngine::Get().device_, 1, &fence, VK_TRUE, UINT64_MAX));
+	VK_CHECK(vkResetFences(VulkanEngine::Get().device_, 1, &fence));
+
+
+	cmd_buffer.Reset();
+	cmd_buffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	// Execute the user's function
-	function(&immediate_buffer_);
+	function(&cmd_buffer);
 
-	immediate_buffer_.End();
+	cmd_buffer.End();
 
 	// Set up command buffer submission info
 	VkCommandBufferSubmitInfo cmd_info{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
-	cmd_info.commandBuffer = immediate_buffer_.GetCommandBuffer();
+	cmd_info.commandBuffer = cmd_buffer.GetCommandBuffer();
 
 	// Submit the command buffer
 	VkSubmitInfo2 submit_info{ VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
@@ -481,8 +510,8 @@ void CommandBufferManager::ImmediateSubmit(std::function<void(CommandBuffer* cmd
 	submit_info.pCommandBufferInfos = &cmd_info;
 
 	// Submit to the queue and wait
-	VK_CHECK(vkQueueSubmit2(VulkanEngine::Get().main_queue_, 1, &submit_info, immediate_fence_));
-	VK_CHECK(vkWaitForFences(VulkanEngine::Get().device_, 1, &immediate_fence_, VK_TRUE, UINT64_MAX));
+	VK_CHECK(vkQueueSubmit2(queue, 1, &submit_info, fence));
+	VK_CHECK(vkWaitForFences(VulkanEngine::Get().device_, 1, &fence, VK_TRUE, UINT64_MAX));
 }
 
 uint32_t CommandBufferManager::GetPoolIndex(uint32_t frame_index, uint32_t thread_index)

@@ -63,6 +63,8 @@ public:
 
 	// Pipeline barriers
 	void PipelineBarrier2(const VkDependencyInfo& dep_info);
+	
+	void UploadTextureData(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped);
 
 	// Resource updates
 	void TransitionImage(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout);
@@ -104,7 +106,7 @@ public:
 	CommandBuffer* GetCommandBuffer(uint32_t frame, uint32_t thread_index, bool begin = true);
 	CommandBuffer* GetSecondaryCommandBuffer(uint32_t frame, uint32_t thread_index);
 
-	void ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function);
+	void ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue);
 
 private:
 	static constexpr uint32_t MAX_COMMAND_BUFFERS_PER_THREAD = 8;
@@ -122,4 +124,9 @@ private:
 	VkCommandPool immediate_pool_{ VK_NULL_HANDLE };
 	CommandBuffer immediate_buffer_;
 	VkFence immediate_fence_{ VK_NULL_HANDLE };
+
+	// Transfer queue support
+	VkCommandPool transfer_pool_{ VK_NULL_HANDLE };
+	CommandBuffer transfer_buffer_;
+	VkFence transfer_fence_{ VK_NULL_HANDLE };
 };

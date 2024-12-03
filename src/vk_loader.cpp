@@ -34,8 +34,8 @@ namespace lc
 
 					const std::string path(file_path.uri.path().begin(), file_path.uri.path().end());
 
-                    std::filesystem::path relative_path(file_path.uri.path().begin(), file_path.uri.path().end());
-                    std::filesystem::path texture_path = gltf_parent_path / relative_path;
+					std::filesystem::path relative_path(file_path.uri.path().begin(), file_path.uri.path().end());
+					std::filesystem::path texture_path = gltf_parent_path / relative_path;
 
 					engine->async_loader_.RequestFileLoad(texture_path.string().c_str(),
 														  [promise](AllocatedImage image)
@@ -545,30 +545,10 @@ namespace lc
 	void AsyncLoader::Init(enki::TaskScheduler* task_scheduler)
 	{
 		task_scheduler_ = task_scheduler;
-
-		// create command pool and command buffer
-		VkCommandPoolCreateInfo pool_create_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-													.pNext = nullptr,
-													.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-													.queueFamilyIndex = VulkanEngine::Get().main_queue_family_ };
-		VK_CHECK(vkCreateCommandPool(VulkanEngine::Get().device_, &pool_create_info, nullptr, &command_pool_));
-
-		VkCommandBufferAllocateInfo alloc_info = { .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-												  .pNext = nullptr,
-												  .commandPool = command_pool_,
-												  .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-												  .commandBufferCount = 1 };
-		VK_CHECK(vkAllocateCommandBuffers(VulkanEngine::Get().device_, &alloc_info, &transfer_cmd_));
-
-		VkFenceCreateInfo fence_info = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .pNext = nullptr, .flags = 0 };
-		VK_CHECK(vkCreateFence(VulkanEngine::Get().device_, &fence_info, nullptr, &transfer_fence_));
 	}
 
 	void AsyncLoader::Shutdown()
 	{
-		vkDestroyFence(VulkanEngine::Get().device_, transfer_fence_, nullptr);
-		vkDestroyCommandPool(VulkanEngine::Get().device_, command_pool_, nullptr);
-
 		file_load_requests_.clear();
 		upload_requests_.clear();
 

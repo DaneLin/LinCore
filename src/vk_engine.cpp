@@ -396,7 +396,7 @@ void VulkanEngine::Run()
 void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)> &&function)
 {
 	command_buffer_manager_.ImmediateSubmit([&](CommandBuffer *cmd)
-											{ function(cmd->GetCommandBuffer()); });
+											{ function(cmd->GetCommandBuffer()); }, main_queue_);
 }
 
 AllocatedBufferUntyped VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
@@ -539,7 +539,7 @@ AllocatedImage VulkanEngine::CreateImage(void *data, VkExtent3D size, VkFormat f
 			else
 			{
 				cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			} }));
+			} }), main_queue_);
 
 	DestroyBuffer(upload_buffer);
 

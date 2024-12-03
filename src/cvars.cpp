@@ -629,7 +629,7 @@ void CVarSystemImpl::EditParameter(CVarParameter *p, float textWidth)
 		break;
 	}
 
-	if (ImGui::IsItemHovered)
+	if (ImGui::IsItemHovered())
 	{
 		ImGui::SetTooltip(p->description.c_str());
 	}

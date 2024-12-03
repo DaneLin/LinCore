@@ -79,10 +79,6 @@ namespace lc
 		std::vector<FileLoadRequest> file_load_requests_;
 		std::vector<UploadRequest> upload_requests_;
 
-		VkCommandPool command_pool_;
-		VkCommandBuffer transfer_cmd_;
-		VkFence transfer_fence_;
-
 		void ProcessFileRequests();
 		void ProcessUploadRequests();
 	};

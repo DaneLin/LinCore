@@ -20,7 +20,7 @@ add_executable (lincore
   "logging.h" "cvars.cpp" "frustum_cull.h" "vk_pushbuffer.h" "vk_pushbuffer.cpp" "config.h" "vk_shaders.h" "vk_shaders.cpp" "vk_scene.h" "vk_scene.cpp" "vk_profiler.h" "vk_profiler.cpp"    "command_buffer.h" "command_buffer.cpp" "frame_graph.h" "frame_graph.cpp")
 
 set_property(TARGET lincore PROPERTY CXX_STANDARD 20)
-target_compile_definitions(lincore PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
+target_compile_definitions(lincore PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE _CRT_SECURE_NO_WARNINGS)
 target_include_directories(lincore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_dependencies(lincore Shaders)
