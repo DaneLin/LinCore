@@ -145,7 +145,6 @@ namespace lc
 
 	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine *engine, std::string_view file_path)
 	{
-		// TODO : load gltf in a separate thread
 		LOGI("Loading GLTF: {}", file_path);
 
 		std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
