@@ -31,6 +31,49 @@ VulkanEngine* loaded_engine = nullptr;
 
 VulkanEngine& VulkanEngine::Get() { return *loaded_engine; }
 
+struct CommandRecordingTask : enki::ITaskSet {
+	VulkanEngine* engine;
+	CommandBuffer** secondary_cmds;
+	std::vector<uint32_t>* draw_indices;
+	uint32_t thread_count;
+	uint32_t frame_index;
+	VkDescriptorSet global_descriptor;
+	VkDescriptorSet bindless_descriptor;
+	VkExtent2D draw_extent;
+
+	virtual void ExecuteRange(enki::TaskSetPartition range, uint32_t threadnum) override {
+		uint32_t start = range.start;
+		uint32_t end = range.end;
+
+		CommandBuffer* thread_cmd = secondary_cmds[threadnum];
+		CommandBufferInheritanceInfo inheritance_info{};
+		inheritance_info.color_attachment_count = 1;
+		inheritance_info.color_formats = &engine->draw_image_.format;
+		inheritance_info.depth_format = engine->depth_image_.format;
+		inheritance_info.samples = VK_SAMPLE_COUNT_1_BIT;
+		inheritance_info.render_area = { 0, 0, draw_extent.width, draw_extent.height };
+
+		thread_cmd->Reset();
+		thread_cmd->BeginSecondary(inheritance_info);
+
+#if LC_DRAW_INDIRECT
+		thread_cmd->BindIndexBuffer(engine->global_mesh_buffer_.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+#endif
+
+		thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS,
+			engine->mesh_pipeline_layout_, 0, 1, &global_descriptor, 0, nullptr);
+		thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS,
+			engine->mesh_pipeline_layout_, 2, 1, &bindless_descriptor, 0, nullptr);
+
+		RenderInfo info{};
+		for (uint32_t i = start; i < end; i++) {
+			engine->DrawObject(thread_cmd,
+				engine->main_draw_context_.opaque_surfaces[(*draw_indices)[i]], info);
+		}
+		thread_cmd->End();
+	}
+};
+
 bool is_visible(const RenderObject& obj, const glm::mat4& viewproj)
 {
 	std::array<glm::vec3, 8> corners{
@@ -816,7 +859,7 @@ void VulkanEngine::InitSwapchain()
 void VulkanEngine::InitCommands()
 {
 	// initialize commandbuffermanager, suppose to use 4 threads
-	command_buffer_manager_.Init(4);
+	command_buffer_manager_.Init(kNUM_RENDER_THREADS);
 }
 
 void VulkanEngine::InitSyncStructures()
@@ -1124,27 +1167,34 @@ void VulkanEngine::InitDefaultData()
 
 void VulkanEngine::InitTaskSystem()
 {
-	enki::TaskSchedulerConfig config;
-	config.numTaskThreadsToCreate += 1;
-	task_scheduler_.Initialize(task_config_);
+	// 渲染任务线程池
+	enki::TaskSchedulerConfig render_config;
+	render_config.numTaskThreadsToCreate = kNUM_RENDER_THREADS - 1;
+	render_task_scheduler_.Initialize(render_config);
 
-	async_loader_.Init(&task_scheduler_);
+	// IO 任务线程池
+	enki::TaskSchedulerConfig io_config;
+	io_config.numTaskThreadsToCreate = 1; // 专门为 IO 任务预留一个线程
+	io_task_scheduler_.Initialize(io_config);
 
-	run_pinned_task.threadNum = task_scheduler_.GetNumTaskThreads() - 1;
-	run_pinned_task.task_scheduler = &task_scheduler_;
-	task_scheduler_.AddPinnedTask(&run_pinned_task);
+	async_loader_.Init(&io_task_scheduler_);
+
+	// 配置 Pinned Task 到 IO 线程池
+	run_pinned_task.threadNum = io_task_scheduler_.GetNumTaskThreads() - 1;
+	run_pinned_task.task_scheduler = &io_task_scheduler_;
+	io_task_scheduler_.AddPinnedTask(&run_pinned_task);
 
 	async_load_task.threadNum = run_pinned_task.threadNum;
 	async_load_task.async_loader = &async_loader_;
-	async_load_task.task_scheduler = &task_scheduler_;
+	async_load_task.task_scheduler = &io_task_scheduler_;
 	async_load_task.state = async_loader_.GetState();
-	task_scheduler_.AddPinnedTask(&async_load_task);
+	io_task_scheduler_.AddPinnedTask(&async_load_task);
 
 	main_deletion_queue_.PushFunction([&]() {
 		async_loader_.Shutdown();
 		run_pinned_task.execute = false;
-		// 等待所有任务完成
-		task_scheduler_.WaitforAllAndShutdown();
+		render_task_scheduler_.WaitforAllAndShutdown();
+		io_task_scheduler_.WaitforAllAndShutdown();
 		});
 }
 
@@ -1290,53 +1340,77 @@ void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 	render_info.flags = VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT;
 	cmd->BeginRendering(render_info);
 
-	const uint32_t num_threads = 4;
-	std::vector<std::thread> workers;
+//	const uint32_t num_threads = 4;
+//	std::vector<std::thread> workers;
+//	std::vector<CommandBuffer*> secondary_cmds(num_threads);
+//
+//	for (uint32_t thread_idx = 0; thread_idx < num_threads; ++thread_idx)
+//	{
+//		secondary_cmds[thread_idx] = command_buffer_manager_.GetSecondaryCommandBuffer(frame_number_ % kFRAME_OVERLAP, thread_idx);
+//	}
+//
+//	auto thread_func = [&](uint32_t thread_idx, uint32_t start, uint32_t end) {
+//		CommandBuffer* thread_cmd = secondary_cmds[thread_idx];
+//		CommandBufferInheritanceInfo inheritance_info{};
+//		inheritance_info.color_attachment_count = 1;
+//		inheritance_info.color_formats = &draw_image_.format;
+//		inheritance_info.depth_format = depth_image_.format;
+//		inheritance_info.samples = VK_SAMPLE_COUNT_1_BIT;
+//		inheritance_info.render_area = { 0, 0, draw_extent_.width, draw_extent_.height };
+//		thread_cmd->Reset();
+//		thread_cmd->BeginSecondary(inheritance_info);
+//#if LC_DRAW_INDIRECT
+//		{
+//			thread_cmd->BindIndexBuffer(global_mesh_buffer_.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+//		}
+//#endif // LC_DRAW_INDIRECT
+//
+//		thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &global_descriptor, 0, nullptr);
+//		thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
+//
+//		RenderInfo info{};
+//		for (uint32_t i = start; i < end; ++i)
+//		{
+//			DrawObject(thread_cmd, main_draw_context_.opaque_surfaces[opaqueDraws[i]], info);
+//		};
+//		thread_cmd->End();
+//	};
+//
+//	uint32_t work_per_thread = (opaqueDraws.size() + num_threads - 1) / num_threads;
+//	for (uint32_t i = 0; i < num_threads; ++i) {
+//		uint32_t start = i * work_per_thread;
+//		uint32_t end = std::min((i + 1) * work_per_thread, (uint32_t)opaqueDraws.size());
+//		workers.emplace_back(thread_func, i, start, end);
+//	}
+//
+//	// 等待所有线程完成
+//	for (auto& worker : workers) {
+//		worker.join();
+//	}
+
+	
+	const uint32_t num_threads = kNUM_RENDER_THREADS;
 	std::vector<CommandBuffer*> secondary_cmds(num_threads);
 
-	for (uint32_t thread_idx = 0; thread_idx < num_threads; ++thread_idx)
-	{
-		secondary_cmds[thread_idx] = command_buffer_manager_.GetSecondaryCommandBuffer(frame_number_ % kFRAME_OVERLAP, thread_idx);
+	for (uint32_t thread_idx = 0; thread_idx < num_threads; ++thread_idx) {
+		secondary_cmds[thread_idx] = command_buffer_manager_.GetSecondaryCommandBuffer(
+			frame_number_ % kFRAME_OVERLAP,
+			thread_idx);
 	}
 
-	auto thread_func = [&](uint32_t thread_idx, uint32_t start, uint32_t end) {
-		CommandBuffer* thread_cmd = secondary_cmds[thread_idx];
-		CommandBufferInheritanceInfo inheritance_info{};
-		inheritance_info.color_attachment_count = 1;
-		inheritance_info.color_formats = &draw_image_.format;
-		inheritance_info.depth_format = depth_image_.format;
-		inheritance_info.samples = VK_SAMPLE_COUNT_1_BIT;
-		inheritance_info.render_area = { 0, 0, draw_extent_.width, draw_extent_.height };
-		thread_cmd->Reset();
-		thread_cmd->BeginSecondary(inheritance_info);
-#if LC_DRAW_INDIRECT
-		{
-			thread_cmd->BindIndexBuffer(global_mesh_buffer_.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-		}
-#endif // LC_DRAW_INDIRECT
+	CommandRecordingTask recordTask;
+	recordTask.engine = this;
+	recordTask.secondary_cmds = secondary_cmds.data();
+	recordTask.draw_indices = &opaqueDraws;
+	recordTask.thread_count = num_threads;
+	recordTask.frame_index = frame_number_ % kFRAME_OVERLAP;
+	recordTask.global_descriptor = global_descriptor;
+	recordTask.bindless_descriptor = bindless_texture_set_;
+	recordTask.draw_extent = draw_extent_;
+	recordTask.m_SetSize = opaqueDraws.size();
 
-		thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 0, 1, &global_descriptor, 0, nullptr);
-		thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS, mesh_pipeline_layout_, 2, 1, &bindless_texture_set_, 0, nullptr);
-
-		RenderInfo info{};
-		for (uint32_t i = start; i < end; ++i)
-		{
-			DrawObject(thread_cmd, main_draw_context_.opaque_surfaces[opaqueDraws[i]], info);
-		};
-		thread_cmd->End();
-	};
-
-	uint32_t work_per_thread = (opaqueDraws.size() + num_threads - 1) / num_threads;
-	for (uint32_t i = 0; i < num_threads; ++i) {
-		uint32_t start = i * work_per_thread;
-		uint32_t end = std::min((i + 1) * work_per_thread, (uint32_t)opaqueDraws.size());
-		workers.emplace_back(thread_func, i, start, end);
-	}
-
-	// 等待所有线程完成
-	for (auto& worker : workers) {
-		worker.join();
-	}
+	render_task_scheduler_.AddTaskSetToPipe(&recordTask);
+	render_task_scheduler_.WaitforTask(&recordTask);
 
 	// 执行次级命令缓冲区
 	std::vector<VkCommandBuffer> vk_secondary_cmds(num_threads);

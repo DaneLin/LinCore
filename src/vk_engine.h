@@ -19,7 +19,7 @@
 #include "vk_pipelines.h"
 #include "vk_loader.h"
 #include "TaskScheduler.h"
-#include <command_buffer.h>
+#include <command_buffer.h>\
 
 namespace vkutils {
 	class VulkanProfiler;
@@ -125,6 +125,8 @@ struct GlobalMeshBuffer {
 
 	void UploadToGPU(VulkanEngine* engine);
 };
+
+
 
 struct EngineStats {
 	float frame_time;
@@ -256,8 +258,8 @@ public:
 
 	vkutils::VulkanProfiler* profiler_;
 
-	enki::TaskSchedulerConfig task_config_;
-	enki::TaskScheduler task_scheduler_;
+	enki::TaskScheduler render_task_scheduler_;
+	enki::TaskScheduler io_task_scheduler_;
 	lc::RunPinnedTaskLoopTask run_pinned_task;
 	lc::AsyncLoadTask async_load_task;
 
@@ -301,6 +303,8 @@ public:
 
 	void UpdateScene();
 
+	void DrawObject(CommandBuffer* cmd, const RenderObject& r, RenderInfo& render_info);
+
 private:
 	void InitVulkan();
 
@@ -336,8 +340,7 @@ private:
 
 	const std::string GetAssetPath(const std::string& path) const;
 
-	void DrawObject(CommandBuffer* cmd, const RenderObject& r, RenderInfo& render_info);
-
+	
 private:
 	// swapchain stuff
 	VkSwapchainKHR swapchain_;

@@ -98,6 +98,8 @@ private:
 class CommandBufferManager
 {
 public:
+	static constexpr uint32_t MAX_COMMAND_BUFFERS_PER_THREAD = 8;
+	static constexpr uint32_t MAX_SECONDARY_COMMAND_BUFFERS = 16;
 
 	void Init(uint32_t num_threads);
 	void Shutdown();
@@ -109,8 +111,7 @@ public:
 	void ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue);
 
 private:
-	static constexpr uint32_t MAX_COMMAND_BUFFERS_PER_THREAD = 8;
-	static constexpr uint32_t MAX_SECONDARY_COMMAND_BUFFERS = 16;
+	
 	uint32_t GetPoolIndex(uint32_t frame_index, uint32_t thread_index);
 
 	std::vector<VkCommandPool> command_pools_;
@@ -130,3 +131,5 @@ private:
 	CommandBuffer transfer_buffer_;
 	VkFence transfer_fence_{ VK_NULL_HANDLE };
 };
+
+
