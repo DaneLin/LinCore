@@ -61,6 +61,9 @@ public:
 	void SetViewport(float x, float y, float width, float height, float min_depth = 0.f, float max_depth = 1.f);
 	void SetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height);
 
+	void Clear(float r, float g, float b, float a, uint32_t attachment_index);
+	void ClearDepthStencil(float depth, uint8_t stencil);
+
 	// Pipeline barriers
 	void PipelineBarrier2(const VkDependencyInfo& dep_info);
 	
@@ -80,8 +83,11 @@ public:
 
 
 	VkCommandBuffer command_buffer_{ VK_NULL_HANDLE };
+	// Clear value for each attachment with depth/stencil at the end.
+	VkClearValue clear_values_[kMAX_IMAGE_OUTPUT + 1];
 
 private:
+	static const uint32_t kDepth_Stencil_Clear_Index = kMAX_IMAGE_OUTPUT;
 	
 	bool is_recording_{ false };
 	CommandBufferLevel level_{ CommandBufferLevel::kPrimary };

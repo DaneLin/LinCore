@@ -222,10 +222,17 @@ namespace lc
 		FrameGraphNode* GetNode(const std::string& name);
 		FrameGraphNode* AccessNode(FrameGraphNodeHandle handle);
 
+		FrameGraphResource* GetResource(const std::string& name);
+		FrameGraphResource* AccessResource(FrameGraphResourceHandle handle);
+
+		void AddNode(FrameGraphNodeCreation& node);
+
 		std::vector<FrameGraphNodeHandle> nodes;
+		std::vector<FrameGraphNodeHandle> all_nodes;
+
 		FrameGraphBuilder* builder{nullptr};
 
-		std::string name;
+		const char* name = nullptr;
 
 	private:
 		void ComputeEdges(FrameGraphNode* node, uint32_t node_index);

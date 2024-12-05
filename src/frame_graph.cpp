@@ -220,12 +220,21 @@ namespace lc
 
     FrameGraphResource *FrameGraphBuilder::GetResource(const std::string &name)
     {
-        return nullptr;
+		auto it = resource_cache.resource_map.find(name);
+        if (it == resource_cache.resource_map.end())
+        {
+            return nullptr;
+        }
+        return &resource_cache.resources[it->second];
     }
 
     FrameGraphResource *FrameGraphBuilder::AccessResource(FrameGraphResourceHandle handle)
     {
-        return nullptr;
+        if (handle.index >= resource_cache.resources.size())
+        {
+            return nullptr;
+        }
+		return &resource_cache.resources[handle.index];
     }
 
     void FrameGraph::Init(FrameGraphBuilder *builder, VulkanEngine *engine)
@@ -238,6 +247,7 @@ namespace lc
     void FrameGraph::Shutdown()
     {
         nodes.clear();
+        all_nodes.clear();
     }
 
     void FrameGraph::Reset()
@@ -287,21 +297,63 @@ namespace lc
 
     void FrameGraph::AddUI()
     {
+        for (size_t idx = 0; idx < nodes.size(); ++idx)
+        {
+            FrameGraphNode* node = builder->AccessNode(nodes[idx]);
+            if (!node->enabled)
+            {
+                continue;
+            }
+            node->render_pass->AddUI();
+        }
     }
     void FrameGraph::Render(CommandBuffer *gpu_command)
     {
+        for (size_t idx = 0; idx < nodes.size(); ++idx)
+        {
+			FrameGraphNode* node = builder->AccessNode(nodes[idx]);
+            if (!node->enabled || !node)
+            {
+                continue;
+            }
+
+            // set up dynamic rendering
+
+        }
     }
     void FrameGraph::OnResize(uint32_t new_width, uint32_t new_height)
     {
+        for (auto handle : nodes)
+        {
+            auto node = builder->AccessNode(handle);
+            if (node && node->enabled && node->render_pass)
+            {
+				node->render_pass->OnResize(engine, new_width, new_height);
+            }
+        }
     }
 
     FrameGraphNode *FrameGraph::GetNode(const std::string &name)
     {
-        return nullptr;
+        return builder->GetNode(name);
     }
     FrameGraphNode *FrameGraph::AccessNode(FrameGraphNodeHandle handle)
     {
-        return nullptr;
+        return builder->AccessNode(handle);
+    }
+
+    FrameGraphResource* FrameGraph::GetResource(const std::string& name)
+    {
+        return builder->GetResource(name);
+    }
+
+    FrameGraphResource* FrameGraph::AccessResource(FrameGraphResourceHandle handle)
+    {
+        return builder->AccessResource(handle);
+    }
+
+    void FrameGraph::AddNode(FrameGraphNodeCreation& node)
+    {
     }
 
     void FrameGraph::ComputeEdges(FrameGraphNode *node, uint32_t node_index)
@@ -312,9 +364,9 @@ namespace lc
     {
     }
 
-        bool FrameGraph::CreateNodeResources(FrameGraphNode *node)
-        {
-            return false;
-        }
+    bool FrameGraph::CreateNodeResources(FrameGraphNode *node)
+    {
+        return false;
+    }
 
 } // namespace lc

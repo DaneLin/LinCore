@@ -189,6 +189,16 @@ void CommandBuffer::SetScissor(int32_t x, int32_t y, uint32_t width, uint32_t he
 	state_.scissor = scissor;
 }
 
+void CommandBuffer::Clear(float r, float g, float b, float a, uint32_t attachment_index)
+{
+	clear_values_[attachment_index].color = { r,g,b,a };
+}
+
+void CommandBuffer::ClearDepthStencil(float depth, uint8_t stencil)
+{
+	clear_values_[kDepth_Stencil_Clear_Index].depthStencil = { depth, stencil };
+}
+
 void CommandBuffer::PipelineBarrier2(const VkDependencyInfo& dep_info)
 {
 	vkCmdPipelineBarrier2(command_buffer_, &dep_info);

@@ -29,6 +29,11 @@ inline constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 11;
 
 inline constexpr uint32_t kMAX_BINDLESS_RESOURCES = 1024;
 
+inline constexpr uint8_t kMAX_IMAGE_OUTPUT = 8;
+inline constexpr uint8_t kMAX_DESCRIPTOR_SET_LAYOUTS = 8;
+inline constexpr uint8_t kMAX_SHADER_STAGES = 8;
+inline constexpr uint8_t kMAX_DESCRIPTOR_PER_SET = 16;
+
 const std::string cache_file_path = "pipeline_cache_data.bin";
 
 inline constexpr uint32_t kSTAGING_BUFFER_SIZE = 64 * 1024 * 1024;
