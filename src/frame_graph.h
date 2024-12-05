@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vk_types.h>
+#include "vk_resources.h"
 
 class VulkanEngine;
 class CommandBuffer;

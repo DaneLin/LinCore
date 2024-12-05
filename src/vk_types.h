@@ -20,47 +20,6 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
 
-static const uint32_t kInvalidIndex = UINT32_MAX;
-
-typedef uint32_t ResourceHandle;
-
-struct BufferHandle
-{
-	ResourceHandle index;
-}; // struct BufferHandle
-
-struct TextureHandle
-{
-	ResourceHandle index;
-}; // struct TextureHandle
-
-struct ShaderStateHandle
-{
-	ResourceHandle index;
-}; // struct ShaderStateHandle
-
-struct  DescriptorSetHandle
-{
-	ResourceHandle index;
-}; // struct DescriptorSetHandle
-
-struct PipelineHandle
-{
-	ResourceHandle index;
-}; // struct PipelineHandle
-
-struct RenderPassHandle
-{
-	ResourceHandle index;
-}; // struct RenderPassHandle
-
-// Invaild handles
-static BufferHandle kInvalidBufferHandle = {kInvalidIndex};
-static TextureHandle kInvalidTextureHandle = {kInvalidIndex};
-static ShaderStateHandle kInvalidShaderStateHandle = { kInvalidIndex };
-static DescriptorSetHandle kInvalidDescriptorSetHandle = { kInvalidIndex };
-static PipelineHandle kInvalidPipelineHandle = { kInvalidIndex };
-static RenderPassHandle kInvalidRenderPassHandle = { kInvalidIndex };
 
 struct AllocatedImage
 {

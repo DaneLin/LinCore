@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vk_types.h>
+#include <config.h>
 
 enum class CommandBufferLevel
 {
