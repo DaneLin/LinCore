@@ -282,16 +282,6 @@ public:
 
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
-	//AllocatedBufferUntyped CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-
-	//void DestroyBuffer(const AllocatedBufferUntyped& buffer);
-
-	//AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-
-	//AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-
-	//void DestroyImage(const AllocatedImage& image);
-
 	void UpdateScene();
 
 	void DrawObject(CommandBuffer* cmd, const RenderObject& r, RenderInfo& render_info);
