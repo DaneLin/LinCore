@@ -22,14 +22,14 @@ namespace lc
                 continue;
             }
 
-            if (resource.type == FrameGraphResourceType::KTexture || resource.type == FrameGraphResourceType::kAttachment)
+            /*if (resource.type == FrameGraphResourceType::KTexture || resource.type == FrameGraphResourceType::kAttachment)
             {
                 engine->DestroyImage(resource.resource_info.texture.image);
             }
             else if (resource.type == FrameGraphResourceType::kBuffer)
             {
                 engine->DestroyBuffer(resource.resource_info.buffer.buffer);
-            }
+            }*/
         }
         resources.clear();
         resource_map.clear();
@@ -124,22 +124,22 @@ namespace lc
             // Create the resource
             if (creation.type == FrameGraphResourceType::KTexture || creation.type == FrameGraphResourceType::kAttachment)
             {
-                // Create texture
-                VkExtent3D extent{
-                    creation.resource_info.texture.width,
-                    creation.resource_info.texture.height,
-                    creation.resource_info.texture.depth};
-                resource.resource_info.texture.image = engine->CreateImage(
-                    extent,
-                    creation.resource_info.texture.format,
-                    creation.resource_info.texture.flags);
+                //// Create texture
+                //VkExtent3D extent{
+                //    creation.resource_info.texture.width,
+                //    creation.resource_info.texture.height,
+                //    creation.resource_info.texture.depth};
+                //resource.resource_info.texture.image = engine->CreateImage(
+                //    extent,
+                //    creation.resource_info.texture.format,
+                //    creation.resource_info.texture.flags);
             }
             else if (creation.type == FrameGraphResourceType::kBuffer)
             {
-                resource.resource_info.buffer.buffer = engine->CreateBuffer(
+               /* resource.resource_info.buffer.buffer = engine->CreateBuffer(
                     creation.resource_info.buffer.size,
                     creation.resource_info.buffer.flags,
-                    VMA_MEMORY_USAGE_GPU_ONLY);
+                    VMA_MEMORY_USAGE_GPU_ONLY);*/
             }
         }
 

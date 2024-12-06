@@ -1,12 +1,11 @@
 #pragma once
 
-#include "vk_types.h"
 #include <mutex>
 #include <shared_mutex>
 #include <queue>
 #include <unordered_map>
 #include <gpu_enums.h>
-
+#include <vk_mem_alloc.h>
 // Forward declaration
 class VulkanEngine;
 
@@ -86,6 +85,44 @@ static DescriptorSetHandle kInvalidDescriptorSetHandle = { kInvalidIndex };
 static PipelineHandle kInvalidPipelineHandle = { kInvalidIndex };
 static RenderPassHandle kInvalidRenderPassHandle = { kInvalidIndex };
 
+struct AllocatedImage
+{
+    VkImage image;
+    VkImageView view;
+    VmaAllocation allocation;
+    VkExtent3D extent;
+    VkFormat format;
+};
+
+struct AllocatedBufferUntyped
+{
+    VkBuffer buffer{ VK_NULL_HANDLE };
+    VmaAllocation allocation{};
+    VmaAllocationInfo info{};
+    VkDeviceSize size{ 0 };
+    VkDescriptorBufferInfo GetInfo(VkDeviceSize offset = 0) const{
+        return VkDescriptorBufferInfo{ .buffer=buffer,.offset = offset, .range = size };
+    }
+};
+
+
+template<typename T>
+struct AllocatedBuffer : public AllocatedBufferUntyped {
+    void operator=(const AllocatedBufferUntyped& other) {
+        buffer = other.buffer;
+        allocation = other.allocation;
+        info = other.info;
+        size = other.size;
+    }
+    AllocatedBuffer(AllocatedBufferUntyped& other) {
+        buffer = other.buffer;
+        allocation = other.allocation;
+        info = other.info;
+        size = other.size;
+    }
+    AllocatedBuffer() = default;
+};
+
 
 // Resource creation info base class
 struct ResourceCreationInfo {
@@ -97,6 +134,13 @@ struct BufferCreationInfo : ResourceCreationInfo {
     VkBufferUsageFlags usage;
     VkDeviceSize size;
     VmaMemoryUsage memory_usage;
+    void* initial_data{ nullptr };
+    const char* name{ nullptr };
+
+    BufferCreationInfo& Reset();
+    BufferCreationInfo& Set(VkBufferUsageFlags flags, VmaMemoryUsage mem_usage, VkDeviceSize buffer_size) ;
+    BufferCreationInfo& SetData(void* data) ;
+    BufferCreationInfo& SetName(const char* buffer_name) ;
 };
 
 // Texture creation info
@@ -111,33 +155,20 @@ struct TextureCreationInfo : ResourceCreationInfo {
     VkSampleCountFlagBits samples{ VK_SAMPLE_COUNT_1_BIT };
     VkImageTiling tiling{ VK_IMAGE_TILING_OPTIMAL };
     VkImageCreateFlags flags{ 0 };
+    void* initial_data{ nullptr };
 
+    // Builder style methods
+    TextureCreationInfo& SetSize(uint32_t width, uint32_t height, uint32_t depth = 1);
+	TextureCreationInfo& SetSize(VkExtent3D size);
+    TextureCreationInfo& SetFormatType(VkFormat fmt, TextureType::Enum tex_type);
+    TextureCreationInfo& SetFlags(uint32_t mips, VkImageCreateFlags create_flags) ;
+    TextureCreationInfo& SetLayout(VkImageLayout layout) ;
+    TextureCreationInfo& SetUsage(VkImageUsageFlags usage_flags) ;
+    TextureCreationInfo& SetData(void* data) ;
     // Helper function to set array layers based on texture type
-    void SetArrayLayers(uint32_t layers) {
-        array_layers = layers;
-        if (type == TextureType::Texture_Cube_Array) {
-            array_layers *= 6; // Cube maps need 6 faces per array layer
-        }
-    }
-
+    void SetArrayLayers(uint32_t layers) ;
     // Helper function to validate creation info based on texture type
-    bool Validate() const {
-        switch (type) {
-            case TextureType::Texture1D:
-            case TextureType::Texture_1D_Array:
-                return extent.width > 0 && extent.height == 1 && extent.depth == 1;
-            case TextureType::Texture2D:
-            case TextureType::Texture_2D_Array:
-                return extent.width > 0 && extent.height > 0 && extent.depth == 1;
-            case TextureType::Texture3D:
-                return extent.width > 0 && extent.height > 0 && extent.depth > 0;
-            case TextureType::Texture_Cube_Array:
-                return extent.width > 0 && extent.height > 0 && extent.depth == 1 && 
-                       (array_layers % 6) == 0 && extent.width == extent.height;
-            default:
-                return false;
-        }
-    }
+    bool Validate() const ;
 };
 
 // Resource pool template class
@@ -189,7 +220,7 @@ public:
     ~ResourceManager() = default;
 
     void Init(VulkanEngine* engine);
-    void Cleanup();
+    void CleanUp();
 
     // Buffer resource creation and management
     BufferHandle CreateBuffer(const BufferCreationInfo& info);
@@ -215,3 +246,83 @@ private:
     
     mutable std::shared_mutex creation_info_mutex_;
 };
+
+namespace TextureFormat {
+
+    inline bool IsDepthStencil( VkFormat value ) {
+        return value >= VK_FORMAT_D16_UNORM_S8_UINT && value < VK_FORMAT_BC1_RGB_UNORM_BLOCK;
+    }
+    inline bool IsDepthOnly( VkFormat value ) {
+        return value >= VK_FORMAT_D16_UNORM && value < VK_FORMAT_S8_UINT;
+    }
+    inline bool IsStencilOnly( VkFormat value ) {
+        return value == VK_FORMAT_S8_UINT;
+    }
+
+    inline bool HasDepth( VkFormat value ) {
+        return IsDepthOnly(value) || IsDepthStencil( value );
+    }
+    inline bool HasStencil( VkFormat value ) {
+        return value >= VK_FORMAT_S8_UINT && value <= VK_FORMAT_D32_SFLOAT_S8_UINT;
+    }
+    inline bool HasDepthOrStencil( VkFormat value ) {
+        return value >= VK_FORMAT_D16_UNORM && value <= VK_FORMAT_D32_SFLOAT_S8_UINT;
+    }
+
+} // namespace TextureFormat
+
+// Synchronization //////////////////////////////////////////////////////////////
+
+//
+//
+struct ImageBarrier {
+
+    TextureHandle                   texture             = kInvalidTextureHandle;
+    ResourceState                   destination_state   = RESOURCE_STATE_UNDEFINED; // Source state is saved in the texture.
+
+    uint16_t                             array_base_layer    = 0;
+    uint16_t                             array_layer_count   = 1;
+    uint16_t                             mip_base_level      = 0;
+    uint16_t                             mip_level_count     = 1;
+
+}; // struct ImageBarrier
+
+//
+//
+struct BufferBarrier {
+
+    BufferHandle                    buffer              = kInvalidBufferHandle;
+    ResourceState                   source_state        = RESOURCE_STATE_UNDEFINED;
+    ResourceState                   destination_state   = RESOURCE_STATE_UNDEFINED;
+    uint32_t                             offset              = 0;
+    uint32_t                             size                = 0;
+
+}; // struct MemoryBarrier
+
+//
+//
+struct ExecutionBarrier {
+
+    static constexpr uint32_t            k_max_barriers = 8;
+
+    uint32_t                             num_image_barriers      = 0;
+    uint32_t                             num_buffer_barriers     = 0;
+
+    ImageBarrier                    image_barriers[ k_max_barriers ];
+    BufferBarrier                   buffer_barriers[ k_max_barriers ];
+
+    ExecutionBarrier&               Reset();
+    ExecutionBarrier&               AddImageBarrier( const ImageBarrier& barrier );
+    ExecutionBarrier&               AddBufferBarrier( const BufferBarrier& barrier );
+
+}; // struct ExecutionBarrier
+
+//
+//
+struct ResourceUpdate {
+
+    ResourceUpdateType::Enum        type;
+    ResourceHandle                  handle;
+    uint32_t                             current_frame;
+    uint32_t                             deleting;
+}; // struct ResourceUpdate

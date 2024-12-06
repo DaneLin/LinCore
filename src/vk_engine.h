@@ -89,7 +89,8 @@ struct RenderObject {
 
 	uint32_t first_index;
 
-	VkBuffer index_buffer;
+	//VkBuffer index_buffer;
+	BufferHandle index_buffer_handle;
 
 	size_t indirect_draw_index;
 
@@ -115,9 +116,12 @@ struct MeshNode : public Node {
 };
 
 struct GlobalMeshBuffer {
-	AllocatedBuffer<Vertex> vertex_buffer;
+	/*AllocatedBuffer<Vertex> vertex_buffer;
 	AllocatedBuffer<uint32_t> index_buffer;
-	AllocatedBuffer<VkDrawIndexedIndirectCommand> indirect_command_buffer;
+	AllocatedBuffer<VkDrawIndexedIndirectCommand> indirect_command_buffer;*/
+	BufferHandle vertex_buffer_handle;
+	BufferHandle index_buffer_handle;
+	BufferHandle indirect_command_buffer_handle;
 
 	std::vector<Vertex> vertex_data;
 	std::vector<uint32_t> index_data;
@@ -184,11 +188,8 @@ public:
 	FrameData frames_[kFRAME_OVERLAP];
 
 	VkQueue main_queue_;
-
 	VkQueue transfer_queue_;
-
 	uint32_t main_queue_family_;
-
 	uint32_t transfer_queue_family_;
 
 	DeletionQueue main_deletion_queue_;
@@ -197,40 +198,34 @@ public:
 
 	// draw resources
 	AllocatedImage draw_image_;
-
 	AllocatedImage depth_image_;
-
 	VkExtent2D draw_extent_;
-
 	float render_scale_ = 1.f;
 
 	lc::DescriptorAllocatorGrowable global_descriptor_allocator_;
 
 	// 添加bindless相关成员
 	VkDescriptorSetLayout bindless_texture_layout_{ VK_NULL_HANDLE };
-
 	VkDescriptorSet bindless_texture_set_{ VK_NULL_HANDLE };
+	
+	VkDescriptorSetLayout draw_image_descriptor_layout_{ VK_NULL_HANDLE };;
+	VkDescriptorSet draw_image_descriptor_{ VK_NULL_HANDLE };
 
-	VkDescriptorSet draw_image_descriptor_;
-
-	VkDescriptorSetLayout draw_image_descriptor_layout_;
+	VkDescriptorSetLayout gpu_scene_data_descriptor_layout_;
 
 	VkPipelineLayout mesh_pipeline_layout_;
 
 	std::vector<ComputeEffect> background_effects_;
-
 	int current_background_effect_{ 0 };
 	int current_scene_{ 0 };
 
 	GPUSceneData scene_data_;
 
-	VkDescriptorSetLayout gpu_scene_data_descriptor_layout_;
-	
 	struct {
-		AllocatedImage white_image;
-		AllocatedImage black_image;
-		AllocatedImage grey_image;
-		AllocatedImage error_checker_board_image;
+		TextureHandle white_image;
+		TextureHandle black_image;
+		TextureHandle grey_image;
+		TextureHandle error_checker_board_image;
 	}default_images_;
 
 	struct {
@@ -251,9 +246,7 @@ public:
 	EngineStats engine_stats_;
 
 	lc::ShaderCache shader_cache_;
-
 	lc::TextureCache texture_cache_;
-
 	lc::PipelineCache* global_pipeline_cache_;
 
 	vkutils::VulkanProfiler* profiler_;
@@ -262,12 +255,12 @@ public:
 	enki::TaskScheduler io_task_scheduler_;
 	lc::RunPinnedTaskLoopTask run_pinned_task;
 	lc::AsyncLoadTask async_load_task;
-
 	lc::AsyncLoader async_loader_;
 
 	GlobalMeshBuffer global_mesh_buffer_;
 
 	CommandBufferManager command_buffer_manager_;
+	ResourceManager resource_manager_;
 
 public:
 
@@ -287,19 +280,17 @@ public:
 
 	FrameData& GetCurrentFrame() { return frames_[frame_number_ % kFRAME_OVERLAP]; }
 
-	void ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function);
-
-	AllocatedBufferUntyped CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
-
-	void DestroyBuffer(const AllocatedBufferUntyped& buffer);
-
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
-	AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	//AllocatedBufferUntyped CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 
-	AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	//void DestroyBuffer(const AllocatedBufferUntyped& buffer);
 
-	void DestroyImage(const AllocatedImage& image);
+	//AllocatedImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+
+	//AllocatedImage CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+
+	//void DestroyImage(const AllocatedImage& image);
 
 	void UpdateScene();
 

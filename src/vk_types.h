@@ -19,16 +19,7 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
-
-
-struct AllocatedImage
-{
-	VkImage image;
-	VkImageView view;
-	VmaAllocation allocation;
-	VkExtent3D extent;
-	VkFormat format;
-};
+#include "vk_resources.h"
 
 struct DeletionQueue
 {
@@ -49,37 +40,6 @@ struct DeletionQueue
 
 		deletors.clear();
 	}
-};
-
-struct AllocatedBufferUntyped
-{
-	VkBuffer buffer{ VK_NULL_HANDLE };
-	VmaAllocation allocation{};
-	VmaAllocationInfo info{};
-	VkDeviceSize size{ 0 };
-	VkDescriptorBufferInfo GetInfo(VkDeviceSize offset = 0) const;
-};
-
-inline VkDescriptorBufferInfo AllocatedBufferUntyped::GetInfo(VkDeviceSize offset) const
-{
-	return VkDescriptorBufferInfo{ .buffer=buffer,.offset = offset, .range = size };
-}
-
-template<typename T>
-struct AllocatedBuffer : public AllocatedBufferUntyped {
-	void operator=(const AllocatedBufferUntyped& other) {
-		buffer = other.buffer;
-		allocation = other.allocation;
-		info = other.info;
-		size = other.size;
-	}
-	AllocatedBuffer(AllocatedBufferUntyped& other) {
-		buffer = other.buffer;
-		allocation = other.allocation;
-		info = other.info;
-		size = other.size;
-	}
-	AllocatedBuffer() = default;
 };
 
 // Mesh buffers on GPU
@@ -105,8 +65,10 @@ struct GPUSceneData
 // holds the resources needed for a mesh
 struct GPUMeshBuffers
 {
-	AllocatedBuffer<uint32_t> index_buffer;
-	AllocatedBuffer<Vertex> vertex_buffer;
+	/*AllocatedBuffer<uint32_t> index_buffer;
+	AllocatedBuffer<Vertex> vertex_buffer;*/
+	BufferHandle index_buffer_handle;
+	BufferHandle vertex_buffer_handle;
 	size_t indirect_index;
 	VkDeviceAddress vertex_buffer_address;
 };
@@ -184,20 +146,4 @@ struct Node : public IRenderable
 		}
 	}
 };
-
-inline bool IsDepthFormat(VkFormat format)
-{
-	switch (format)
-	{
-	case VK_FORMAT_D16_UNORM:
-	case VK_FORMAT_X8_D24_UNORM_PACK32:
-	case VK_FORMAT_D32_SFLOAT:
-	case VK_FORMAT_D16_UNORM_S8_UINT:
-	case VK_FORMAT_D24_UNORM_S8_UINT:
-	case VK_FORMAT_D32_SFLOAT_S8_UINT:
-		return true;
-	default:
-		return false;
-	}
-}
 

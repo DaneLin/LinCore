@@ -8,16 +8,6 @@
 #include <future>
 #include <logging.h>
 
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#else
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <sched.h>
-#endif
-
 namespace fastgltf
 {
 	class Asset;
@@ -104,19 +94,6 @@ namespace lc
 	{
 		void Execute() override
 		{
-#ifdef _WIN32
-			HANDLE thread = GetCurrentThread();
-			PROCESSOR_NUMBER procNumber;
-			GetCurrentProcessorNumberEx(&procNumber);
-			LOGI("IO Task Thread ID: {}, Running on Processor: Group {}, Number {}",
-				GetCurrentThreadId(),
-				procNumber.Group,
-				procNumber.Number);
-#else
-			pid_t tid = syscall(SYS_gettid);
-			int cpu = sched_getcpu();
-			LOGI("IO Task Thread ID: {}, Running on CPU: {}", tid, cpu);
-#endif
 			while (task_scheduler->GetIsRunning()&& execute)
 			{
 				task_scheduler->WaitForNewPinnedTasks();
@@ -150,6 +127,7 @@ namespace lc
 		enki::TaskScheduler *task_scheduler;
 		std::shared_ptr<AsyncLoaderState> state;
 	};
+
 
 	struct TextureID
 	{
@@ -277,7 +255,7 @@ namespace lc
 
 		lc::DescriptorAllocatorGrowable descriptor_pool;
 
-		AllocatedBufferUntyped material_data_buffer;
+		BufferHandle material_data_buffer_handle;
 
 		VulkanEngine *creator;
 

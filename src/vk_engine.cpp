@@ -57,7 +57,7 @@ struct CommandRecordingTask : enki::ITaskSet {
 		thread_cmd->BeginSecondary(inheritance_info);
 
 #if LC_DRAW_INDIRECT
-		thread_cmd->BindIndexBuffer(engine->global_mesh_buffer_.index_buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+		thread_cmd->BindIndexBuffer(engine->resource_manager_.GetBuffer(engine->global_mesh_buffer_.index_buffer_handle).buffer, 0, VK_INDEX_TYPE_UINT32);
 #endif
 
 		thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -149,8 +149,9 @@ void VulkanEngine::Init()
 	InitVulkan();
 
 	profiler_ = new vkutils::VulkanProfiler();
-
 	profiler_->Init(device_, gpu_properties_.limits.timestampPeriod);
+
+	resource_manager_.Init(this);
 
 	InitSwapchain();
 
@@ -167,6 +168,8 @@ void VulkanEngine::Init()
 	InitDefaultData();
 
 	InitTaskSystem();
+
+	
 
 	main_camera_.velocity_ = glm::vec3(0.f);
 	main_camera_.position_ = glm::vec3(-10, 1, 0);
@@ -190,11 +193,6 @@ void VulkanEngine::Init()
 
 	global_mesh_buffer_.UploadToGPU(this);
 
-	main_deletion_queue_.PushFunction([=]() {
-		DestroyBuffer(global_mesh_buffer_.vertex_buffer);
-		DestroyBuffer(global_mesh_buffer_.index_buffer);
-		DestroyBuffer(global_mesh_buffer_.indirect_command_buffer); });
-
 	for (size_t i = 0; i < loaded_scenes.size(); ++i)
 	{
 		loaded_scenes_[std::to_string(i)] = *loaded_scenes[i];
@@ -213,6 +211,8 @@ void VulkanEngine::CleanUp()
 
 		profiler_->CleanUp();
 		delete profiler_;
+
+		resource_manager_.CleanUp();
 
 		command_buffer_manager_.Shutdown();
 
@@ -459,36 +459,30 @@ void VulkanEngine::Run()
 	}
 }
 
-void VulkanEngine::ImmediateSubmit(std::function<void(VkCommandBuffer cmd)>&& function)
-{
-	command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd)
-		{ function(cmd->GetCommandBuffer()); }, main_queue_);
-}
-
-AllocatedBufferUntyped VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
-{
-	// allocate buffer
-	VkBufferCreateInfo bufferInfo = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-	bufferInfo.pNext = nullptr;
-	bufferInfo.size = allocSize;
-
-	bufferInfo.usage = usage;
-
-	VmaAllocationCreateInfo vmaallocInfo = {};
-	vmaallocInfo.usage = memoryUsage;
-	vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT;
-	AllocatedBufferUntyped newBuffer;
-
-	// allocate the buffer
-	VK_CHECK(vmaCreateBuffer(allocator_, &bufferInfo, &vmaallocInfo, &newBuffer.buffer, &newBuffer.allocation, &newBuffer.info));
-
-	return newBuffer;
-}
-
-void VulkanEngine::DestroyBuffer(const AllocatedBufferUntyped& buffer)
-{
-	vmaDestroyBuffer(allocator_, buffer.buffer, buffer.allocation);
-}
+//AllocatedBufferUntyped VulkanEngine::CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage)
+//{
+//	// allocate buffer
+//	VkBufferCreateInfo bufferInfo = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+//	bufferInfo.pNext = nullptr;
+//	bufferInfo.size = allocSize;
+//
+//	bufferInfo.usage = usage;
+//
+//	VmaAllocationCreateInfo vmaallocInfo = {};
+//	vmaallocInfo.usage = memoryUsage;
+//	vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT;
+//	AllocatedBufferUntyped newBuffer;
+//
+//	// allocate the buffer
+//	VK_CHECK(vmaCreateBuffer(allocator_, &bufferInfo, &vmaallocInfo, &newBuffer.buffer, &newBuffer.allocation, &newBuffer.info));
+//
+//	return newBuffer;
+//}
+//
+//void VulkanEngine::DestroyBuffer(const AllocatedBufferUntyped& buffer)
+//{
+//	vmaDestroyBuffer(allocator_, buffer.buffer, buffer.allocation);
+//}
 
 GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
 {
@@ -498,125 +492,133 @@ GPUMeshBuffers VulkanEngine::UploadMesh(std::span<uint32_t> indices, std::span<V
 	GPUMeshBuffers new_surface;
 
 	// create the vertex buffer
-	new_surface.vertex_buffer = CreateBuffer(vertex_buffer_size,
+	/*new_surface.vertex_buffer = CreateBuffer(vertex_buffer_size,
 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+		VMA_MEMORY_USAGE_GPU_ONLY);*/
+	BufferCreationInfo vertex_buffer_info{};
+	vertex_buffer_info.Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY, vertex_buffer_size);
+	new_surface.vertex_buffer_handle = resource_manager_.CreateBuffer(vertex_buffer_info);
 
 	// find the address of the vertex buffer
-	VkBufferDeviceAddressInfo deviceAddressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = new_surface.vertex_buffer.buffer };
+	/*VkBufferDeviceAddressInfo deviceAddressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = new_surface.vertex_buffer.buffer };*/
+	VkBufferDeviceAddressInfo deviceAddressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = resource_manager_.GetBuffer(new_surface.vertex_buffer_handle).buffer};
 	new_surface.vertex_buffer_address = vkGetBufferDeviceAddress(device_, &deviceAddressInfo);
 
 	// create index buffer
-	new_surface.index_buffer = CreateBuffer(index_buffer_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+	// new_surface.index_buffer = CreateBuffer(index_buffer_size, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+	BufferCreationInfo index_buffer_info{};
+	index_buffer_info.Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, index_buffer_size);
+	new_surface.index_buffer_handle = resource_manager_.CreateBuffer(index_buffer_info);
 
-	AllocatedBufferUntyped staging = CreateBuffer(vertex_buffer_size + index_buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+	BufferCreationInfo staging_buffer_info{};
+	staging_buffer_info.Reset().Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, vertex_buffer_size + index_buffer_size);
+	BufferHandle staging_buffer_handle = resource_manager_.CreateBuffer(staging_buffer_info);
+	AllocatedBufferUntyped& staging = resource_manager_.GetBuffer(staging_buffer_handle);
 
 	void* data = staging.allocation->GetMappedData();
 
 	memcpy(data, vertices.data(), vertex_buffer_size);
 	memcpy((char*)data + vertex_buffer_size, indices.data(), index_buffer_size);
 
-	ImmediateSubmit([&](VkCommandBuffer cmd)
+	command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd)
 		{
 			VkBufferCopy vertex_copy{ 0 };
 			vertex_copy.dstOffset = 0;
 			vertex_copy.srcOffset = 0;
 			vertex_copy.size = vertex_buffer_size;
 
-			vkCmdCopyBuffer(cmd, staging.buffer, new_surface.vertex_buffer.buffer, 1, &vertex_copy);
+			vkCmdCopyBuffer(cmd->command_buffer_, staging.buffer, resource_manager_.GetBuffer(new_surface.vertex_buffer_handle).buffer, 1, &vertex_copy);
 
 			VkBufferCopy index_copy{ 0 };
 			index_copy.dstOffset = 0;
 			index_copy.srcOffset = vertex_buffer_size;
 			index_copy.size = index_buffer_size;
 
-			vkCmdCopyBuffer(cmd, staging.buffer, new_surface.index_buffer.buffer, 1, &index_copy); });
-
-	DestroyBuffer(staging);
+			vkCmdCopyBuffer(cmd->command_buffer_, staging.buffer, resource_manager_.GetBuffer(new_surface.index_buffer_handle).buffer, 1, &index_copy); }, main_queue_);
 
 	return new_surface;
 }
 
-AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
-{
-	AllocatedImage new_image;
-	new_image.format = format;
-	new_image.extent = size;
-
-	VkImageCreateInfo imgInfo = vkinit::ImageCreateInfo(format, usage, size);
-	if (mipmapped)
-	{
-		imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(size.width, size.height)))) + 1;
-	}
-
-	// always allocate images on dedicated GPU memory
-	VmaAllocationCreateInfo allocInfo = {};
-	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-	allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-	VK_CHECK(vmaCreateImage(allocator_, &imgInfo, &allocInfo, &new_image.image, &new_image.allocation, nullptr));
-
-	VkImageAspectFlags aspect_flag = VK_IMAGE_ASPECT_COLOR_BIT;
-	if (format == VK_FORMAT_D32_SFLOAT)
-	{
-		aspect_flag = VK_IMAGE_ASPECT_DEPTH_BIT;
-	}
-
-	// build a image-view for the image
-	VkImageViewCreateInfo view_info = vkinit::ImageViewCreateInfo(format, new_image.image, aspect_flag);
-	view_info.subresourceRange.levelCount = imgInfo.mipLevels;
-
-	VK_CHECK(vkCreateImageView(device_, &view_info, nullptr, &new_image.view));
-
-	return new_image;
-}
-
-AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
-{
-	size_t data_size = size.depth * size.width * size.height * 4;
-	AllocatedBufferUntyped upload_buffer = CreateBuffer(data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	memcpy(upload_buffer.info.pMappedData, data, data_size);
-
-	AllocatedImage new_image = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
-
-	command_buffer_manager_.ImmediateSubmit(([&](CommandBuffer* cmd)
-		{
-			cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-			VkBufferImageCopy copy_region{};
-			copy_region.bufferOffset = 0;
-			copy_region.bufferRowLength = 0;
-			copy_region.bufferImageHeight = 0;
-
-			copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			copy_region.imageSubresource.mipLevel = 0;
-			copy_region.imageSubresource.baseArrayLayer = 0;
-			copy_region.imageSubresource.layerCount = 1;
-			copy_region.imageExtent = size;
-
-			// copy the buffer into the image
-			vkCmdCopyBufferToImage(cmd->command_buffer_, upload_buffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
-
-			if (mipmapped)
-			{
-				cmd->GenerateMipmaps(new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
-			}
-			else
-			{
-				cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-			} }), main_queue_);
-
-			DestroyBuffer(upload_buffer);
-
-			return new_image;
-}
-
-void VulkanEngine::DestroyImage(const AllocatedImage& image)
-{
-	vkDestroyImageView(device_, image.view, nullptr);
-	vmaDestroyImage(allocator_, image.image, image.allocation);
-}
+//AllocatedImage VulkanEngine::CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+//{
+//	AllocatedImage new_image;
+//	new_image.format = format;
+//	new_image.extent = size;
+//
+//	VkImageCreateInfo imgInfo = vkinit::ImageCreateInfo(format, usage, size);
+//	if (mipmapped)
+//	{
+//		imgInfo.mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(size.width, size.height)))) + 1;
+//	}
+//
+//	// always allocate images on dedicated GPU memory
+//	VmaAllocationCreateInfo allocInfo = {};
+//	allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+//	allocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+//
+//	VK_CHECK(vmaCreateImage(allocator_, &imgInfo, &allocInfo, &new_image.image, &new_image.allocation, nullptr));
+//
+//	VkImageAspectFlags aspect_flag = VK_IMAGE_ASPECT_COLOR_BIT;
+//	if (format == VK_FORMAT_D32_SFLOAT)
+//	{
+//		aspect_flag = VK_IMAGE_ASPECT_DEPTH_BIT;
+//	}
+//
+//	// build a image-view for the image
+//	VkImageViewCreateInfo view_info = vkinit::ImageViewCreateInfo(format, new_image.image, aspect_flag);
+//	view_info.subresourceRange.levelCount = imgInfo.mipLevels;
+//
+//	VK_CHECK(vkCreateImageView(device_, &view_info, nullptr, &new_image.view));
+//
+//	return new_image;
+//}
+//
+//AllocatedImage VulkanEngine::CreateImage(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+//{
+//	size_t data_size = size.depth * size.width * size.height * 4;
+//	AllocatedBufferUntyped upload_buffer = CreateBuffer(data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+//
+//	memcpy(upload_buffer.info.pMappedData, data, data_size);
+//
+//	AllocatedImage new_image = CreateImage(size, format, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, mipmapped);
+//
+//	command_buffer_manager_.ImmediateSubmit(([&](CommandBuffer* cmd)
+//		{
+//			cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+//
+//			VkBufferImageCopy copy_region{};
+//			copy_region.bufferOffset = 0;
+//			copy_region.bufferRowLength = 0;
+//			copy_region.bufferImageHeight = 0;
+//
+//			copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+//			copy_region.imageSubresource.mipLevel = 0;
+//			copy_region.imageSubresource.baseArrayLayer = 0;
+//			copy_region.imageSubresource.layerCount = 1;
+//			copy_region.imageExtent = size;
+//
+//			// copy the buffer into the image
+//			vkCmdCopyBufferToImage(cmd->command_buffer_, upload_buffer.buffer, new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy_region);
+//
+//			if (mipmapped)
+//			{
+//				cmd->GenerateMipmaps(new_image.image, VkExtent2D{ new_image.extent.width, new_image.extent.height });
+//			}
+//			else
+//			{
+//				cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+//			} }), main_queue_);
+//
+//			DestroyBuffer(upload_buffer);
+//
+//			return new_image;
+//}
+//
+//void VulkanEngine::DestroyImage(const AllocatedImage& image)
+//{
+//	vkDestroyImageView(device_, image.view, nullptr);
+//	vmaDestroyImage(allocator_, image.image, image.allocation);
+//}
 
 void VulkanEngine::InitVulkan()
 {
@@ -1109,13 +1111,20 @@ void VulkanEngine::InitDefaultData()
 {
 
 	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
-	default_images_.white_image = CreateImage((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+	TextureCreationInfo image_info{};
+	image_info.SetData((void*)&white)
+		.SetSize(1,1,1)
+		.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
+		.SetUsage(VK_IMAGE_USAGE_SAMPLED_BIT);
+	default_images_.white_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66, 0.66, 0.66, 1));
-	default_images_.grey_image = CreateImage((void*)&grey, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+	image_info.SetData((void*)&grey);
+	default_images_.grey_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&grey, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
-	default_images_.black_image = CreateImage((void*)&black, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+	image_info.SetData((void*)&black);
+	default_images_.black_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&black, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	// checkerboard image
 	uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
@@ -1127,7 +1136,9 @@ void VulkanEngine::InitDefaultData()
 			pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
 		}
 	}
-	default_images_.error_checker_board_image = CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+	image_info.SetData(pixels.data())
+		.SetSize(16, 16, 1);
+	default_images_.error_checker_board_image = resource_manager_.CreateTexture(image_info);// CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 
 	VkSamplerCreateInfo sampler_create_info = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 
@@ -1145,28 +1156,24 @@ void VulkanEngine::InitDefaultData()
 		{
 			vkDestroySampler(device_, default_samplers_.nearest, nullptr);
 			vkDestroySampler(device_, default_samplers_.linear, nullptr);
-
-			DestroyImage(default_images_.white_image);
-			DestroyImage(default_images_.grey_image);
-			DestroyImage(default_images_.black_image);
-			DestroyImage(default_images_.error_checker_board_image); });
+		});
 
 	GLTFMetallic_Roughness::MaterialResources material_resources;
-	material_resources.color_image = default_images_.white_image;
+	material_resources.color_image = resource_manager_.GetTexture( default_images_.white_image);
 	material_resources.color_sampler = default_samplers_.linear;
-	material_resources.metal_rough_image = default_images_.white_image;
+	material_resources.metal_rough_image = resource_manager_.GetTexture(default_images_.white_image);
 	material_resources.metal_rought_sampler = default_samplers_.linear;
 
 	// set the uniform buffer for the material data
-	AllocatedBufferUntyped material_constants = CreateBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	BufferCreationInfo buffer_info{};
+	buffer_info.Reset().Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, sizeof(GLTFMetallic_Roughness::MaterialConstants));
+	BufferHandle material_constants_handle = resource_manager_.CreateBuffer(buffer_info);
+	AllocatedBufferUntyped& material_constants = resource_manager_.GetBuffer(material_constants_handle);// CreateBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// write the buffer
 	GLTFMetallic_Roughness::MaterialConstants* scene_uniform_data = (GLTFMetallic_Roughness::MaterialConstants*)material_constants.allocation->GetMappedData();
 	scene_uniform_data->color_factors = glm::vec4(1, 1, 1, 1);
 	scene_uniform_data->metal_rough_factors = glm::vec4(1, 0.5, 0, 0);
-
-	main_deletion_queue_.PushFunction([=, this]()
-		{ DestroyBuffer(material_constants); });
 
 	material_resources.data_buffer = material_constants.buffer;
 	material_resources.data_buffer_offset = 0;
@@ -1311,7 +1318,7 @@ void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 			const RenderObject& A = main_draw_context_.opaque_surfaces[iA];
 			const RenderObject& B = main_draw_context_.opaque_surfaces[iB];
 			if (A.material == B.material) {
-				return A.index_buffer < B.index_buffer;
+				return resource_manager_.GetBuffer( A.index_buffer_handle).buffer < resource_manager_.GetBuffer(B.index_buffer_handle).buffer;
 			}
 			else {
 				return A.material < B.material;
@@ -1319,11 +1326,10 @@ void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 
 
 	// allocate a new uniform buffer for the scene data
-	AllocatedBufferUntyped gpu_scene_data_buffer = CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
-	// add it to the deletion queue of this frame so it gets deleted once its been used
-	GetCurrentFrame().deletion_queue.PushFunction([=, this]()
-		{ DestroyBuffer(gpu_scene_data_buffer); });
+	BufferCreationInfo buffer_info{};
+	buffer_info.Reset().Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, sizeof(GPUSceneData));
+	BufferHandle gpu_handle = resource_manager_.CreateBuffer(buffer_info);
+	AllocatedBufferUntyped& gpu_scene_data_buffer = resource_manager_.GetBuffer(gpu_handle);// CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	// write the buffer
 	GPUSceneData* scene_uniform_data = (GPUSceneData*)gpu_scene_data_buffer.allocation->GetMappedData();
@@ -1336,7 +1342,7 @@ void VulkanEngine::DrawGeometry(CommandBuffer* cmd)
 		lc::DescriptorWriter writer;
 		writer.WriteBuffer(0, gpu_scene_data_buffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 #if LC_DRAW_INDIRECT
-		writer.WriteBuffer(1, global_mesh_buffer_.vertex_buffer.buffer, sizeof(Vertex) * global_mesh_buffer_.vertex_data.size(), 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+		writer.WriteBuffer(1, resource_manager_.GetBuffer( global_mesh_buffer_.vertex_buffer_handle).buffer, sizeof(Vertex) * global_mesh_buffer_.vertex_data.size(), 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 #endif // LC_DRAW_INDIRECT
 		writer.UpdateSet(device_, global_descriptor);
 	}
@@ -1453,15 +1459,15 @@ void VulkanEngine::DrawObject(CommandBuffer* cmd, const RenderObject& r, RenderI
 	gpu_draw_indirect_push_constants.world_matrix = r.transform;
 	cmd->PushConstants(r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &gpu_draw_indirect_push_constants);
 
-	cmd->DrawIndexedIndirect(global_mesh_buffer_.indirect_command_buffer.buffer, 
+	cmd->DrawIndexedIndirect(resource_manager_.GetBuffer(global_mesh_buffer_.indirect_command_buffer_handle).buffer, 
 		static_cast<uint32_t>(r.indirect_draw_index * sizeof(VkDrawIndexedIndirectCommand)), 
 		static_cast<uint32_t>(sizeof(VkDrawIndexedIndirectCommand)));
 #else
 	// rebind index buffer if needed
-	if (r.index_buffer != render_info.last_index_buffer)
+	if (resource_manager_.GetBuffer(r.index_buffer_handle).buffer != render_info.last_index_buffer)
 	{
-		render_info.last_index_buffer = r.index_buffer;
-		cmd->BindIndexBuffer(r.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+		render_info.last_index_buffer = resource_manager_.GetBuffer(r.index_buffer_handle).buffer;
+		cmd->BindIndexBuffer(render_info.last_index_buffer, 0, VK_INDEX_TYPE_UINT32);
 	}
 	// calculate final mesh matrix
 	GPUDrawPushConstants gpu_draw_push_constants;
@@ -1621,7 +1627,7 @@ void MeshNode::Draw(const glm::mat4& top_matrix, DrawContext& ctx)
 			RenderObject def;
 			def.index_count = s.count;
 			def.first_index = s.start_index;
-			def.index_buffer = mesh->mesh_buffers.index_buffer.buffer;
+			def.index_buffer_handle = mesh->mesh_buffers.index_buffer_handle;
 			def.material = &s.material->data;
 			def.bounds = s.bounds;
 			def.transform = node_matrix;
@@ -1643,62 +1649,60 @@ void GlobalMeshBuffer::UploadToGPU(VulkanEngine* engine)
 	LOGI("Uploading mesh data to GPU");
 	size_t vertex_buffer_size = vertex_data.size() * sizeof(Vertex);
 	size_t index_buffer_size = index_data.size() * sizeof(uint32_t);
+	size_t command_buffer_size = indirect_commands.size() * sizeof(VkDrawIndexedIndirectCommand);
 
-	vertex_buffer = engine->CreateBuffer(vertex_buffer_size,
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+	BufferCreationInfo vertex_buffer_info{};
+	vertex_buffer_info.Reset().Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY,
+		vertex_buffer_size);
 
-	index_buffer = engine->CreateBuffer(index_buffer_size,
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+	BufferCreationInfo index_buffer_info{};
+	index_buffer_info.Reset().Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY,
+		index_buffer_size);
+	BufferCreationInfo indirect_buffer_info{};
+	indirect_buffer_info.Reset().Set(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+		VMA_MEMORY_USAGE_GPU_ONLY,
+		command_buffer_size);
+	BufferCreationInfo staging_buffer_info{};
+	staging_buffer_info.Reset().Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VMA_MEMORY_USAGE_CPU_ONLY,
+		vertex_buffer_size + index_buffer_size + command_buffer_size);
 
-	AllocatedBufferUntyped staging_buffer = engine->CreateBuffer(vertex_buffer_size + index_buffer_size,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VMA_MEMORY_USAGE_CPU_ONLY);
+	vertex_buffer_handle = engine->resource_manager_.CreateBuffer(vertex_buffer_info);
+	index_buffer_handle = engine->resource_manager_.CreateBuffer(index_buffer_info);
+	indirect_command_buffer_handle = engine->resource_manager_.CreateBuffer(indirect_buffer_info);
+	BufferHandle staging_buffer_handle = engine->resource_manager_.CreateBuffer(staging_buffer_info);
+
+	AllocatedBufferUntyped& staging_buffer = engine->resource_manager_.GetBuffer(staging_buffer_handle);
 
 	void* data = staging_buffer.allocation->GetMappedData();
 	memcpy(data, vertex_data.data(), vertex_buffer_size);
 	memcpy((char*)data + vertex_buffer_size, index_data.data(), index_buffer_size);
+	memcpy((char*)data + vertex_buffer_size + index_buffer_size, indirect_commands.data(), command_buffer_size);
 
-	engine->ImmediateSubmit([&](VkCommandBuffer cmd)
+	engine->command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd)
 		{
 			VkBufferCopy vertex_copy{ 0 };
 			vertex_copy.dstOffset = 0;
 			vertex_copy.srcOffset = 0;
 			vertex_copy.size = vertex_buffer_size;
 
-			vkCmdCopyBuffer(cmd, staging_buffer.buffer, vertex_buffer.buffer, 1, &vertex_copy);
+			vkCmdCopyBuffer(cmd->command_buffer_, staging_buffer.buffer, engine->resource_manager_.GetBuffer(vertex_buffer_handle).buffer, 1, &vertex_copy);
 
 			VkBufferCopy index_copy{ 0 };
 			index_copy.dstOffset = 0;
 			index_copy.srcOffset = vertex_buffer_size;
 			index_copy.size = index_buffer_size;
 
-			vkCmdCopyBuffer(cmd, staging_buffer.buffer, index_buffer.buffer, 1, &index_copy); });
+			vkCmdCopyBuffer(cmd->command_buffer_, staging_buffer.buffer, engine->resource_manager_.GetBuffer(index_buffer_handle).buffer, 1, &index_copy); 
 
-	engine->DestroyBuffer(staging_buffer);
+			VkBufferCopy command_copy{ 0 };
+			command_copy.dstOffset = 0;
+			command_copy.srcOffset = vertex_buffer_size + index_buffer_size;
+			command_copy.size = command_buffer_size;
 
-	size_t command_buffer_size = indirect_commands.size() * sizeof(VkDrawIndexedIndirectCommand);
-
-	indirect_command_buffer = engine->CreateBuffer(command_buffer_size,
-		VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VMA_MEMORY_USAGE_GPU_ONLY);
-
-	staging_buffer = engine->CreateBuffer(command_buffer_size,
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VMA_MEMORY_USAGE_CPU_ONLY);
-
-	data = staging_buffer.allocation->GetMappedData();
-	memcpy(data, indirect_commands.data(), command_buffer_size);
-
-	engine->ImmediateSubmit([&](VkCommandBuffer cmd)
-		{
-			VkBufferCopy copy_region{};
-			copy_region.srcOffset = 0;
-			copy_region.dstOffset = 0;
-			copy_region.size = command_buffer_size;
-
-			vkCmdCopyBuffer(cmd, staging_buffer.buffer, indirect_command_buffer.buffer, 1, &copy_region); });
-
-	engine->DestroyBuffer(staging_buffer);
+			vkCmdCopyBuffer(cmd->command_buffer_, staging_buffer.buffer, engine->resource_manager_.GetBuffer(indirect_command_buffer_handle).buffer, 1, &command_copy);
+		}, 
+		engine->main_queue_);
 }

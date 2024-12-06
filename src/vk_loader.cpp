@@ -241,16 +241,17 @@ namespace lc
 			else
 			{
 				// we failed to load, so lets give the slot a default white texture to not completely break loading
-				images.push_back(engine->default_images_.error_checker_board_image);
+				images.push_back(engine->resource_manager_.GetTexture( engine->default_images_.error_checker_board_image));
 				LOGW("gltf failed to load texture {}, fallint to default error texture", image.name);
 			}
 		}
+		BufferCreationInfo buffer_info{};
+		buffer_info.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size());
+		file.material_data_buffer_handle = engine->resource_manager_.CreateBuffer(buffer_info);
 
-		file.material_data_buffer = engine->CreateBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size(),
-														 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-														 VMA_MEMORY_USAGE_CPU_TO_GPU);
+		AllocatedBufferUntyped material_data_buffer = engine->resource_manager_.GetBuffer(file.material_data_buffer_handle);
 		int data_index = 0;
-		GLTFMetallic_Roughness::MaterialConstants *sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants *)file.material_data_buffer.info.pMappedData;
+		GLTFMetallic_Roughness::MaterialConstants *sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants *)material_data_buffer.info.pMappedData;
 
 		for (fastgltf::Material &mat : gltf.materials)
 		{
@@ -275,12 +276,12 @@ namespace lc
 
 			GLTFMetallic_Roughness::MaterialResources material_resources;
 			// TODO: Replace with real images
-			material_resources.color_image = engine->default_images_.white_image;
+			material_resources.color_image = engine->resource_manager_.GetTexture(engine->default_images_.white_image);
 			material_resources.color_sampler = engine->default_samplers_.linear;
-			material_resources.metal_rough_image = engine->default_images_.white_image;
+			material_resources.metal_rough_image = engine->resource_manager_.GetTexture(engine->default_images_.white_image);
 			material_resources.metal_rought_sampler = engine->default_samplers_.linear;
 
-			material_resources.data_buffer = file.material_data_buffer.buffer;
+			material_resources.data_buffer = material_data_buffer.buffer;
 			material_resources.data_buffer_offset = data_index * sizeof(GLTFMetallic_Roughness::MaterialConstants);
 
 			// grab textures from gltf file
@@ -335,11 +336,12 @@ namespace lc
 					fastgltf::Accessor &indexaccessor = gltf.accessors[p.indicesAccessor.value()];
 					indices.reserve(indices.size() + indexaccessor.count);
 
-					fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
-															 [&](std::uint32_t idx)
-															 {
-																 indices.push_back(static_cast<uint32_t>(idx + initial_vtx));
-															 });
+					fastgltf::iterateAccessor<std::uint32_t>(gltf, 
+						indexaccessor,
+						[&](std::uint32_t idx)
+						{
+							indices.push_back(static_cast<uint32_t>(idx + initial_vtx));
+						});
 				}
 
 				// load vertex positions
@@ -347,17 +349,18 @@ namespace lc
 					fastgltf::Accessor &posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
 					vertices.resize(vertices.size() + posAccessor.count);
 
-					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
-																  [&](glm::vec3 v, size_t index)
-																  {
-																	  Vertex newvtx;
-																	  newvtx.position = v;
-																	  newvtx.normal = {1, 0, 0};
-																	  newvtx.color = glm::vec4{1.f};
-																	  newvtx.uv_x = 0;
-																	  newvtx.uv_y = 0;
-																	  vertices[initial_vtx + index] = newvtx;
-																  });
+					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, 
+						posAccessor,
+						[&](glm::vec3 v, size_t index)
+						{
+							Vertex newvtx;
+							newvtx.position = v;
+							newvtx.normal = {1, 0, 0};
+							newvtx.color = glm::vec4{1.f};
+							newvtx.uv_x = 0;
+							newvtx.uv_y = 0;
+							vertices[initial_vtx + index] = newvtx;
+						});
 				}
 
 				// load vertex normals
@@ -365,11 +368,12 @@ namespace lc
 				if (normals != p.attributes.end())
 				{
 
-					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).accessorIndex],
-																  [&](glm::vec3 v, size_t index)
-																  {
-																	  vertices[initial_vtx + index].normal = v;
-																  });
+					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, 
+						gltf.accessors[(*normals).accessorIndex],
+						[&](glm::vec3 v, size_t index)
+						{
+							vertices[initial_vtx + index].normal = v;
+						});
 				}
 
 				// load UVs
@@ -377,12 +381,13 @@ namespace lc
 				if (uv != p.attributes.end())
 				{
 
-					fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).accessorIndex],
-																  [&](glm::vec2 v, size_t index)
-																  {
-																	  vertices[initial_vtx + index].uv_x = v.x;
-																	  vertices[initial_vtx + index].uv_y = v.y;
-																  });
+					fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, 
+						gltf.accessors[(*uv).accessorIndex],
+						[&](glm::vec2 v, size_t index)
+						{
+							vertices[initial_vtx + index].uv_x = v.x;
+							vertices[initial_vtx + index].uv_y = v.y;
+						});
 				}
 
 				// load vertex colors
@@ -390,11 +395,12 @@ namespace lc
 				if (colors != p.attributes.end())
 				{
 
-					fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).accessorIndex],
-																  [&](glm::vec4 v, size_t index)
-																  {
-																	  vertices[initial_vtx + index].color = v;
-																  });
+					fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, 
+						gltf.accessors[(*colors).accessorIndex],
+						[&](glm::vec4 v, size_t index)
+						{
+							vertices[initial_vtx + index].color = v;
+						});
 				}
 
 				if (p.materialIndex.has_value())
@@ -515,25 +521,24 @@ namespace lc
 		VkDevice dv = creator->device_;
 
 		descriptor_pool.DestroyPools(dv);
-		creator->DestroyBuffer(material_data_buffer);
 
-		for (auto &[k, v] : meshes)
+		/*for (auto &[k, v] : meshes)
 		{
 
 			creator->DestroyBuffer(v->mesh_buffers.index_buffer);
 			creator->DestroyBuffer(v->mesh_buffers.vertex_buffer);
-		}
+		}*/
 
-		for (auto &[k, v] : images)
-		{
+		//for (auto &[k, v] : images)
+		//{
 
-			if (v.image == creator->default_images_.error_checker_board_image.image)
-			{
-				// dont destroy the default images
-				continue;
-			}
-			creator->DestroyImage(v);
-		}
+		//	if (v.image == creator->default_images_.error_checker_board_image.image)
+		//	{
+		//		// dont destroy the default images
+		//		continue;
+		//	}
+		//	creator->DestroyImage(v);
+		//}
 
 		for (auto &sampler : samplers)
 		{
@@ -706,10 +711,19 @@ namespace lc
 
 			// Process upload as before...
 			size_t data_size = request.extent.depth * request.extent.width * request.extent.height * 4;
-			AllocatedBufferUntyped upload_buffer = VulkanEngine::Get().CreateBuffer(data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+			BufferCreationInfo buffer_info{};
+			buffer_info.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, data_size);
+			BufferHandle upload_buffer_handle = VulkanEngine::Get().resource_manager_.CreateBuffer(buffer_info);
+			AllocatedBufferUntyped& upload_buffer = VulkanEngine::Get().resource_manager_.GetBuffer(upload_buffer_handle);// (data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 			memcpy(upload_buffer.info.pMappedData, request.data, data_size);
 
-			AllocatedImage new_image = VulkanEngine::Get().CreateImage(request.extent, request.format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, request.enable_mips);
+			TextureCreationInfo texture_info{};
+			texture_info.SetSize(request.extent)
+				.SetFormatType(request.format, TextureType::Enum::Texture2D)
+				.SetUsage(VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+			TextureHandle texture_handle = VulkanEngine::Get().resource_manager_.CreateTexture(texture_info);
+			AllocatedImage& new_image = VulkanEngine::Get().resource_manager_.GetTexture(texture_handle);
+			//AllocatedImage new_image = VulkanEngine::Get().CreateImage(request.extent, request.format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, request.enable_mips);
 
 			VulkanEngine::Get().command_buffer_manager_.ImmediateSubmit(
 				[&](CommandBuffer* cmd) {
@@ -741,7 +755,6 @@ namespace lc
 				},
 				VulkanEngine::Get().transfer_queue_);
 
-			VulkanEngine::Get().DestroyBuffer(upload_buffer);
 			request.callback(new_image);
 		}
 	}

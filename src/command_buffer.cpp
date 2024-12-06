@@ -206,8 +206,9 @@ void CommandBuffer::PipelineBarrier2(const VkDependencyInfo& dep_info)
 
 void CommandBuffer::UploadTextureData(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
 {
-	AllocatedImage image = VulkanEngine::Get().CreateImage(data, size, format, usage, mipmapped);
-	TransitionImage(image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	//TODO: replace with resource manager
+	/*AllocatedImage image = VulkanEngine::Get().CreateImage(data, size, format, usage, mipmapped);
+	TransitionImage(image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);*/
 }
 
 void CommandBuffer::TransitionImage(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t src_queue_family_index, uint32_t dst_queue_family_index)
