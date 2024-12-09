@@ -25,6 +25,8 @@
 #include <volk.h>
 #include "frustum_cull.h"
 
+#include "vk_device.h"
+
 AutoCVar_Float CVAR_DrawDistance("gpu.drawDistance", "Distance cull", 5000);
 
 VulkanEngine* loaded_engine = nullptr;

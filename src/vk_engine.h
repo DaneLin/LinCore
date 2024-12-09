@@ -1,25 +1,18 @@
-﻿// vulkan_guide.h : Include file for standard system include files,
-// or project specific include files.
-
-#pragma once
+﻿#pragma once
 
 #include <vk_types.h>
 #include <vk_initializers.h>
-
 // bootstrap library
 #include "VkBootstrap.h"
 
 #include <vk_descriptors.h>
-
 #include "camera.h"
-
 #include "vk_shaders.h"
-
 #include "config.h"
 #include "vk_pipelines.h"
 #include "vk_loader.h"
 #include "TaskScheduler.h"
-#include <command_buffer.h>\
+#include <command_buffer.h>
 
 namespace vkutils {
 	class VulkanProfiler;
@@ -130,7 +123,9 @@ struct GlobalMeshBuffer {
 	void UploadToGPU(VulkanEngine* engine);
 };
 
-
+namespace lc {
+    class GPUDevice;  // Forward declaration
+}
 
 struct EngineStats {
 	float frame_time;
@@ -261,6 +256,8 @@ public:
 
 	CommandBufferManager command_buffer_manager_;
 	ResourceManager resource_manager_;
+
+	lc::GPUDevice* gpu_device_;  // 使用普通指针
 
 public:
 

@@ -1,4 +1,5 @@
-﻿#include <glm/matrix.hpp>
+﻿#pragma once
+#include <glm/matrix.hpp>
 
 class Frustum
 {

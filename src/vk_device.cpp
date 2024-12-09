@@ -5,69 +5,305 @@
 #include <vector>
 #include <algorithm>
 
-bool GPUDevice::Init(const CreateInfo& create_info) {
-    instance_ = CreateInstance(create_info.app_name, create_info.engine_name, create_info.api_version);
-    if (instance_ == VK_NULL_HANDLE) {
-        LOGE("Failed to create Vulkan instance");
-        return false;
-    }
+namespace lc
+{
+
+
+bool GPUDevice::InitVulkanFeatures() {
+    // vulkan 1.3 features
+    features_13_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    features_13_.dynamicRendering = true;
+    features_13_.synchronization2 = true;
+
+    // vulkan 1.2 features
+    features_12_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features_12_.bufferDeviceAddress = true;
+    features_12_.descriptorIndexing = true;
+    features_12_.descriptorBindingPartiallyBound = true;
+    features_12_.descriptorBindingSampledImageUpdateAfterBind = true;
+    features_12_.descriptorBindingUniformBufferUpdateAfterBind = true;
+    features_12_.runtimeDescriptorArray = true;
+    features_12_.descriptorBindingVariableDescriptorCount = true;
+    features_12_.hostQueryReset = true;
+    features_12_.drawIndirectCount = true;
+
+    // vulkan 1.0 features
+    features_10_.pipelineStatisticsQuery = true;
+    features_10_.multiDrawIndirect = true;
+    features_10_.geometryShader = true;
+    features_10_.inheritedQueries = true;
+
+    return true;
+}
+
+bool GPUDevice::InitVulkanDevice(VkSurfaceKHR surface) {
+    // Chain the feature structs
+    features_12_.pNext = &features_13_;
     
-    if (!SetupDebugMessenger()) {
-        LOGE("Failed to setup debug messenger");
+    // Create device info
+    VkDeviceCreateInfo device_info = {};
+    device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    device_info.pNext = &features_12_;
+    device_info.pEnabledFeatures = &features_10_;
+
+    // Setup queue create infos
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
+    std::set<uint32_t> unique_queue_families = { queue_indices_.graphics_family, queue_indices_.transfer_family };
+
+    float queue_priority = 1.0f;
+    for (uint32_t queue_family : unique_queue_families) {
+        VkDeviceQueueCreateInfo queue_create_info = {};
+        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_create_info.queueFamilyIndex = queue_family;
+        queue_create_info.queueCount = 1;
+        queue_create_info.pQueuePriorities = &queue_priority;
+        queue_create_infos.push_back(queue_create_info);
+    }
+
+    device_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
+    device_info.pQueueCreateInfos = queue_create_infos.data();
+
+    // Add device extensions
+    device_info.enabledExtensionCount = static_cast<uint32_t>(std::size(required_extensions));
+    device_info.ppEnabledExtensionNames = required_extensions;
+
+    // Create logical device
+    if (vkCreateDevice(physical_device_, &device_info, nullptr, &device_) != VK_SUCCESS) {
+        LOGE("Failed to create logical device");
         return false;
     }
 
-    if (!CreateDevice(create_info.surface)) {
-        LOGE("Failed to create logical device");
+    // Get queue handles
+    vkGetDeviceQueue(device_, queue_indices_.graphics_family, 0, &graphics_queue_);
+    vkGetDeviceQueue(device_, queue_indices_.transfer_family, 0, &transfer_queue_);
+    
+    return true;
+}
+
+bool GPUDevice::InitVulkanAllocator() {
+    VmaVulkanFunctions vulkan_functions = {};
+    vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+    vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
+    VmaAllocatorCreateInfo allocator_info = {};
+    allocator_info.physicalDevice = physical_device_;
+    allocator_info.device = device_;
+    allocator_info.instance = instance_;
+    allocator_info.pVulkanFunctions = &vulkan_functions;
+    allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+    if (vmaCreateAllocator(&allocator_info, &allocator_) != VK_SUCCESS) {
+        LOGE("Failed to create VMA allocator");
         return false;
     }
 
     return true;
 }
 
-VkInstance GPUDevice::CreateInstance(const char* app_name, const char* engine_name, uint32_t api_version) {
-    vkb::InstanceBuilder builder;
+bool GPUDevice::SelectPhysicalDevice(VkSurfaceKHR surface) {
+    uint32_t device_count = 0;
+    vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
     
-    auto inst_ret = builder.set_app_name(app_name)
-        .set_engine_name(engine_name)
-        .request_validation_layers(true)
-        .use_default_debug_messenger()
-        .require_api_version(api_version)
-        .build();
-
-    if (!inst_ret) {
-        LOGE("Failed to create Vulkan instance: {}", inst_ret.error().message());
-        return VK_NULL_HANDLE;
+    if (device_count == 0) {
+        LOGE("Failed to find GPUs with Vulkan support!");
+        return false;
     }
 
-    vkb::Instance vkb_inst = inst_ret.value();
-    return vkb_inst.instance;
+    std::vector<VkPhysicalDevice> devices(device_count);
+    vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
+
+    LOGI("Found {} GPU(s) with Vulkan support:", device_count);
+
+    // Score and select the best device
+    int highest_score = -1;
+    for (const auto& device : devices) {
+        LogDeviceProperties(device);
+        
+        // Check if device meets minimum requirements
+        VkPhysicalDeviceProperties device_properties;
+        vkGetPhysicalDeviceProperties(device, &device_properties);
+        
+        // Check for Vulkan 1.3 support
+        if (VK_API_VERSION_MAJOR(device_properties.apiVersion) < 1 ||
+            (VK_API_VERSION_MAJOR(device_properties.apiVersion) == 1 && 
+             VK_API_VERSION_MINOR(device_properties.apiVersion) < 3)) {
+            continue;
+        }
+
+        // Check extension support
+        uint32_t extension_count;
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
+        std::vector<VkExtensionProperties> available_extensions(extension_count);
+        vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, available_extensions.data());
+
+        bool extensions_supported = true;
+        for (const char* required_extension : required_extensions) {
+            bool extension_found = false;
+            for (const auto& extension : available_extensions) {
+                if (strcmp(required_extension, extension.extensionName) == 0) {
+                    extension_found = true;
+                    break;
+                }
+            }
+            if (!extension_found) {
+                extensions_supported = false;
+                break;
+            }
+        }
+
+        if (!extensions_supported) {
+            continue;
+        }
+
+        // Score the device
+        int score = 0;
+        if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            score += 1000;
+        }
+        score += device_properties.limits.maxImageDimension2D;
+
+        // Select this device if it has the highest score
+        if (score > highest_score) {
+            physical_device_ = device;
+            properties_ = device_properties;
+            highest_score = score;
+        }
+    }
+
+    if (physical_device_ == VK_NULL_HANDLE) {
+        LOGE("Failed to find a suitable GPU!");
+        return false;
+    }
+
+    // Get the final device properties
+    vkGetPhysicalDeviceProperties(physical_device_, &properties_);
+    vkGetPhysicalDeviceMemoryProperties(physical_device_, &memory_properties_);
+    
+    return true;
+}
+
+void GPUDevice::LogDeviceProperties(VkPhysicalDevice device) {
+    VkPhysicalDeviceProperties device_properties;
+    vkGetPhysicalDeviceProperties(device, &device_properties);
+
+    LOGI("GPU: {}", device_properties.deviceName);
+    LOGI("    - Type: {}", device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated" : 
+                          device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? "Discrete" :
+                          device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ? "Virtual" :
+                          device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "CPU" : "Other");
+    LOGI("    - API Version: {}.{}.{}", 
+         VK_VERSION_MAJOR(device_properties.apiVersion),
+         VK_VERSION_MINOR(device_properties.apiVersion),
+         VK_VERSION_PATCH(device_properties.apiVersion));
+}
+
+bool GPUDevice::CreateSurface(SDL_Window* window) {
+    if (!SDL_Vulkan_CreateSurface(window, instance_, &surface_)) {
+        LOGE("Failed to create window surface!");
+        return false;
+    }
+    return true;
+}
+
+void GPUDevice::DestroySurface() {
+    if (surface_ != VK_NULL_HANDLE) {
+        vkDestroySurfaceKHR(instance_, surface_, nullptr);
+        surface_ = VK_NULL_HANDLE;
+    }
+}
+
+bool GPUDevice::Init(const CreateInfo& create_info) {
+    if (volkInitialize() != VK_SUCCESS) {
+        LOGE("Failed to initialize volk");
+        return false;
+    }
+
+    instance_ = CreateInstance(create_info.app_name, create_info.engine_name, create_info.api_version);
+    if (instance_ == VK_NULL_HANDLE) {
+        LOGE("Failed to create Vulkan instance");
+        return false;
+    }
+
+    volkLoadInstance(instance_);
+    
+    if (!SetupDebugMessenger()) {
+        LOGE("Failed to setup debug messenger");
+        return false;
+    }
+
+    if (!CreateSurface(create_info.window)) {
+        LOGE("Failed to create surface");
+        return false;
+    }
+
+    if (!SelectPhysicalDevice(surface_)) {
+        LOGE("Failed to select physical device");
+        return false;
+    }
+
+    if (!InitVulkanFeatures()) {
+        LOGE("Failed to initialize Vulkan features");
+        return false;
+    }
+
+    queue_indices_ = FindQueueFamilies(physical_device_, surface_);
+    if (queue_indices_.graphics_family == UINT32_MAX) {
+        LOGE("Failed to find suitable queue families");
+        return false;
+    }
+
+    if (!InitVulkanDevice(surface_)) {
+        LOGE("Failed to create logical device");
+        return false;
+    }
+
+    volkLoadDevice(device_);
+    
+    if (!InitVulkanAllocator()) {
+        LOGE("Failed to initialize VMA allocator");
+        return false;
+    }
+
+    return true;
 }
 
 void GPUDevice::Cleanup() {
-    // 等待设备完成所有操作
+    // Wait for device operations to complete
     if (device_) {
         vkDeviceWaitIdle(device_);
     }
 
-    // 清理资源池中的资源
+    // Clean up command buffers
+    ShutdownCommandBuffers();
+
+    // Clean up descriptor allocator
+    DestroyDescriptorAllocator();
+
+    // Clean up resources
+    DestroySurface();
    
-    // 清理VMA分配器
+    // Clean up VMA allocator
     if (allocator_) {
         vmaDestroyAllocator(allocator_);
         allocator_ = VK_NULL_HANDLE;
     }
     
-    // 清理设备
+    // Clean up device
     if (device_) {
         vkDestroyDevice(device_, nullptr);
         device_ = VK_NULL_HANDLE;
     }
 
-    // 清理调试信使
+    // Clean up debug messenger
     if (debug_messenger_) {
         vkDestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
         debug_messenger_ = VK_NULL_HANDLE;
+    }
+
+    // Clean up instance
+    if (instance_) {
+        vkDestroyInstance(instance_, nullptr);
+        instance_ = VK_NULL_HANDLE;
     }
 }
 
@@ -144,6 +380,15 @@ bool GPUDevice::CreateDevice(VkSurfaceKHR surface) {
     }
 }
 
+bool GPUDevice::InitCommandBuffers(uint32_t num_threads) {
+    command_buffer_manager_.Init(num_threads);
+    return true;
+}
+
+void GPUDevice::ShutdownCommandBuffers() {
+    command_buffer_manager_.Shutdown();
+}
+
 bool GPUDevice::SetupDebugMessenger() {
     VkDebugUtilsMessengerCreateInfoEXT create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -191,6 +436,26 @@ bool GPUDevice::SetupDebugMessenger() {
     return true;
 }
 
+VkInstance GPUDevice::CreateInstance(const char* app_name, const char* engine_name, uint32_t api_version) {
+    vkb::InstanceBuilder builder;
+    
+    auto inst_ret = builder.set_app_name(app_name)
+        .set_engine_name(engine_name)
+        .request_validation_layers(true)
+        .use_default_debug_messenger()
+        .require_api_version(api_version)
+        .build();
+
+    if (!inst_ret) {
+        LOGE("Failed to create Vulkan instance: {}", inst_ret.error().message());
+        return VK_NULL_HANDLE;
+    }
+
+    vkb::Instance vkb_inst = inst_ret.value();
+    debug_messenger_ = vkb_inst.debug_messenger;
+    return vkb_inst.instance;
+}
+
 GPUDevice::QueueFamilyIndices GPUDevice::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
     QueueFamilyIndices indices{};
 
@@ -232,59 +497,6 @@ void GPUDevice::SetDebugName(VkObjectType type, uint64_t handle, const char* nam
     auto vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance_, "vkSetDebugUtilsObjectNameEXT");
     if (vkSetDebugUtilsObjectNameEXT) {
         vkSetDebugUtilsObjectNameEXT(device_, &name_info);
-    }
-}
-
-VkCommandPool GPUDevice::CreateCommandPool(const CommandPoolConfig& config) {
-    VkCommandPoolCreateInfo pool_info{};
-    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_info.queueFamilyIndex = config.queue_family_index;
-    pool_info.flags = config.flags;
-
-    VkCommandPool pool;
-    if (vkCreateCommandPool(device_, &pool_info, nullptr, &pool) != VK_SUCCESS) {
-        LOGE("Failed to create command pool");
-        return VK_NULL_HANDLE;
-    }
-
-    if (config.debug_name) {
-        SetDebugName(VK_OBJECT_TYPE_COMMAND_POOL, (uint64_t)pool, config.debug_name);
-    }
-
-    return pool;
-}
-
-void GPUDevice::DestroyCommandPool(VkCommandPool pool) {
-    if (pool) {
-        vkDestroyCommandPool(device_, pool, nullptr);
-    }
-}
-
-std::vector<VkCommandBuffer> GPUDevice::AllocateCommandBuffers(const CommandBufferConfig& config) {
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = config.command_pool;
-    alloc_info.level = config.level;
-    alloc_info.commandBufferCount = config.count;
-
-    std::vector<VkCommandBuffer> command_buffers(config.count);
-    if (vkAllocateCommandBuffers(device_, &alloc_info, command_buffers.data()) != VK_SUCCESS) {
-        LOGE("Failed to allocate command buffers");
-        return {};
-    }
-
-    if (config.debug_name) {
-        for (uint32_t i = 0; i < config.count; i++) {
-            SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)command_buffers[i], config.debug_name);
-        }
-    }
-
-    return command_buffers;
-}
-
-void GPUDevice::FreeCommandBuffers(VkCommandPool pool, const std::vector<VkCommandBuffer>& command_buffers) {
-    if (!command_buffers.empty()) {
-        vkFreeCommandBuffers(device_, pool, static_cast<uint32_t>(command_buffers.size()), command_buffers.data());
     }
 }
 
@@ -335,57 +547,59 @@ void GPUDevice::DestroySemaphore(VkSemaphore semaphore) {
     }
 }
 
-VkCommandBuffer GPUDevice::BeginSingleTimeCommands(VkCommandPool pool) {
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandPool = pool;
-    alloc_info.commandBufferCount = 1;
-
-    VkCommandBuffer command_buffer;
-    vkAllocateCommandBuffers(device_, &alloc_info, &command_buffer);
-
-    VkCommandBufferBeginInfo begin_info{};
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-    vkBeginCommandBuffer(command_buffer, &begin_info);
-
-    return command_buffer;
-}
-
-void GPUDevice::EndSingleTimeCommands(VkCommandBuffer command_buffer, VkCommandPool pool) {
-    vkEndCommandBuffer(command_buffer);
-
-    VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffer;
-
-    vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE);
-    vkQueueWaitIdle(graphics_queue_);
-
-    vkFreeCommandBuffers(device_, pool, 1, &command_buffer);
-}
-
-void GPUDevice::SubmitToGraphicsQueue(const VkSubmitInfo& submit_info, VkFence fence) {
-    if (vkQueueSubmit(graphics_queue_, 1, &submit_info, fence) != VK_SUCCESS) {
-        LOGE("Failed to submit to graphics queue");
+bool GPUDevice::Submit(VkQueue queue, const QueueSubmitInfo& submit_info) {
+    if (vkQueueSubmit(queue, submit_info.submit_count, submit_info.submit_info, submit_info.fence) != VK_SUCCESS) {
+        LOGE("Failed to submit to queue");
+        return false;
     }
+    return true;
 }
 
-void GPUDevice::SubmitToTransferQueue(const VkSubmitInfo& submit_info, VkFence fence) {
-    if (vkQueueSubmit(transfer_queue_, 1, &submit_info, fence) != VK_SUCCESS) {
-        LOGE("Failed to submit to transfer queue");
+bool GPUDevice::Present(VkQueue queue, const QueuePresentInfo& present_info) {
+    VkResult result = vkQueuePresentKHR(queue, present_info.present_info);
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        LOGE("Failed to present swap chain image");
+        return false;
     }
+    return true;
 }
 
-void GPUDevice::WaitGraphicsQueueIdle() {
-    vkQueueWaitIdle(graphics_queue_);
+bool GPUDevice::WaitQueueIdle(VkQueue queue) {
+    if (vkQueueWaitIdle(queue) != VK_SUCCESS) {
+        LOGE("Failed to wait for queue idle");
+        return false;
+    }
+    return true;
 }
 
-void GPUDevice::WaitTransferQueueIdle() {
-    vkQueueWaitIdle(transfer_queue_);
+uint32_t GPUDevice::GetQueueFamilyIndex(VkQueueFlags required_flags) const {
+    // Get queue family properties
+    uint32_t queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, nullptr);
+    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, queue_families.data());
+
+    // First try to find a dedicated queue for the requested flags
+    for (uint32_t i = 0; i < queue_family_count; i++) {
+        if (queue_families[i].queueFlags == required_flags) {
+            return i;
+        }
+    }
+
+    // If no dedicated queue is found, try to find a queue family that supports the requested flags
+    for (uint32_t i = 0; i < queue_family_count; i++) {
+        if ((queue_families[i].queueFlags & required_flags) == required_flags) {
+            return i;
+        }
+    }
+
+    return VK_QUEUE_FAMILY_IGNORED;
+}
+
+VkQueue GPUDevice::GetQueue(uint32_t family_index, uint32_t queue_index) const {
+    VkQueue queue;
+    vkGetDeviceQueue(device_, family_index, queue_index, &queue);
+    return queue;
 }
 
 BufferHandle GPUDevice::CreateBuffer(const BufferCreationInfo& info) {
@@ -514,4 +728,74 @@ BufferCreationInfo GPUDevice::GetBufferCreationInfo(BufferHandle handle) const {
 TextureCreationInfo GPUDevice::GetTextureCreationInfo(TextureHandle handle) const {
     std::shared_lock lock(creation_info_mutex_);
     return texture_creation_infos_.at(handle);
+}
+
+VkDescriptorSetLayout GPUDevice::CreateDescriptorSetLayout(const DescriptorLayoutInfo& layout_info) {
+    lc::DescriptorLayoutBuilder builder;
+    
+    for (const auto& binding : layout_info.bindings) {
+        builder.AddBinding(binding.binding, binding.descriptorType, binding.descriptorCount);
+    }
+
+    return builder.Build(device_, layout_info.shader_stages, layout_info.pNext, layout_info.flags);
+}
+
+void GPUDevice::DestroyDescriptorSetLayout(VkDescriptorSetLayout layout) {
+    if (layout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(device_, layout, nullptr);
+    }
+}
+
+bool GPUDevice::InitDescriptorAllocator(const DescriptorAllocatorCreateInfo& create_info) {
+    descriptor_allocator_.Init(device_, create_info.max_sets, create_info.pool_sizes);
+    return true;
+}
+
+void GPUDevice::DestroyDescriptorAllocator() {
+    descriptor_allocator_.DestroyPools(device_);
+}
+
+VkDescriptorSet GPUDevice::AllocateDescriptorSet(VkDescriptorSetLayout layout, void* pNext) {
+    return descriptor_allocator_.Allocate(device_, layout, pNext);
+}
+
+void GPUDevice::UpdateDescriptorSet(VkDescriptorSet set, const std::vector<VkWriteDescriptorSet>& writes) {
+    lc::DescriptorWriter writer;
+    
+    for (const auto& write : writes) {
+        switch (write.descriptorType) {
+            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+            case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                for (uint32_t i = 0; i < write.descriptorCount; i++) {
+                    const auto& image_info = write.pImageInfo[i];
+                    writer.WriteImage(write.dstBinding + i, 
+                                    image_info.imageView,
+                                    image_info.sampler,
+                                    image_info.imageLayout,
+                                    write.descriptorType);
+                }
+                break;
+
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                for (uint32_t i = 0; i < write.descriptorCount; i++) {
+                    const auto& buffer_info = write.pBufferInfo[i];
+                    writer.WriteBuffer(write.dstBinding + i,
+                                     buffer_info.buffer,
+                                     buffer_info.offset,
+                                     buffer_info.range,
+                                     write.descriptorType);
+                }
+                break;
+
+            default:
+                LOGE("Unsupported descriptor type in UpdateDescriptorSet");
+                break;
+        }
+    }
+
+    writer.UpdateSet(device_, set);
+}
+
 }
