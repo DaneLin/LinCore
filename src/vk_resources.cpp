@@ -57,6 +57,12 @@ void TextureCreationInfo::SetArrayLayers(uint32_t layers)
     }
 }
 
+TextureCreationInfo& TextureCreationInfo::SetName(const char* buffer_name)
+{
+    name = buffer_name;
+    return *this;
+}
+
 // Helper function to validate creation info based on texture type
 bool TextureCreationInfo::Validate() const
 {

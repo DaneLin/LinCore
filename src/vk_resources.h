@@ -156,6 +156,7 @@ struct TextureCreationInfo : ResourceCreationInfo {
     VkImageTiling tiling{ VK_IMAGE_TILING_OPTIMAL };
     VkImageCreateFlags flags{ 0 };
     void* initial_data{ nullptr };
+    const char* name{ nullptr };
 
     // Builder style methods
     TextureCreationInfo& SetSize(uint32_t width, uint32_t height, uint32_t depth = 1);
@@ -165,6 +166,7 @@ struct TextureCreationInfo : ResourceCreationInfo {
     TextureCreationInfo& SetLayout(VkImageLayout layout) ;
     TextureCreationInfo& SetUsage(VkImageUsageFlags usage_flags) ;
     TextureCreationInfo& SetData(void* data) ;
+    TextureCreationInfo& SetName(const char* buffer_name);
     // Helper function to set array layers based on texture type
     void SetArrayLayers(uint32_t layers) ;
     // Helper function to validate creation info based on texture type
