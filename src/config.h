@@ -23,22 +23,23 @@ const std::vector<const char*> required_extensions = {
 // Maximum number of texture descriptors in the pool
 #define DESCRIPTOR_LIMIT 65536
 
-inline constexpr unsigned int kFRAME_OVERLAP = 2;
+constexpr unsigned int kFRAME_OVERLAP = 2;
+constexpr uint32_t kINITIAL_DESCRIPTOR_POOL_SIZE = 1024;
 
-inline constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 11;
+constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 11;
 
-inline constexpr uint32_t kMAX_BINDLESS_RESOURCES = 1024;
+constexpr uint32_t kMAX_BINDLESS_RESOURCES = 1024;
 
-inline constexpr uint8_t kMAX_IMAGE_OUTPUT = 8;
-inline constexpr uint8_t kMAX_DESCRIPTOR_SET_LAYOUTS = 8;
-inline constexpr uint8_t kMAX_SHADER_STAGES = 8;
-inline constexpr uint8_t kMAX_DESCRIPTOR_PER_SET = 16;
+constexpr uint8_t kMAX_IMAGE_OUTPUT = 8;
+constexpr uint8_t kMAX_DESCRIPTOR_SET_LAYOUTS = 8;
+constexpr uint8_t kMAX_SHADER_STAGES = 8;
+constexpr uint8_t kMAX_DESCRIPTOR_PER_SET = 16;
 
 const std::string cache_file_path = "pipeline_cache_data.bin";
 
-inline constexpr uint32_t kSTAGING_BUFFER_SIZE = 64 * 1024 * 1024;
+constexpr uint32_t kSTAGING_BUFFER_SIZE = 64 * 1024 * 1024;
 
-inline constexpr uint32_t kNUM_RENDER_THREADS = 4;
+constexpr uint32_t kNUM_RENDER_THREADS = 4;
 
 #define LC_DRAW_INDIRECT 1
 

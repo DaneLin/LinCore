@@ -207,7 +207,7 @@ void CommandBuffer::PipelineBarrier2(const VkDependencyInfo& dep_info)
 void CommandBuffer::UploadTextureData(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
 {
 	//TODO: replace with resource manager
-	/*AllocatedImage image = VulkanEngine::Get().CreateImage(data, size, format, usage, mipmapped);
+	/*AllocatedImage image = CreateImage(data, size, format, usage, mipmapped);
 	TransitionImage(image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);*/
 }
 
@@ -372,8 +372,9 @@ void CommandBuffer::PushConstants(VkPipelineLayout layout, VkShaderStageFlags st
 	vkCmdPushConstants(command_buffer_, layout, stage_flags, offset, size, values);
 }
 
-void CommandBufferManager::Init(uint32_t num_threads)
+void CommandBufferManager::Init(GPUDevice* gpu_device,uint32_t num_threads)
 {
+	gpu_device_ = gpu_device;
 	num_pools_per_frame = num_threads;
 
 	const uint32_t total_pools = num_pools_per_frame * kFRAME_OVERLAP;
@@ -384,11 +385,11 @@ void CommandBufferManager::Init(uint32_t num_threads)
 
 	VkCommandPoolCreateInfo pool_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 	pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	pool_info.queueFamilyIndex = VulkanEngine::Get().main_queue_family_;
+	pool_info.queueFamilyIndex = gpu_device_->queue_indices_.graphics_family;
 
 	for (uint32_t i = 0; i < total_pools; ++i)
 	{
-		VK_CHECK(vkCreateCommandPool(VulkanEngine::Get().device_, &pool_info, nullptr, &command_pools_[i]));
+		VK_CHECK(vkCreateCommandPool(gpu_device_->device_, &pool_info, nullptr, &command_pools_[i]));
 	}
 
 	// Create primary command buffers
@@ -404,7 +405,7 @@ void CommandBufferManager::Init(uint32_t num_threads)
 		alloc_info.commandBufferCount = 1;
 
 		CommandBuffer& cmd = command_buffers_[i];
-		vkAllocateCommandBuffers(VulkanEngine::Get().device_, &alloc_info, &cmd.command_buffer_);
+		vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &cmd.command_buffer_);
 		cmd.Init(CommandBufferLevel::kPrimary);
 	}
 
@@ -420,55 +421,55 @@ void CommandBufferManager::Init(uint32_t num_threads)
 		alloc_info.commandBufferCount = 1;
 
 		CommandBuffer& cmd = secondary_command_buffers_[i];
-		VK_CHECK(vkAllocateCommandBuffers(VulkanEngine::Get().device_, &alloc_info, &cmd.command_buffer_));
+		VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &cmd.command_buffer_));
 		cmd.Init(CommandBufferLevel::kSecondary);
 	}
 
 	// Initialize immediate submit resources
-	VK_CHECK(vkCreateCommandPool(VulkanEngine::Get().device_, &pool_info, nullptr, &immediate_pool_));
+	VK_CHECK(vkCreateCommandPool(gpu_device_->device_, &pool_info, nullptr, &immediate_pool_));
 
 	VkCommandBufferAllocateInfo alloc_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 	alloc_info.commandPool = immediate_pool_;
 	alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	alloc_info.commandBufferCount = 1;
 
-	VK_CHECK(vkAllocateCommandBuffers(VulkanEngine::Get().device_, &alloc_info, &immediate_buffer_.command_buffer_));
+	VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &immediate_buffer_.command_buffer_));
 	immediate_buffer_.Init(CommandBufferLevel::kPrimary);
 
 	VkFenceCreateInfo fence_info{ .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
 	fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	VK_CHECK(vkCreateFence(VulkanEngine::Get().device_, &fence_info, nullptr, &immediate_fence_));
+	VK_CHECK(vkCreateFence(gpu_device_->device_, &fence_info, nullptr, &immediate_fence_));
 
 	// Initialize transfer queue resources
 	VkCommandPoolCreateInfo transfer_pool_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
 	transfer_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	transfer_pool_info.queueFamilyIndex = VulkanEngine::Get().transfer_queue_family_;
+	transfer_pool_info.queueFamilyIndex = gpu_device_->queue_indices_.transfer_family;
 
-	VK_CHECK(vkCreateCommandPool(VulkanEngine::Get().device_, &transfer_pool_info, nullptr, &transfer_pool_));
+	VK_CHECK(vkCreateCommandPool(gpu_device_->device_, &transfer_pool_info, nullptr, &transfer_pool_));
 
 	VkCommandBufferAllocateInfo transfer_alloc_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 	transfer_alloc_info.commandPool = transfer_pool_;
 	transfer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	transfer_alloc_info.commandBufferCount = 1;
 
-	VK_CHECK(vkAllocateCommandBuffers(VulkanEngine::Get().device_, &transfer_alloc_info, &transfer_buffer_.command_buffer_));
+	VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &transfer_alloc_info, &transfer_buffer_.command_buffer_));
 	transfer_buffer_.Init(CommandBufferLevel::kPrimary);
 
-	VK_CHECK(vkCreateFence(VulkanEngine::Get().device_, &fence_info, nullptr, &transfer_fence_));
+	VK_CHECK(vkCreateFence(gpu_device_->device_, &fence_info, nullptr, &transfer_fence_));
 }
 
 void CommandBufferManager::Shutdown()
 {
 	for (VkCommandPool& pool : command_pools_)
 	{
-		vkDestroyCommandPool(VulkanEngine::Get().device_, pool, nullptr);
+		vkDestroyCommandPool(gpu_device_->device_, pool, nullptr);
 	}
 
-	vkDestroyCommandPool(VulkanEngine::Get().device_, immediate_pool_, nullptr);
-	vkDestroyFence(VulkanEngine::Get().device_, immediate_fence_, nullptr);
+	vkDestroyCommandPool(gpu_device_->device_, immediate_pool_, nullptr);
+	vkDestroyFence(gpu_device_->device_, immediate_fence_, nullptr);
 
-	vkDestroyCommandPool(VulkanEngine::Get().device_, transfer_pool_, nullptr);
-	vkDestroyFence(VulkanEngine::Get().device_, transfer_fence_, nullptr);
+	vkDestroyCommandPool(gpu_device_->device_, transfer_pool_, nullptr);
+	vkDestroyFence(gpu_device_->device_, transfer_fence_, nullptr);
 }
 
 void CommandBufferManager::ResetPools(uint32_t frame_index)
@@ -476,7 +477,7 @@ void CommandBufferManager::ResetPools(uint32_t frame_index)
 	for (uint32_t i = 0; i < num_pools_per_frame; ++i)
 	{
 		const uint32_t pool_index = GetPoolIndex(frame_index, i);
-		VK_CHECK(vkResetCommandPool(VulkanEngine::Get().device_, command_pools_[pool_index], 0));
+		VK_CHECK(vkResetCommandPool(gpu_device_->device_, command_pools_[pool_index], 0));
 		used_buffers_[pool_index] = 0;
 		used_secondary_buffers_[pool_index] = 0;
 	}
@@ -516,11 +517,11 @@ CommandBuffer* CommandBufferManager::GetSecondaryCommandBuffer(uint32_t frame, u
 void CommandBufferManager::ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue)
 {
 	// Wait for any pending immediate submits to complete
-	VkFence fence = queue == VulkanEngine::Get().transfer_queue_ ? transfer_fence_ : immediate_fence_;
-	CommandBuffer& cmd_buffer = queue == VulkanEngine::Get().transfer_queue_ ? transfer_buffer_ : immediate_buffer_;
+	VkFence fence = queue == gpu_device_->transfer_queue_ ? transfer_fence_ : immediate_fence_;
+	CommandBuffer& cmd_buffer = queue == gpu_device_->transfer_queue_ ? transfer_buffer_ : immediate_buffer_;
 
-	VK_CHECK(vkWaitForFences(VulkanEngine::Get().device_, 1, &fence, VK_TRUE, UINT64_MAX));
-	VK_CHECK(vkResetFences(VulkanEngine::Get().device_, 1, &fence));
+	VK_CHECK(vkWaitForFences(gpu_device_->device_, 1, &fence, VK_TRUE, UINT64_MAX));
+	VK_CHECK(vkResetFences(gpu_device_->device_, 1, &fence));
 
 
 	cmd_buffer.Reset();
@@ -542,7 +543,7 @@ void CommandBufferManager::ImmediateSubmit(std::function<void(CommandBuffer* cmd
 
 	// Submit to the queue and wait
 	VK_CHECK(vkQueueSubmit2(queue, 1, &submit_info, fence));
-	VK_CHECK(vkWaitForFences(VulkanEngine::Get().device_, 1, &fence, VK_TRUE, UINT64_MAX));
+	VK_CHECK(vkWaitForFences(gpu_device_->device_, 1, &fence, VK_TRUE, UINT64_MAX));
 }
 
 uint32_t CommandBufferManager::GetPoolIndex(uint32_t frame_index, uint32_t thread_index)

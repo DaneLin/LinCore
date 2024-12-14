@@ -278,7 +278,7 @@ namespace lc
 		{
 			if (set_layouts_[i] != VK_NULL_HANDLE)
 			{
-				vkDestroyDescriptorSetLayout(VulkanEngine::Get().device_, set_layouts_[i], nullptr);
+				vkDestroyDescriptorSetLayout(VulkanEngine::Get().gpu_device_.device_, set_layouts_[i], nullptr);
 			}
 		}
 	}
@@ -502,7 +502,7 @@ namespace lc
 		{
 			ShaderModule newShader;
 
-			bool result = vkutil::LoadShader(VulkanEngine::Get().device_, path.c_str(), &newShader);
+			bool result = vkutil::LoadShader(VulkanEngine::Get().gpu_device_.device_, path.c_str(), &newShader);
 			if (!result)
 			{
 				LOGE("Error when compiling shader {}", path);
@@ -518,7 +518,7 @@ namespace lc
 	{
 		for (auto &[k, v] : module_cache_)
 		{
-			vkDestroyShaderModule(VulkanEngine::Get().device_, v.module, nullptr);
+			vkDestroyShaderModule(VulkanEngine::Get().gpu_device_.device_, v.module, nullptr);
 		}
 		for (ShaderEffect *effect : shader_effect_cache_)
 		{

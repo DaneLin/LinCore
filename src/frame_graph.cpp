@@ -173,8 +173,8 @@ namespace lc
         node.ref_count = 0;
 
         // Set up render pass info
-        VkFormat color_format = engine->draw_image_.format;
-        VkFormat depth_format = engine->depth_image_.format;
+        VkFormat color_format = engine->gpu_device_.draw_image_.format;
+        VkFormat depth_format = engine->gpu_device_.depth_image_.format;
 
         node.render_pass_info.color_formats.push_back(color_format);
         node.render_pass_info.depth_format = depth_format;

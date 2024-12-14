@@ -220,9 +220,11 @@ namespace lc
 		color_blend_attachment_.alphaBlendOp = VK_BLEND_OP_ADD;
 	}
 
-	PipelineCache::PipelineCache(VkDevice device, const std::string cache_file_path)
-		: device_(device), cache_file_path_(cache_file_path)
+	void PipelineCache::Init(VkDevice device, const std::string cache_file_path)
 	{
+		device_ = device;
+		cache_file_path_ = cache_file_path;
+
 		if (!LoadPipelineCache())
 		{
 			LOGI("Creating new pipeline cache");
@@ -234,8 +236,9 @@ namespace lc
 		}
 	}
 
-	PipelineCache::~PipelineCache()
+	void PipelineCache::CleanUp()
 	{
+		SaveCache();
 		vkDestroyPipelineCache(device_, cache_, nullptr);
 	}
 

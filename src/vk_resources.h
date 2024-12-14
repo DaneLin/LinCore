@@ -8,6 +8,7 @@
 #include <vk_mem_alloc.h>
 // Forward declaration
 class VulkanEngine;
+class GPUDevice;
 
 static const uint32_t kInvalidIndex = UINT32_MAX;
 
@@ -221,7 +222,7 @@ public:
     ResourceManager() = default;
     ~ResourceManager() = default;
 
-    void Init(VulkanEngine* engine);
+    void Init(GPUDevice* gpu_device);
     void CleanUp();
 
     // Buffer resource creation and management
@@ -238,7 +239,7 @@ private:
     void CreateBufferResource(BufferHandle handle);
     void CreateTextureResource(TextureHandle handle);
 
-    VulkanEngine* engine_{ nullptr };
+    GPUDevice* gpu_device_{ nullptr };
     
     ResourcePool<BufferHandle, AllocatedBufferUntyped> buffer_pool_;
     ResourcePool<TextureHandle, AllocatedImage> texture_pool_;

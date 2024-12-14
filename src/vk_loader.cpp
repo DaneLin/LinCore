@@ -5,6 +5,7 @@
 #include "stb_image.h"
 #include <iostream>
 
+#include "vk_device.h"
 #include "vk_engine.h"
 #include "vk_initializers.h"
 #include "vk_types.h"
@@ -17,10 +18,12 @@
 
 #include "logging.h"
 
+
 namespace lc
 {
-	std::optional<AllocatedImage> LoadImage(VulkanEngine *engine, fastgltf::Asset &asset, fastgltf::Image &image, const std::filesystem::path &gltf_parent_path)
+	std::optional<AllocatedImage> LoadImage(fastgltf::Asset &asset, fastgltf::Image &image, const std::filesystem::path &gltf_parent_path)
 	{
+		VulkanEngine* engine = &VulkanEngine::Get();
 		auto promise = std::make_shared<std::promise<std::optional<AllocatedImage>>>();
 		auto future = promise->get_future();
 
@@ -143,12 +146,12 @@ namespace lc
 		engine->global_mesh_buffer_.index_data.insert(engine->global_mesh_buffer_.index_data.end(), indices.begin(), indices.end());
 	}
 
-	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine *engine, std::string_view file_path)
+	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(GPUDevice* gpu_device, std::string_view file_path)
 	{
 		LOGI("Loading GLTF: {}", file_path);
 
 		std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
-		scene->creator = engine;
+		scene->gpu_device = gpu_device;
 		LoadedGLTF &file = *scene.get();
 
 		fastgltf::Parser parser{};
@@ -197,7 +200,7 @@ namespace lc
 																			 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
 																			 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
 
-		file.descriptor_pool.Init(engine->device_, static_cast<uint32_t>(gltf.materials.size()), sizes);
+		file.descriptor_pool.Init(gpu_device->device_, static_cast<uint32_t>(gltf.materials.size()), sizes);
 
 		// load sampler
 		for (fastgltf::Sampler &sampler : gltf.samplers)
@@ -212,7 +215,7 @@ namespace lc
 			sampler_create_info.mipmapMode = ExtractMipmapMode(sampler.minFilter.value_or(fastgltf::Filter::Nearest));
 
 			VkSampler new_sampler;
-			vkCreateSampler(engine->device_, &sampler_create_info, nullptr, &new_sampler);
+			vkCreateSampler(gpu_device->device_, &sampler_create_info, nullptr, &new_sampler);
 
 			file.samplers.push_back(new_sampler);
 		}
@@ -227,7 +230,7 @@ namespace lc
 		// load all textures
 		for (fastgltf::Image &image : gltf.images)
 		{
-			std::optional<AllocatedImage> img = LoadImage(engine, gltf, image, path.parent_path());
+			std::optional<AllocatedImage> img = LoadImage( gltf, image, path.parent_path());
 
 			if (img.has_value())
 			{
@@ -241,15 +244,15 @@ namespace lc
 			else
 			{
 				// we failed to load, so lets give the slot a default white texture to not completely break loading
-				images.push_back(engine->resource_manager_.GetTexture( engine->default_images_.error_checker_board_image));
+				images.push_back(gpu_device->resource_manager_.GetTexture(gpu_device->default_resources_.images.error_checker_board_image));
 				LOGW("gltf failed to load texture {}, fallint to default error texture", image.name);
 			}
 		}
 		BufferCreationInfo buffer_info{};
 		buffer_info.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size());
-		file.material_data_buffer_handle = engine->resource_manager_.CreateBuffer(buffer_info);
+		file.material_data_buffer_handle = gpu_device->resource_manager_.CreateBuffer(buffer_info);
 
-		AllocatedBufferUntyped material_data_buffer = engine->resource_manager_.GetBuffer(file.material_data_buffer_handle);
+		AllocatedBufferUntyped material_data_buffer = gpu_device->resource_manager_.GetBuffer(file.material_data_buffer_handle);
 		int data_index = 0;
 		GLTFMetallic_Roughness::MaterialConstants *sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants *)material_data_buffer.info.pMappedData;
 
@@ -276,10 +279,10 @@ namespace lc
 
 			GLTFMetallic_Roughness::MaterialResources material_resources;
 			// TODO: Replace with real images
-			material_resources.color_image = engine->resource_manager_.GetTexture(engine->default_images_.white_image);
-			material_resources.color_sampler = engine->default_samplers_.linear;
-			material_resources.metal_rough_image = engine->resource_manager_.GetTexture(engine->default_images_.white_image);
-			material_resources.metal_rought_sampler = engine->default_samplers_.linear;
+			material_resources.color_image = gpu_device->resource_manager_.GetTexture(gpu_device->default_resources_.images.white_image);
+			material_resources.color_sampler = gpu_device->default_resources_.samplers.linear;
+			material_resources.metal_rough_image = gpu_device->resource_manager_.GetTexture(gpu_device->default_resources_.images.white_image);
+			material_resources.metal_rought_sampler = gpu_device->default_resources_.samplers.linear;
 
 			material_resources.data_buffer = material_data_buffer.buffer;
 			material_resources.data_buffer_offset = data_index * sizeof(GLTFMetallic_Roughness::MaterialConstants);
@@ -294,13 +297,13 @@ namespace lc
 				material_resources.color_sampler = file.samplers[sampler];
 			}
 
-			constants.color_tex_id = engine->texture_cache_.AddTexture(engine->device_, material_resources.color_image.view, material_resources.color_sampler).index;
-			constants.metal_rought_tex_id = engine->texture_cache_.AddTexture(engine->device_, material_resources.metal_rough_image.view, material_resources.metal_rought_sampler).index;
+			constants.color_tex_id =gpu_device->texture_cache_.AddTexture(gpu_device->device_, material_resources.color_image.view, material_resources.color_sampler).index;
+			constants.metal_rought_tex_id = gpu_device->texture_cache_.AddTexture(gpu_device->device_, material_resources.metal_rough_image.view, material_resources.metal_rought_sampler).index;
 
 			// write material parameter to buffer
 			sceneMaterialConstants[data_index] = constants;
 			// Build material
-			new_mat->data = engine->metal_rough_material_.WriteMaterial(engine->device_, pass_type, material_resources, file.descriptor_pool);
+			new_mat->data = VulkanEngine::Get().metal_rough_material_.WriteMaterial(gpu_device->device_, pass_type, material_resources, file.descriptor_pool);
 
 			data_index++;
 		}
@@ -320,8 +323,8 @@ namespace lc
 			// clear the mesh arrays each mesh, we dont want to merge them by error
 			indices.clear();
 			vertices.clear();
-			size_t global_index_offset = engine->global_mesh_buffer_.index_data.size();
-			size_t global_vertex_offset = engine->global_mesh_buffer_.vertex_data.size();
+			size_t global_index_offset = VulkanEngine::Get().global_mesh_buffer_.index_data.size();
+			size_t global_vertex_offset = VulkanEngine::Get().global_mesh_buffer_.vertex_data.size();
 
 			for (auto &&p : mesh.primitives)
 			{
@@ -434,12 +437,12 @@ namespace lc
 				cmd.instanceCount = 1;
 				cmd.firstInstance = 0;
 
-				new_surface.indirect_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.indirect_commands.size());
-				engine->global_mesh_buffer_.indirect_commands.push_back(cmd);
+				new_surface.indirect_offset = static_cast<uint32_t>(VulkanEngine::Get().global_mesh_buffer_.indirect_commands.size());
+				VulkanEngine::Get().global_mesh_buffer_.indirect_commands.push_back(cmd);
 
 				new_mesh->surfaces.push_back(new_surface);
 			}
-			new_mesh->mesh_buffers = engine->UploadMesh(indices, vertices);
+			new_mesh->mesh_buffers = VulkanEngine::Get().UploadMesh(indices, vertices);
 			AddMeshBufferToGlobalBuffers(indices, vertices);
 		}
 
@@ -518,7 +521,7 @@ namespace lc
 
 	void LoadedGLTF::ClearAll()
 	{
-		VkDevice dv = creator->device_;
+		VkDevice dv = gpu_device->device_;
 
 		descriptor_pool.DestroyPools(dv);
 
@@ -713,19 +716,18 @@ namespace lc
 			size_t data_size = request.extent.depth * request.extent.width * request.extent.height * 4;
 			BufferCreationInfo buffer_info{};
 			buffer_info.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, data_size);
-			BufferHandle upload_buffer_handle = VulkanEngine::Get().resource_manager_.CreateBuffer(buffer_info);
-			AllocatedBufferUntyped& upload_buffer = VulkanEngine::Get().resource_manager_.GetBuffer(upload_buffer_handle);// (data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+			BufferHandle upload_buffer_handle = VulkanEngine::Get().gpu_device_.resource_manager_.CreateBuffer(buffer_info);
+			AllocatedBufferUntyped& upload_buffer = VulkanEngine::Get().gpu_device_.resource_manager_.GetBuffer(upload_buffer_handle);// (data_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 			memcpy(upload_buffer.info.pMappedData, request.data, data_size);
 
 			TextureCreationInfo texture_info{};
 			texture_info.SetSize(request.extent)
 				.SetFormatType(request.format, TextureType::Enum::Texture2D)
 				.SetUsage(VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
-			TextureHandle texture_handle = VulkanEngine::Get().resource_manager_.CreateTexture(texture_info);
-			AllocatedImage& new_image = VulkanEngine::Get().resource_manager_.GetTexture(texture_handle);
-			//AllocatedImage new_image = VulkanEngine::Get().CreateImage(request.extent, request.format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, request.enable_mips);
-
-			VulkanEngine::Get().command_buffer_manager_.ImmediateSubmit(
+			TextureHandle texture_handle = VulkanEngine::Get().gpu_device_.resource_manager_.CreateTexture(texture_info);
+			AllocatedImage& new_image = VulkanEngine::Get().gpu_device_.resource_manager_.GetTexture(texture_handle);
+			
+			VulkanEngine::Get().gpu_device_.command_buffer_manager_.ImmediateSubmit(
 				[&](CommandBuffer* cmd) {
 					// Command buffer operations...
 					cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
@@ -749,11 +751,11 @@ namespace lc
 					else {
 						cmd->TransitionImage(new_image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 							VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-							VulkanEngine::Get().transfer_queue_family_,
-							VulkanEngine::Get().main_queue_family_);
+							VulkanEngine::Get().gpu_device_.queue_indices_.transfer_family,
+							VulkanEngine::Get().gpu_device_.queue_indices_.graphics_family);
 					}
 				},
-				VulkanEngine::Get().transfer_queue_);
+				VulkanEngine::Get().gpu_device_.transfer_queue_);
 
 			request.callback(new_image);
 		}

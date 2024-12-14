@@ -4,798 +4,678 @@
 #include <set>
 #include <vector>
 #include <algorithm>
+#include <SDL_vulkan.h>
+#include <volk/volk.h>
+#include <SDL.h>
+#include <glm/packing.hpp>
 
-namespace lc
-{
-
-
-bool GPUDevice::InitVulkanFeatures() {
-    // vulkan 1.3 features
-    features_13_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-    features_13_.dynamicRendering = true;
-    features_13_.synchronization2 = true;
-
-    // vulkan 1.2 features
-    features_12_.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    features_12_.bufferDeviceAddress = true;
-    features_12_.descriptorIndexing = true;
-    features_12_.descriptorBindingPartiallyBound = true;
-    features_12_.descriptorBindingSampledImageUpdateAfterBind = true;
-    features_12_.descriptorBindingUniformBufferUpdateAfterBind = true;
-    features_12_.runtimeDescriptorArray = true;
-    features_12_.descriptorBindingVariableDescriptorCount = true;
-    features_12_.hostQueryReset = true;
-    features_12_.drawIndirectCount = true;
-
-    // vulkan 1.0 features
-    features_10_.pipelineStatisticsQuery = true;
-    features_10_.multiDrawIndirect = true;
-    features_10_.geometryShader = true;
-    features_10_.inheritedQueries = true;
-
-    return true;
-}
-
-bool GPUDevice::InitVulkanDevice(VkSurfaceKHR surface) {
-    // Chain the feature structs
-    features_12_.pNext = &features_13_;
-    
-    // Create device info
-    VkDeviceCreateInfo device_info = {};
-    device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_info.pNext = &features_12_;
-    device_info.pEnabledFeatures = &features_10_;
-
-    // Setup queue create infos
-    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
-    std::set<uint32_t> unique_queue_families = { queue_indices_.graphics_family, queue_indices_.transfer_family };
-
-    float queue_priority = 1.0f;
-    for (uint32_t queue_family : unique_queue_families) {
-        VkDeviceQueueCreateInfo queue_create_info = {};
-        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-        queue_create_info.queueFamilyIndex = queue_family;
-        queue_create_info.queueCount = 1;
-        queue_create_info.pQueuePriorities = &queue_priority;
-        queue_create_infos.push_back(queue_create_info);
-    }
-
-    device_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
-    device_info.pQueueCreateInfos = queue_create_infos.data();
-
-    // Add device extensions
-    device_info.enabledExtensionCount = static_cast<uint32_t>(std::size(required_extensions));
-    device_info.ppEnabledExtensionNames = required_extensions;
-
-    // Create logical device
-    if (vkCreateDevice(physical_device_, &device_info, nullptr, &device_) != VK_SUCCESS) {
-        LOGE("Failed to create logical device");
-        return false;
-    }
-
-    // Get queue handles
-    vkGetDeviceQueue(device_, queue_indices_.graphics_family, 0, &graphics_queue_);
-    vkGetDeviceQueue(device_, queue_indices_.transfer_family, 0, &transfer_queue_);
-    
-    return true;
-}
-
-bool GPUDevice::InitVulkanAllocator() {
-    VmaVulkanFunctions vulkan_functions = {};
-    vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
-    vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
-
-    VmaAllocatorCreateInfo allocator_info = {};
-    allocator_info.physicalDevice = physical_device_;
-    allocator_info.device = device_;
-    allocator_info.instance = instance_;
-    allocator_info.pVulkanFunctions = &vulkan_functions;
-    allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
-
-    if (vmaCreateAllocator(&allocator_info, &allocator_) != VK_SUCCESS) {
-        LOGE("Failed to create VMA allocator");
-        return false;
-    }
-
-    return true;
-}
-
-bool GPUDevice::SelectPhysicalDevice(VkSurfaceKHR surface) {
-    uint32_t device_count = 0;
-    vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
-    
-    if (device_count == 0) {
-        LOGE("Failed to find GPUs with Vulkan support!");
-        return false;
-    }
-
-    std::vector<VkPhysicalDevice> devices(device_count);
-    vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
-
-    LOGI("Found {} GPU(s) with Vulkan support:", device_count);
-
-    // Score and select the best device
-    int highest_score = -1;
-    for (const auto& device : devices) {
-        LogDeviceProperties(device);
-        
-        // Check if device meets minimum requirements
-        VkPhysicalDeviceProperties device_properties;
-        vkGetPhysicalDeviceProperties(device, &device_properties);
-        
-        // Check for Vulkan 1.3 support
-        if (VK_API_VERSION_MAJOR(device_properties.apiVersion) < 1 ||
-            (VK_API_VERSION_MAJOR(device_properties.apiVersion) == 1 && 
-             VK_API_VERSION_MINOR(device_properties.apiVersion) < 3)) {
-            continue;
-        }
-
-        // Check extension support
-        uint32_t extension_count;
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
-        std::vector<VkExtensionProperties> available_extensions(extension_count);
-        vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, available_extensions.data());
-
-        bool extensions_supported = true;
-        for (const char* required_extension : required_extensions) {
-            bool extension_found = false;
-            for (const auto& extension : available_extensions) {
-                if (strcmp(required_extension, extension.extensionName) == 0) {
-                    extension_found = true;
-                    break;
-                }
-            }
-            if (!extension_found) {
-                extensions_supported = false;
-                break;
-            }
-        }
-
-        if (!extensions_supported) {
-            continue;
-        }
-
-        // Score the device
-        int score = 0;
-        if (device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-            score += 1000;
-        }
-        score += device_properties.limits.maxImageDimension2D;
-
-        // Select this device if it has the highest score
-        if (score > highest_score) {
-            physical_device_ = device;
-            properties_ = device_properties;
-            highest_score = score;
-        }
-    }
-
-    if (physical_device_ == VK_NULL_HANDLE) {
-        LOGE("Failed to find a suitable GPU!");
-        return false;
-    }
-
-    // Get the final device properties
-    vkGetPhysicalDeviceProperties(physical_device_, &properties_);
-    vkGetPhysicalDeviceMemoryProperties(physical_device_, &memory_properties_);
-    
-    return true;
-}
-
-void GPUDevice::LogDeviceProperties(VkPhysicalDevice device) {
-    VkPhysicalDeviceProperties device_properties;
-    vkGetPhysicalDeviceProperties(device, &device_properties);
-
-    LOGI("GPU: {}", device_properties.deviceName);
-    LOGI("    - Type: {}", device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated" : 
-                          device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? "Discrete" :
-                          device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ? "Virtual" :
-                          device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "CPU" : "Other");
-    LOGI("    - API Version: {}.{}.{}", 
-         VK_VERSION_MAJOR(device_properties.apiVersion),
-         VK_VERSION_MINOR(device_properties.apiVersion),
-         VK_VERSION_PATCH(device_properties.apiVersion));
-}
-
-bool GPUDevice::CreateSurface(SDL_Window* window) {
-    if (!SDL_Vulkan_CreateSurface(window, instance_, &surface_)) {
-        LOGE("Failed to create window surface!");
-        return false;
-    }
-    return true;
-}
-
-void GPUDevice::DestroySurface() {
-    if (surface_ != VK_NULL_HANDLE) {
-        vkDestroySurfaceKHR(instance_, surface_, nullptr);
-        surface_ = VK_NULL_HANDLE;
-    }
-}
+#include "vk_pipelines.h"
 
 bool GPUDevice::Init(const CreateInfo& create_info) {
-    if (volkInitialize() != VK_SUCCESS) {
-        LOGE("Failed to initialize volk");
-        return false;
-    }
 
-    instance_ = CreateInstance(create_info.app_name, create_info.engine_name, create_info.api_version);
-    if (instance_ == VK_NULL_HANDLE) {
-        LOGE("Failed to create Vulkan instance");
-        return false;
-    }
+	if (!InitVulkan(create_info)) {
+		return false;
+	}
 
-    volkLoadInstance(instance_);
-    
-    if (!SetupDebugMessenger()) {
-        LOGE("Failed to setup debug messenger");
-        return false;
-    }
+	if (!InitSwapchain()) {
+		return false;
+	}
 
-    if (!CreateSurface(create_info.window)) {
-        LOGE("Failed to create surface");
-        return false;
-    }
+	resource_manager_.Init(this);
+	command_buffer_manager_.Init(this, kNUM_RENDER_THREADS);
+	pipeline_cache_.Init(device_, cache_file_path);
+	profiler_.Init(device_, properties_.limits.timestampPeriod);
 
-    if (!SelectPhysicalDevice(surface_)) {
-        LOGE("Failed to select physical device");
-        return false;
-    }
+	InitDefaultResources();
+	InitDescriptors();
+	InitFrameDatas();
 
-    if (!InitVulkanFeatures()) {
-        LOGE("Failed to initialize Vulkan features");
-        return false;
-    }
-
-    queue_indices_ = FindQueueFamilies(physical_device_, surface_);
-    if (queue_indices_.graphics_family == UINT32_MAX) {
-        LOGE("Failed to find suitable queue families");
-        return false;
-    }
-
-    if (!InitVulkanDevice(surface_)) {
-        LOGE("Failed to create logical device");
-        return false;
-    }
-
-    volkLoadDevice(device_);
-    
-    if (!InitVulkanAllocator()) {
-        LOGE("Failed to initialize VMA allocator");
-        return false;
-    }
-
-    return true;
+	return true;
 }
 
-void GPUDevice::Cleanup() {
-    // Wait for device operations to complete
-    if (device_) {
-        vkDeviceWaitIdle(device_);
-    }
-
-    // Clean up command buffers
-    ShutdownCommandBuffers();
-
-    // Clean up descriptor allocator
-    DestroyDescriptorAllocator();
-
-    // Clean up resources
-    DestroySurface();
-   
-    // Clean up VMA allocator
-    if (allocator_) {
-        vmaDestroyAllocator(allocator_);
-        allocator_ = VK_NULL_HANDLE;
-    }
-    
-    // Clean up device
-    if (device_) {
-        vkDestroyDevice(device_, nullptr);
-        device_ = VK_NULL_HANDLE;
-    }
-
-    // Clean up debug messenger
-    if (debug_messenger_) {
-        vkDestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
-        debug_messenger_ = VK_NULL_HANDLE;
-    }
-
-    // Clean up instance
-    if (instance_) {
-        vkDestroyInstance(instance_, nullptr);
-        instance_ = VK_NULL_HANDLE;
-    }
+void GPUDevice::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+	createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	createInfo.pfnUserCallback = DebugCallback;
+	createInfo.pUserData = this;  // Pass the GPUDevice instance to the callback
 }
 
-bool GPUDevice::CreateDevice(VkSurfaceKHR surface) {
-    try {
-        // Use VkBootstrap's device selector directly with the physical device
-        uint32_t device_count = 0;
-        vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
-        if (device_count == 0) {
-            LOGE("Failed to find GPUs with Vulkan support!");
-            return false;
-        }
+void GPUDevice::SetupDebugMessenger() {
+	if (!bUseValidationLayers) return;
 
-        std::vector<VkPhysicalDevice> devices(device_count);
-        vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
+	VkDebugUtilsMessengerCreateInfoEXT createInfo;
+	PopulateDebugMessengerCreateInfo(createInfo);
 
-        // Find a suitable device
-        for (const auto& device : devices) {
-            physical_device_ = device;
-            queue_indices_ = FindQueueFamilies(device, surface);
-            
-            if (queue_indices_.graphics_family != UINT32_MAX) {
-                // Found a suitable device
-                break;
-            }
-        }
-
-        if (physical_device_ == VK_NULL_HANDLE) {
-            LOGE("Failed to find a suitable GPU!");
-            return false;
-        }
-
-        // Get device properties
-        vkGetPhysicalDeviceProperties(physical_device_, &properties_);
-        vkGetPhysicalDeviceFeatures(physical_device_, &features_);
-
-        // Create logical device
-        std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
-        std::set<uint32_t> unique_queue_families = { queue_indices_.graphics_family };
-        if (queue_indices_.transfer_family != queue_indices_.graphics_family) {
-            unique_queue_families.insert(queue_indices_.transfer_family);
-        }
-
-        float queue_priority = 1.0f;
-        for (uint32_t queue_family : unique_queue_families) {
-            VkDeviceQueueCreateInfo queue_create_info{};
-            queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queue_create_info.queueFamilyIndex = queue_family;
-            queue_create_info.queueCount = 1;
-            queue_create_info.pQueuePriorities = &queue_priority;
-            queue_create_infos.push_back(queue_create_info);
-        }
-
-        VkDeviceCreateInfo create_info{};
-        create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
-        create_info.pQueueCreateInfos = queue_create_infos.data();
-        create_info.pEnabledFeatures = &features_;
-
-        if (vkCreateDevice(physical_device_, &create_info, nullptr, &device_) != VK_SUCCESS) {
-            LOGE("Failed to create logical device!");
-            return false;
-        }
-
-        // Get queue handles
-        vkGetDeviceQueue(device_, queue_indices_.graphics_family, 0, &graphics_queue_);
-        vkGetDeviceQueue(device_, queue_indices_.transfer_family, 0, &transfer_queue_);
-
-        return true;
-    }
-    catch (const std::exception& e) {
-        LOGE("Device creation failed: {}", e.what());
-        return false;
-    }
+	VK_CHECK(vkCreateDebugUtilsMessengerEXT(instance_, &createInfo, nullptr, &debug_messenger_));
 }
 
-bool GPUDevice::InitCommandBuffers(uint32_t num_threads) {
-    command_buffer_manager_.Init(num_threads);
-    return true;
-}
+VKAPI_ATTR VkBool32 VKAPI_CALL GPUDevice::DebugCallback(
+	VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+	VkDebugUtilsMessageTypeFlagsEXT messageType,
+	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+	void* pUserData) {
 
-void GPUDevice::ShutdownCommandBuffers() {
-    command_buffer_manager_.Shutdown();
-}
+	auto* device = static_cast<GPUDevice*>(pUserData);
+	std::string message = pCallbackData->pMessage;
+	std::string objectNames;
 
-bool GPUDevice::SetupDebugMessenger() {
-    VkDebugUtilsMessengerCreateInfoEXT create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    create_info.pfnUserCallback = [](VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                                   VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                   const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-                                   void* pUserData) -> VKAPI_ATTR VkBool32 {
-        switch (messageSeverity) {
-            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-                LOGD("[Vulkan] {}", pCallbackData->pMessage);
-                break;
-            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-                LOGI("[Vulkan] {}", pCallbackData->pMessage);
-                break;
-            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-                LOGW("[Vulkan] {}", pCallbackData->pMessage);
-                break;
-            case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-                LOGE("[Vulkan] {}", pCallbackData->pMessage);
-                break;
-            default:
-                LOGI("[Vulkan] {}", pCallbackData->pMessage);
-                break;
-        }
-        return VK_FALSE;
-    };
+	// 查找相关对象的名称
+	if (pCallbackData->objectCount > 0 && device) {
+		std::lock_guard<std::mutex> lock(device->debug_mutex_);
+		for (uint32_t i = 0; i < pCallbackData->objectCount; i++) {
+			const auto& obj = pCallbackData->pObjects[i];
+			auto it = device->debug_names_.find(obj.objectHandle);
+			if (it != device->debug_names_.end()) {
+				objectNames += "\n  - Object: " + it->second.name;
+				if (obj.pObjectName) {
+					objectNames += " (" + std::string(obj.pObjectName) + ")";
+				}
+			}
+		}
+	}
 
-    auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT");
-    if (vkCreateDebugUtilsMessengerEXT == nullptr) {
-        LOGE("Failed to get vkCreateDebugUtilsMessengerEXT function pointer");
-        return false;
-    }
+	// 根据消息严重程度选择输出方式
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+		LOGE("Validation Error: {}{}", message, objectNames);
+	}
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+		LOGW("Validation Warning: {}{}", message, objectNames);
+	}
+	else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+		LOGI("Validation Info: {}{}", message, objectNames);
+	}
+	else {
+		LOGD("Validation Debug: {}{}", message, objectNames);
+	}
 
-    if (vkCreateDebugUtilsMessengerEXT(instance_, &create_info, nullptr, &debug_messenger_) != VK_SUCCESS) {
-        LOGE("Failed to create debug utils messenger");
-        return false;
-    }
-
-    return true;
-}
-
-VkInstance GPUDevice::CreateInstance(const char* app_name, const char* engine_name, uint32_t api_version) {
-    vkb::InstanceBuilder builder;
-    
-    auto inst_ret = builder.set_app_name(app_name)
-        .set_engine_name(engine_name)
-        .request_validation_layers(true)
-        .use_default_debug_messenger()
-        .require_api_version(api_version)
-        .build();
-
-    if (!inst_ret) {
-        LOGE("Failed to create Vulkan instance: {}", inst_ret.error().message());
-        return VK_NULL_HANDLE;
-    }
-
-    vkb::Instance vkb_inst = inst_ret.value();
-    debug_messenger_ = vkb_inst.debug_messenger;
-    return vkb_inst.instance;
-}
-
-GPUDevice::QueueFamilyIndices GPUDevice::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
-    QueueFamilyIndices indices{};
-
-    uint32_t queue_family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
-    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
-
-    // 查找支持图形的队列族
-    for (uint32_t i = 0; i < queue_family_count; i++) {
-        if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-            indices.graphics_family = i;
-            break;
-        }
-    }
-
-    // 查找专用传输队列族
-    for (uint32_t i = 0; i < queue_family_count; i++) {
-        if ((queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) &&
-            !(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
-            indices.transfer_family = i;
-            indices.has_dedicated_transfer = true;
-            break;
-        }
-    }
-
-    return indices;
+	return VK_FALSE;
 }
 
 void GPUDevice::SetDebugName(VkObjectType type, uint64_t handle, const char* name) {
-    if (!name) return;
+	if (!bUseValidationLayers || !name) return;
 
-    VkDebugUtilsObjectNameInfoEXT name_info{};
-    name_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-    name_info.objectType = type;
-    name_info.objectHandle = handle;
-    name_info.pObjectName = name;
+	// 保存对象名称到映射中
+	{
+		std::lock_guard<std::mutex> lock(debug_mutex_);
+		debug_names_[handle] = DebugInfo{
+			.handle = handle,
+			.type = type,
+			.name = name
+		};
+	}
 
-    auto vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetInstanceProcAddr(instance_, "vkSetDebugUtilsObjectNameEXT");
-    if (vkSetDebugUtilsObjectNameEXT) {
-        vkSetDebugUtilsObjectNameEXT(device_, &name_info);
-    }
+	// 设置Vulkan对象的调试名称
+	VkDebugUtilsObjectNameInfoEXT nameInfo{
+		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		.objectType = type,
+		.objectHandle = handle,
+		.pObjectName = name
+	};
+
+	vkSetDebugUtilsObjectNameEXT(device_, &nameInfo);
+}
+
+
+
+void GPUDevice::InitDescriptors()
+{
+	std::vector<lc::DescriptorAllocatorGrowable::PoolSizeRatio> default_ratios = {
+	   {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0.1f},
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0.1f},
+		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0.1f},
+	   {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0.7f},
+	};
+	descriptor_allocator_.Init(device_, kINITIAL_DESCRIPTOR_POOL_SIZE, default_ratios);
+	{
+		lc::DescriptorLayoutBuilder builder;
+		// make sure the binding number matches the shader layout
+		builder.AddBinding(kBINDLESS_TEXTURE_BINDING, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMAX_BINDLESS_RESOURCES);
+
+		bindless_texture_layout_ = builder.Build(device_,
+			VK_SHADER_STAGE_FRAGMENT_BIT,
+			nullptr,
+			VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
+
+		// allocate a descriptor set for our bindless textures
+		VkDescriptorSetVariableDescriptorCountAllocateInfo count_allocate_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+			.descriptorSetCount = 1,
+			.pDescriptorCounts = &kMAX_BINDLESS_RESOURCES };
+
+		bindless_texture_set_ = descriptor_allocator_.Allocate(device_, bindless_texture_layout_, &count_allocate_info);
+		texture_cache_.SetDescriptorSet(bindless_texture_set_);
+	}
+
+	// make sure both the descriptor allocator and the new layout get cleaned up properly
+	main_deletion_queue_.PushFunction([&]()
+		{
+			descriptor_allocator_.DestroyPools(device_);
+
+			vkDestroyDescriptorSetLayout(device_, bindless_texture_layout_, nullptr); });
+
+	{
+		lc::DescriptorLayoutBuilder builder;
+		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+#if LC_DRAW_INDIRECT
+		builder.AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+#endif
+		gpu_scene_data_descriptor_layout_ = builder.Build(device_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+
+		main_deletion_queue_.PushFunction([&]()
+			{ vkDestroyDescriptorSetLayout(device_, gpu_scene_data_descriptor_layout_, nullptr); });
+	}
+}
+
+void GPUDevice::InitFrameDatas()
+{
+	VkFenceCreateInfo fence_create_info = vkinit::FenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+	VkSemaphoreCreateInfo semaphore_create_info = vkinit::SemaphoreCreateInfo();
+
+	for (int i = 0; i < kFRAME_OVERLAP; ++i)
+	{
+		VK_CHECK(vkCreateFence(device_, &fence_create_info, nullptr, &frames_[i].render_fence));
+		VK_CHECK(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &frames_[i].render_semaphore));
+		VK_CHECK(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &frames_[i].swapchain_semaphore));
+	}
+
+	for (int i = 0; i < kFRAME_OVERLAP; i++)
+	{
+		// create a descriptor pool
+		std::vector<lc::DescriptorAllocatorGrowable::PoolSizeRatio> frameSizes = {
+			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 0.1f},
+			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0.1f},
+			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0.1f},
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0.7f},
+		};
+
+		frames_[i].frame_descriptors = lc::DescriptorAllocatorGrowable{};
+		frames_[i].frame_descriptors.Init(device_, 1000, frameSizes);
+
+		main_deletion_queue_.PushFunction([&, i]()
+			{ frames_[i].frame_descriptors.DestroyPools(device_); });
+	}
+}
+
+void GPUDevice::LogAvailableDevices() {
+	uint32_t device_count = 0;
+	vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
+
+	if (device_count == 0) {
+		LOGE("No GPUs found with Vulkan support!");
+		return;
+	}
+
+	std::vector<VkPhysicalDevice> devices(device_count);
+	vkEnumeratePhysicalDevices(instance_, &device_count, devices.data());
+
+	LOGI("Available GPUs with Vulkan support:");
+	for (const auto& device : devices) {
+		VkPhysicalDeviceProperties props;
+		vkGetPhysicalDeviceProperties(device, &props);
+		LOGI("  - {} (Type: {})", props.deviceName,
+			props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? "Discrete" :
+			props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated" :
+			props.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU ? "Virtual" :
+			props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU ? "CPU" : "Other");
+	}
+}
+
+void GPUDevice::Shutdown() {
+	// 等待设备完成所有操作
+	if (device_) {
+		vkDeviceWaitIdle(device_);
+	}
+
+	DestroySwapchain();
+	resource_manager_.CleanUp();
+	command_buffer_manager_.Shutdown();
+	pipeline_cache_.CleanUp();
+	main_deletion_queue_.Flush();
+	profiler_.CleanUp();
+
+	for (int i = 0; i < kFRAME_OVERLAP; i++)
+	{
+		vkDestroyFence(device_, frames_[i].render_fence, nullptr);
+		vkDestroySemaphore(device_, frames_[i].render_semaphore, nullptr);
+		vkDestroySemaphore(device_, frames_[i].swapchain_semaphore, nullptr);
+
+		frames_[i].deletion_queue.Flush();
+	}
+
+	// 清理VMA分配器
+	if (allocator_) {
+		vmaDestroyAllocator(allocator_);
+		allocator_ = VK_NULL_HANDLE;
+	}
+
+	// 清理设备
+	if (device_) {
+		vkDestroyDevice(device_, nullptr);
+		device_ = VK_NULL_HANDLE;
+	}
+
+	// 清理调试信使
+	if (debug_messenger_) {
+		vkDestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
+		debug_messenger_ = VK_NULL_HANDLE;
+	}
+}
+
+GPUDevice::QueueFamilyIndices GPUDevice::FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR surface) {
+	QueueFamilyIndices indices{};
+
+	uint32_t queue_family_count = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+	std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+
+	// 查找支持图形的队列族
+	for (uint32_t i = 0; i < queue_family_count; i++) {
+		if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+			indices.graphics_family = i;
+			break;
+		}
+	}
+
+	// 查找专用传输队列族
+	for (uint32_t i = 0; i < queue_family_count; i++) {
+		if ((queue_families[i].queueFlags & VK_QUEUE_TRANSFER_BIT) &&
+			!(queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+			indices.transfer_family = i;
+			indices.has_dedicated_transfer = true;
+			break;
+		}
+	}
+
+	return indices;
 }
 
 VkFence GPUDevice::CreateFence(bool signaled, const char* debug_name) {
-    VkFenceCreateInfo fence_info{};
-    fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fence_info.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
+	VkFenceCreateInfo fence_info{};
+	fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fence_info.flags = signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0;
 
-    VkFence fence;
-    if (vkCreateFence(device_, &fence_info, nullptr, &fence) != VK_SUCCESS) {
-        LOGE("Failed to create fence");
-        return VK_NULL_HANDLE;
-    }
+	VkFence fence;
+	if (vkCreateFence(device_, &fence_info, nullptr, &fence) != VK_SUCCESS) {
+		LOGE("Failed to create fence");
+		return VK_NULL_HANDLE;
+	}
 
-    if (debug_name) {
-        SetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)fence, debug_name);
-    }
+	if (debug_name) {
+		SetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)fence, debug_name);
+	}
 
-    return fence;
+	return fence;
 }
 
 VkSemaphore GPUDevice::CreateSemaphore(const char* debug_name) {
-    VkSemaphoreCreateInfo semaphore_info{};
-    semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+	VkSemaphoreCreateInfo semaphore_info{};
+	semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-    VkSemaphore semaphore;
-    if (vkCreateSemaphore(device_, &semaphore_info, nullptr, &semaphore) != VK_SUCCESS) {
-        LOGE("Failed to create semaphore");
-        return VK_NULL_HANDLE;
-    }
+	VkSemaphore semaphore;
+	if (vkCreateSemaphore(device_, &semaphore_info, nullptr, &semaphore) != VK_SUCCESS) {
+		LOGE("Failed to create semaphore");
+		return VK_NULL_HANDLE;
+	}
 
-    if (debug_name) {
-        SetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)semaphore, debug_name);
-    }
+	if (debug_name) {
+		SetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)semaphore, debug_name);
+	}
 
-    return semaphore;
+	return semaphore;
 }
 
 void GPUDevice::DestroyFence(VkFence fence) {
-    if (fence) {
-        vkDestroyFence(device_, fence, nullptr);
-    }
+	if (fence) {
+		vkDestroyFence(device_, fence, nullptr);
+	}
 }
 
 void GPUDevice::DestroySemaphore(VkSemaphore semaphore) {
-    if (semaphore) {
-        vkDestroySemaphore(device_, semaphore, nullptr);
-    }
+	if (semaphore) {
+		vkDestroySemaphore(device_, semaphore, nullptr);
+	}
 }
 
-bool GPUDevice::Submit(VkQueue queue, const QueueSubmitInfo& submit_info) {
-    if (vkQueueSubmit(queue, submit_info.submit_count, submit_info.submit_info, submit_info.fence) != VK_SUCCESS) {
-        LOGE("Failed to submit to queue");
-        return false;
-    }
-    return true;
+
+void GPUDevice::UploadBuffer(BufferHandle& buffer_handle, void* buffer_data, size_t size, VkBufferUsageFlags usage, bool transfer)
+{
+	BufferCreationInfo buffer_info{};
+	buffer_info.Reset().Set(usage, VMA_MEMORY_USAGE_GPU_ONLY, size);
+	buffer_handle = resource_manager_.CreateBuffer(buffer_info);
+
+	BufferCreationInfo staging_buffer_info{};
+	staging_buffer_info.Reset().Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, size);
+	BufferHandle staging_buffer_handle = resource_manager_.CreateBuffer(staging_buffer_info);
+	AllocatedBufferUntyped& staging_buffer = resource_manager_.GetBuffer(staging_buffer_handle);
+
+	void* data = staging_buffer.info.pMappedData;
+	memcpy(data, buffer_data, size);
+
+	command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd)
+		{
+			VkBufferCopy buffer_copy{ 0 };
+			buffer_copy.dstOffset = 0;
+			buffer_copy.srcOffset = 0;
+			buffer_copy.size = size;
+			vkCmdCopyBuffer(cmd->command_buffer_, staging_buffer.buffer, resource_manager_.GetBuffer(buffer_handle).buffer, 1, &buffer_copy);
+		},
+		transfer ? transfer_queue_ : graphics_queue_);
+
+	resource_manager_.DestroyBuffer(staging_buffer_handle);
 }
 
-bool GPUDevice::Present(VkQueue queue, const QueuePresentInfo& present_info) {
-    VkResult result = vkQueuePresentKHR(queue, present_info.present_info);
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        LOGE("Failed to present swap chain image");
-        return false;
-    }
-    return true;
+bool GPUDevice::InitVulkan(const CreateInfo& create_info)
+{
+	if (volkInitialize() != VK_SUCCESS) {
+		LOGE("Failed to initialize volk");
+		return false;
+	}
+
+	vkb::InstanceBuilder builder;
+	auto inst_ret = builder.set_app_name(create_info.app_name)
+		.set_engine_name(create_info.engine_name)
+		.require_api_version(create_info.api_version)
+		.request_validation_layers(bUseValidationLayers)
+		.enable_validation_layers(bUseValidationLayers)
+		.enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
+		.build();
+
+	if (!inst_ret.has_value()) {
+		LOGE("Failed to create Vulkan instance: {}", inst_ret.error().message());
+		return false;
+	}
+
+	auto vkb_inst = inst_ret.value();
+	instance_ = vkb_inst.instance;
+	volkLoadInstance(instance_);
+
+	window_ = create_info.window;
+	if (!SDL_Vulkan_CreateSurface(window_, instance_, &surface_)) {
+		LOGE("Failed to create window surface");
+		return false;
+	}
+
+	// 配置所需的设备特性
+	DeviceFeatures required_features{};
+	required_features.features_13.dynamicRendering = true;
+	required_features.features_13.synchronization2 = true;
+	required_features.features_12.bufferDeviceAddress = true;
+	required_features.features_12.descriptorIndexing = true;
+	required_features.features_12.descriptorBindingPartiallyBound = true;
+	required_features.features_12.descriptorBindingSampledImageUpdateAfterBind = true;
+	required_features.features_12.descriptorBindingUniformBufferUpdateAfterBind = true;
+	required_features.features_12.runtimeDescriptorArray = true;
+	required_features.features_12.descriptorBindingVariableDescriptorCount = true;
+	required_features.features_12.hostQueryReset = true;
+	required_features.features_12.drawIndirectCount = true;
+	required_features.features_10.pipelineStatisticsQuery = true;
+	required_features.features_10.multiDrawIndirect = true;
+	required_features.features_10.geometryShader = true;
+	required_features.features_10.inheritedQueries = true;
+
+	// 选择物理设备
+	vkb::PhysicalDeviceSelector selector{ vkb_inst };
+	auto phys_ret = selector
+		.set_minimum_version(1, 3)
+		.set_required_features_13(required_features.features_13)
+		.set_required_features_12(required_features.features_12)
+		.set_required_features(required_features.features_10)
+		.set_surface(surface_)
+		.add_required_extensions(required_extensions)
+		.select();
+
+	if (!phys_ret.has_value()) {
+		// 仅在设备选择失败时打印可用设备信息，用于调试
+		LogAvailableDevices();
+		LOGE("Failed to select physical device: {}", phys_ret.error().message());
+		return false;
+	}
+
+	vkb::PhysicalDevice physical_device = phys_ret.value();
+
+	// 创建逻辑设备
+	vkb::DeviceBuilder device_builder{ physical_device };
+	auto dev_ret = device_builder.build();
+	if (!dev_ret.has_value()) {
+		LOGE("Failed to create logical device: {}", dev_ret.error().message());
+		return false;
+	}
+
+	// 保存设备信息
+	auto vkb_device = dev_ret.value();
+	device_ = vkb_device.device;
+	volkLoadDevice(device_);
+	physical_device_ = physical_device.physical_device;
+	properties_ = physical_device.properties;
+	features_ = physical_device.features;
+
+	// 获取队列
+	auto graphics_queue_ret = vkb_device.get_queue(vkb::QueueType::graphics);
+	auto transfer_queue_ret = vkb_device.get_queue(vkb::QueueType::transfer);
+	if (!graphics_queue_ret.has_value()) {
+		LOGE("Failed to get graphics queue");
+		return false;
+	}
+	if (!transfer_queue_ret.has_value()) {
+		LOGE("Failed to get transfer queue");
+		return false;
+	}
+
+	graphics_queue_ = graphics_queue_ret.value();
+	transfer_queue_ = transfer_queue_ret.value();
+	queue_indices_ = FindQueueFamilies(physical_device.physical_device, surface_);
+
+	// 创建VMA分配器
+	VmaVulkanFunctions vulkan_functions = {};
+	vulkan_functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+	vulkan_functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
+	VmaAllocatorCreateInfo allocator_info = {};
+	allocator_info.physicalDevice = physical_device_;
+	allocator_info.device = device_;
+	allocator_info.instance = instance_;
+	allocator_info.pVulkanFunctions = &vulkan_functions;
+	allocator_info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+	if (vmaCreateAllocator(&allocator_info, &allocator_) != VK_SUCCESS) {
+		LOGE("Failed to create VMA allocator");
+		return false;
+	}
+
+	LOGI("GPU Device initialized successfully");
+	LOGI("  Device: {} (API Version: {}.{}.{})",
+		properties_.deviceName,
+		VK_VERSION_MAJOR(properties_.apiVersion),
+		VK_VERSION_MINOR(properties_.apiVersion),
+		VK_VERSION_PATCH(properties_.apiVersion));
+
+
+	// 设置debug messenger
+	if (bUseValidationLayers) {
+		SetupDebugMessenger();
+	}
+
+	return true;
 }
 
-bool GPUDevice::WaitQueueIdle(VkQueue queue) {
-    if (vkQueueWaitIdle(queue) != VK_SUCCESS) {
-        LOGE("Failed to wait for queue idle");
-        return false;
-    }
-    return true;
+bool GPUDevice::InitSwapchain()
+{
+	if (!CreateSwapchain()) {
+		return false;
+	}
+
+	// draw image size will match the window
+	VkExtent3D draw_image_extent = { default_swapchain_info_.extent.width, default_swapchain_info_.extent.height, 1 };
+
+	// hardcoding the draw format to 32 bit float
+	draw_image_.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+	draw_image_.extent = draw_image_extent;
+
+	VkImageUsageFlags draw_image_usages{};
+	draw_image_usages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	draw_image_usages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	draw_image_usages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	draw_image_usages |= VK_IMAGE_USAGE_STORAGE_BIT;
+
+	VkImageCreateInfo rimg_info = vkinit::ImageCreateInfo(draw_image_.format, draw_image_usages, draw_image_extent);
+
+	// for the draw image, we want to allocate it from gpu local memory
+	VmaAllocationCreateInfo rimg_allocinfo{};
+	rimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	// allocate and create the image
+	vmaCreateImage(allocator_, &rimg_info, &rimg_allocinfo, &draw_image_.image, &draw_image_.allocation, nullptr);
+
+	// build a image-view for the draw image to use for rendering
+	VkImageViewCreateInfo rview_info = vkinit::ImageViewCreateInfo(draw_image_.format, draw_image_.image, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	VK_CHECK(vkCreateImageView(device_, &rview_info, nullptr, &draw_image_.view));
+
+	depth_image_.format = VK_FORMAT_D32_SFLOAT;
+	depth_image_.extent = draw_image_extent;
+	VkImageUsageFlags depth_image_usages{};
+	depth_image_usages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+	VkImageCreateInfo dimg_info = vkinit::ImageCreateInfo(depth_image_.format, depth_image_usages, draw_image_extent);
+
+	// allocate and create the image
+	vmaCreateImage(allocator_, &dimg_info, &rimg_allocinfo, &depth_image_.image, &depth_image_.allocation, nullptr);
+
+	VkImageViewCreateInfo dview_info = vkinit::ImageViewCreateInfo(depth_image_.format, depth_image_.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	VK_CHECK(vkCreateImageView(device_, &dview_info, nullptr, &depth_image_.view));
+
+	// add the image to the deletion queue
+	main_deletion_queue_.PushFunction([=]()
+		{
+			vkDestroyImageView(device_, draw_image_.view, nullptr);
+			vmaDestroyImage(allocator_, draw_image_.image, draw_image_.allocation);
+
+			vkDestroyImageView(device_, depth_image_.view, nullptr);
+			vmaDestroyImage(allocator_, depth_image_.image, depth_image_.allocation); });
+
+	return true;
 }
 
-uint32_t GPUDevice::GetQueueFamilyIndex(VkQueueFlags required_flags) const {
-    // Get queue family properties
-    uint32_t queue_family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, nullptr);
-    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, queue_families.data());
+bool GPUDevice::InitCommands()
+{
+	// command_buffer_manager_.Init(this, kNUM_RENDER_THREADS);
 
-    // First try to find a dedicated queue for the requested flags
-    for (uint32_t i = 0; i < queue_family_count; i++) {
-        if (queue_families[i].queueFlags == required_flags) {
-            return i;
-        }
-    }
-
-    // If no dedicated queue is found, try to find a queue family that supports the requested flags
-    for (uint32_t i = 0; i < queue_family_count; i++) {
-        if ((queue_families[i].queueFlags & required_flags) == required_flags) {
-            return i;
-        }
-    }
-
-    return VK_QUEUE_FAMILY_IGNORED;
+	// main_deletion_queue_.PushFunction([&]() {
+	//     command_buffer_manager_.Shutdown();
+	// });
+	return true;
 }
 
-VkQueue GPUDevice::GetQueue(uint32_t family_index, uint32_t queue_index) const {
-    VkQueue queue;
-    vkGetDeviceQueue(device_, family_index, queue_index, &queue);
-    return queue;
+
+
+bool GPUDevice::InitDefaultResources()
+{
+	uint32_t white = glm::packUnorm4x8(glm::vec4(1, 1, 1, 1));
+	TextureCreationInfo image_info{};
+	image_info.SetData((void*)&white)
+		.SetSize(1, 1, 1)
+		.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
+		.SetUsage(VK_IMAGE_USAGE_SAMPLED_BIT);
+	default_resources_.images.white_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66, 0.66, 0.66, 1));
+	image_info.SetData((void*)&grey);
+	default_resources_.images.grey_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&grey, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
+	image_info.SetData((void*)&black);
+	default_resources_.images.black_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&black, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	// checkerboard image
+	uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
+	std::array<uint32_t, 16 * 16> pixels; // for 16x16 checkerboard texture
+	for (int x = 0; x < 16; x++)
+	{
+		for (int y = 0; y < 16; y++)
+		{
+			pixels[y * 16 + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
+		}
+	}
+	image_info.SetData(pixels.data())
+		.SetSize(16, 16, 1);
+	default_resources_.images.error_checker_board_image = resource_manager_.CreateTexture(image_info);// CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+
+	VkSamplerCreateInfo sampler_create_info = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+
+	sampler_create_info.magFilter = VK_FILTER_NEAREST;
+	sampler_create_info.minFilter = VK_FILTER_NEAREST;
+
+	vkCreateSampler(device_, &sampler_create_info, nullptr, &default_resources_.samplers.nearest);
+
+	sampler_create_info.magFilter = VK_FILTER_LINEAR;
+	sampler_create_info.minFilter = VK_FILTER_LINEAR;
+
+	vkCreateSampler(device_, &sampler_create_info, nullptr, &default_resources_.samplers.linear);
+
+	main_deletion_queue_.PushFunction([&]()
+		{
+			vkDestroySampler(device_, default_resources_.samplers.nearest, nullptr);
+			vkDestroySampler(device_, default_resources_.samplers.linear, nullptr);
+		});
+
+	return true;
 }
 
-BufferHandle GPUDevice::CreateBuffer(const BufferCreationInfo& info) {
-    BufferHandle handle = buffer_pool_.Allocate();
-    
-    {
-        std::unique_lock lock(creation_info_mutex_);
-        buffer_creation_infos_[handle] = info;
-    }
 
-    VkBufferCreateInfo buffer_info = {};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_info.size = info.size;
-    buffer_info.usage = info.usage;
-    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+bool GPUDevice::CreateSwapchain()
+{
+	vkb::SwapchainBuilder swapchain_builder{ physical_device_, device_, surface_ };
 
-    VmaAllocationCreateInfo alloc_info = {};
-    alloc_info.usage = info.memory_usage;
+	swapchain_image_format_ = default_swapchain_info_.image_format;
 
-    AllocatedBufferUntyped buffer;
-    VkResult result = vmaCreateBuffer(allocator_, &buffer_info, &alloc_info,
-        &buffer.buffer, &buffer.allocation, &buffer.info);
+	vkb::Swapchain vkb_swapchain = swapchain_builder
+		.set_desired_format(VkSurfaceFormatKHR{ .format = swapchain_image_format_, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+		.set_desired_present_mode(default_swapchain_info_.present_mode)
+		.set_desired_extent(default_swapchain_info_.extent.width, default_swapchain_info_.extent.height)
+		.add_image_usage_flags(default_swapchain_info_.usage)
+		.build()
+		.value();
 
-    if (result == VK_SUCCESS) {
-        buffer.size = info.size;
-        if (info.name) {
-            SetDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer.buffer, info.name);
-        }
-
-        if (info.initial_data) {
-            void* mapped_data;
-            vmaMapMemory(allocator_, buffer.allocation, &mapped_data);
-            memcpy(mapped_data, info.initial_data, info.size);
-            vmaUnmapMemory(allocator_, buffer.allocation);
-        }
-
-        buffer_pool_.Set(handle, std::move(buffer));
-    }
-
-    return handle;
+	swapchain_extent_ = vkb_swapchain.extent;
+	// store swapchain and images
+	swapchain_ = vkb_swapchain.swapchain;
+	swapchain_images_ = vkb_swapchain.get_images().value();
+	swapchain_image_views_ = vkb_swapchain.get_image_views().value();
+	return true;
 }
 
-void GPUDevice::DestroyBuffer(BufferHandle handle) {
-    auto& buffer = buffer_pool_.Get(handle);
-    if (buffer.buffer && buffer.allocation) {
-        vmaDestroyBuffer(allocator_, buffer.buffer, buffer.allocation);
-        buffer = {};
-    }
-    buffer_pool_.Free(handle);
-    
-    std::unique_lock lock(creation_info_mutex_);
-    buffer_creation_infos_.erase(handle);
+void GPUDevice::DestroySwapchain()
+{
+	if (swapchain_ != VK_NULL_HANDLE)
+	{
+		vkDestroySwapchainKHR(device_, swapchain_, nullptr);
+		swapchain_ = VK_NULL_HANDLE;
+	}
+
+	for (auto view : swapchain_image_views_)
+	{
+		vkDestroyImageView(device_, view, nullptr);
+	}
+	swapchain_image_views_.clear();
+	swapchain_images_.clear();
 }
 
-AllocatedBufferUntyped& GPUDevice::GetBuffer(BufferHandle handle) {
-    return buffer_pool_.Get(handle);
-}
+bool GPUDevice::ResizeSwapchain(uint32_t width, uint32_t height)
+{
+	vkDeviceWaitIdle(device_);
+	DestroySwapchain();
 
-TextureHandle GPUDevice::CreateTexture(const TextureCreationInfo& info) {
-    if (!info.Validate()) {
-        return kInvalidTextureHandle;
-    }
+	default_swapchain_info_.extent.width = width;
+	default_swapchain_info_.extent.height = height;
 
-    TextureHandle handle = texture_pool_.Allocate();
-    
-    {
-        std::unique_lock lock(creation_info_mutex_);
-        texture_creation_infos_[handle] = info;
-    }
-
-    VkImageCreateInfo image_info = {};
-    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_info.imageType = info.type == TextureType::Texture2D ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_3D;
-    image_info.format = info.format;
-    image_info.extent = info.extent;
-    image_info.mipLevels = info.mip_levels;
-    image_info.arrayLayers = info.array_layers;
-    image_info.samples = info.samples;
-    image_info.tiling = info.tiling;
-    image_info.usage = info.usage;
-    image_info.flags = info.flags;
-    image_info.initialLayout = info.initial_layout;
-
-    VmaAllocationCreateInfo alloc_info = {};
-    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-    AllocatedImage image;
-    VkResult result = vmaCreateImage(allocator_, &image_info, &alloc_info,
-        &image.image, &image.allocation, nullptr);
-
-    if (result == VK_SUCCESS) {
-        image.format = info.format;
-        image.extent = info.extent;
-
-        if (info.name) {
-            SetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)image.image, info.name);
-        }
-
-        texture_pool_.Set(handle, std::move(image));
-    }
-
-    return handle;
-}
-
-void GPUDevice::DestroyTexture(TextureHandle handle) {
-    auto& image = texture_pool_.Get(handle);
-    if (image.image && image.allocation) {
-        vmaDestroyImage(allocator_, image.image, image.allocation);
-        image = {};
-    }
-    texture_pool_.Free(handle);
-    
-    std::unique_lock lock(creation_info_mutex_);
-    texture_creation_infos_.erase(handle);
-}
-
-AllocatedImage& GPUDevice::GetTexture(TextureHandle handle) {
-    return texture_pool_.Get(handle);
-}
-
-BufferCreationInfo GPUDevice::GetBufferCreationInfo(BufferHandle handle) const {
-    std::shared_lock lock(creation_info_mutex_);
-    return buffer_creation_infos_.at(handle);
-}
-
-TextureCreationInfo GPUDevice::GetTextureCreationInfo(TextureHandle handle) const {
-    std::shared_lock lock(creation_info_mutex_);
-    return texture_creation_infos_.at(handle);
-}
-
-VkDescriptorSetLayout GPUDevice::CreateDescriptorSetLayout(const DescriptorLayoutInfo& layout_info) {
-    lc::DescriptorLayoutBuilder builder;
-    
-    for (const auto& binding : layout_info.bindings) {
-        builder.AddBinding(binding.binding, binding.descriptorType, binding.descriptorCount);
-    }
-
-    return builder.Build(device_, layout_info.shader_stages, layout_info.pNext, layout_info.flags);
-}
-
-void GPUDevice::DestroyDescriptorSetLayout(VkDescriptorSetLayout layout) {
-    if (layout != VK_NULL_HANDLE) {
-        vkDestroyDescriptorSetLayout(device_, layout, nullptr);
-    }
-}
-
-bool GPUDevice::InitDescriptorAllocator(const DescriptorAllocatorCreateInfo& create_info) {
-    descriptor_allocator_.Init(device_, create_info.max_sets, create_info.pool_sizes);
-    return true;
-}
-
-void GPUDevice::DestroyDescriptorAllocator() {
-    descriptor_allocator_.DestroyPools(device_);
-}
-
-VkDescriptorSet GPUDevice::AllocateDescriptorSet(VkDescriptorSetLayout layout, void* pNext) {
-    return descriptor_allocator_.Allocate(device_, layout, pNext);
-}
-
-void GPUDevice::UpdateDescriptorSet(VkDescriptorSet set, const std::vector<VkWriteDescriptorSet>& writes) {
-    lc::DescriptorWriter writer;
-    
-    for (const auto& write : writes) {
-        switch (write.descriptorType) {
-            case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-            case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-            case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-                for (uint32_t i = 0; i < write.descriptorCount; i++) {
-                    const auto& image_info = write.pImageInfo[i];
-                    writer.WriteImage(write.dstBinding + i, 
-                                    image_info.imageView,
-                                    image_info.sampler,
-                                    image_info.imageLayout,
-                                    write.descriptorType);
-                }
-                break;
-
-            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-                for (uint32_t i = 0; i < write.descriptorCount; i++) {
-                    const auto& buffer_info = write.pBufferInfo[i];
-                    writer.WriteBuffer(write.dstBinding + i,
-                                     buffer_info.buffer,
-                                     buffer_info.offset,
-                                     buffer_info.range,
-                                     write.descriptorType);
-                }
-                break;
-
-            default:
-                LOGE("Unsupported descriptor type in UpdateDescriptorSet");
-                break;
-        }
-    }
-
-    writer.UpdateSet(device_, set);
-}
-
+	return CreateSwapchain();
 }

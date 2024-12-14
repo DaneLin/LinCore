@@ -146,7 +146,7 @@ void ResourceManager::CreateBufferResource(BufferHandle handle)
     alloc_info.usage = info.memory_usage;
     alloc_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT;
     AllocatedBufferUntyped buffer;
-    vmaCreateBuffer(engine_->allocator_, &buffer_info, &alloc_info,
+    vmaCreateBuffer(gpu_device_->allocator_, &buffer_info, &alloc_info,
                     &buffer.buffer, &buffer.allocation, &buffer.info);
 
     // Store the created buffer
@@ -161,7 +161,7 @@ AllocatedBufferUntyped &ResourceManager::GetBuffer(BufferHandle handle)
 void ResourceManager::DestroyBuffer(BufferHandle handle)
 {
     AllocatedBufferUntyped &buffer = GetBuffer(handle);
-    vmaDestroyBuffer(engine_->allocator_, buffer.buffer, buffer.allocation);
+    vmaDestroyBuffer(gpu_device_->allocator_, buffer.buffer, buffer.allocation);
 
     {
         std::unique_lock lock(creation_info_mutex_);
@@ -245,7 +245,7 @@ void ResourceManager::CreateTextureResource(TextureHandle handle)
     image.format = info.format;
     image.extent = info.extent;
 
-    vmaCreateImage(engine_->allocator_, &imageInfo, &alloc_info,
+    vmaCreateImage(gpu_device_->allocator_, &imageInfo, &alloc_info,
                    &image.image, &image.allocation, nullptr);
 
     // Create image view
@@ -284,10 +284,10 @@ void ResourceManager::CreateTextureResource(TextureHandle handle)
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = info.array_layers;
 
-    VkResult result = vkCreateImageView(engine_->device_, &viewInfo, nullptr, &image.view);
+    VkResult result = vkCreateImageView(gpu_device_->device_, &viewInfo, nullptr, &image.view);
     if (result != VK_SUCCESS)
     {
-        vmaDestroyImage(engine_->allocator_, image.image, image.allocation);
+        vmaDestroyImage(gpu_device_->allocator_, image.image, image.allocation);
         throw std::runtime_error("Failed to create image view");
     }
 
@@ -303,8 +303,8 @@ AllocatedImage &ResourceManager::GetTexture(TextureHandle handle)
 void ResourceManager::DestroyTexture(TextureHandle handle)
 {
     AllocatedImage &image = GetTexture(handle);
-    vkDestroyImageView(engine_->device_, image.view, nullptr);
-    vmaDestroyImage(engine_->allocator_, image.image, image.allocation);
+    vkDestroyImageView(gpu_device_->device_, image.view, nullptr);
+    vmaDestroyImage(gpu_device_->allocator_, image.image, image.allocation);
 
     {
         std::unique_lock lock(creation_info_mutex_);
@@ -314,9 +314,9 @@ void ResourceManager::DestroyTexture(TextureHandle handle)
     texture_pool_.Free(handle);
 }
 
-void ResourceManager::Init(VulkanEngine *engine)
+void ResourceManager::Init(GPUDevice* gpu_device)
 {
-    engine_ = engine;
+    gpu_device_ = gpu_device;
 }
 
 void ResourceManager::CleanUp()

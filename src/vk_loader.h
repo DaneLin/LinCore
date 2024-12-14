@@ -257,7 +257,8 @@ namespace lc
 
 		BufferHandle material_data_buffer_handle;
 
-		VulkanEngine *creator;
+		//VulkanEngine *creator;
+		GPUDevice* gpu_device;
 
 		~LoadedGLTF()
 		{
@@ -271,5 +272,5 @@ namespace lc
 	};
 
 	void AddMeshBufferToGlobalBuffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
-	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(VulkanEngine *engine, std::string_view file_path);
+	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(GPUDevice* gpu_device, std::string_view file_path);
 } // namespace lc

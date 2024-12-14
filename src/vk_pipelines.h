@@ -12,8 +12,9 @@ namespace lc
 	class PipelineCache
 	{
 	public:
-		PipelineCache(VkDevice device, const std::string cache_file_path);
-		~PipelineCache();
+
+		void Init(VkDevice device, const std::string cache_file_path);
+		void CleanUp();
 
 		VkPipelineCache GetCache() { return cache_; }
 

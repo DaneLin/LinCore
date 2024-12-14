@@ -108,7 +108,7 @@ public:
 	static constexpr uint32_t MAX_COMMAND_BUFFERS_PER_THREAD = 8;
 	static constexpr uint32_t MAX_SECONDARY_COMMAND_BUFFERS = 16;
 
-	void Init(uint32_t num_threads);
+	void Init(GPUDevice* gpu_device, uint32_t num_threads);
 	void Shutdown();
 
 	void ResetPools(uint32_t frame_index);
@@ -118,6 +118,7 @@ public:
 	void ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue);
 
 private:
+	GPUDevice* gpu_device_{ nullptr };
 	
 	uint32_t GetPoolIndex(uint32_t frame_index, uint32_t thread_index);
 

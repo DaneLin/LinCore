@@ -9,10 +9,10 @@
 #include "camera.h"
 #include "vk_shaders.h"
 #include "config.h"
-#include "vk_pipelines.h"
 #include "vk_loader.h"
 #include "TaskScheduler.h"
 #include <command_buffer.h>
+#include "vk_device.h"
 
 namespace vkutils {
 	class VulkanProfiler;
@@ -34,14 +34,6 @@ struct ComputeEffect {
 };
 
 
-struct FrameData {
-	/*VkCommandPool command_pool;
-	VkCommandBuffer main_command_buffer;*/
-	VkSemaphore swapchain_semaphore, render_semaphore;
-	VkFence render_fence;
-	DeletionQueue deletion_queue;
-	class lc::DescriptorAllocatorGrowable frame_descriptors;
-};
 
 struct GLTFMetallic_Roughness {
 	MaterialPipeline opaque_pipeline;
@@ -109,9 +101,6 @@ struct MeshNode : public Node {
 };
 
 struct GlobalMeshBuffer {
-	/*AllocatedBuffer<Vertex> vertex_buffer;
-	AllocatedBuffer<uint32_t> index_buffer;
-	AllocatedBuffer<VkDrawIndexedIndirectCommand> indirect_command_buffer;*/
 	BufferHandle vertex_buffer_handle;
 	BufferHandle index_buffer_handle;
 	BufferHandle indirect_command_buffer_handle;
@@ -123,9 +112,7 @@ struct GlobalMeshBuffer {
 	void UploadToGPU(VulkanEngine* engine);
 };
 
-namespace lc {
-    class GPUDevice;  // Forward declaration
-}
+class GPUDevice;  // Forward declaration
 
 struct EngineStats {
 	float frame_time;
@@ -158,7 +145,7 @@ public:
 
 	bool is_initialized_{ false };
 
-	int frame_number_{ 0 };
+	
 
 	bool freeze_rendering_{ false };
 
@@ -168,65 +155,13 @@ public:
 
 	struct SDL_Window* window_{ nullptr };
 
-	VkInstance instance_;
-
-	VkDebugUtilsMessengerEXT debug_messenger_;
-
-	VkPhysicalDevice chosen_gpu_;
-
-	VkPhysicalDeviceProperties gpu_properties_;
-
-	VkDevice device_;
-
-	VkSurfaceKHR surface_;
-
-	FrameData frames_[kFRAME_OVERLAP];
-
-	VkQueue main_queue_;
-	VkQueue transfer_queue_;
-	uint32_t main_queue_family_;
-	uint32_t transfer_queue_family_;
-
 	DeletionQueue main_deletion_queue_;
-
-	VmaAllocator allocator_;
-
-	// draw resources
-	AllocatedImage draw_image_;
-	AllocatedImage depth_image_;
-	VkExtent2D draw_extent_;
-	float render_scale_ = 1.f;
-
-	lc::DescriptorAllocatorGrowable global_descriptor_allocator_;
-
-	// 添加bindless相关成员
-	VkDescriptorSetLayout bindless_texture_layout_{ VK_NULL_HANDLE };
-	VkDescriptorSet bindless_texture_set_{ VK_NULL_HANDLE };
-	
-	VkDescriptorSetLayout draw_image_descriptor_layout_{ VK_NULL_HANDLE };;
-	VkDescriptorSet draw_image_descriptor_{ VK_NULL_HANDLE };
-
-	VkDescriptorSetLayout gpu_scene_data_descriptor_layout_;
 
 	VkPipelineLayout mesh_pipeline_layout_;
 
 	std::vector<ComputeEffect> background_effects_;
 	int current_background_effect_{ 0 };
 	int current_scene_{ 0 };
-
-	GPUSceneData scene_data_;
-
-	struct {
-		TextureHandle white_image;
-		TextureHandle black_image;
-		TextureHandle grey_image;
-		TextureHandle error_checker_board_image;
-	}default_images_;
-
-	struct {
-		VkSampler linear;
-		VkSampler nearest;
-	}default_samplers_;
 
 	MaterialInstance dafault_data_;
 
@@ -241,10 +176,6 @@ public:
 	EngineStats engine_stats_;
 
 	lc::ShaderCache shader_cache_;
-	lc::TextureCache texture_cache_;
-	lc::PipelineCache* global_pipeline_cache_;
-
-	vkutils::VulkanProfiler* profiler_;
 
 	enki::TaskScheduler render_task_scheduler_;
 	enki::TaskScheduler io_task_scheduler_;
@@ -254,81 +185,31 @@ public:
 
 	GlobalMeshBuffer global_mesh_buffer_;
 
-	CommandBufferManager command_buffer_manager_;
-	ResourceManager resource_manager_;
-
-	lc::GPUDevice* gpu_device_;  // 使用普通指针
+	GPUDevice gpu_device_;
 
 public:
-
 	static VulkanEngine& Get();
-
 	//initializes everything in the engine
 	void Init();
-
 	//shuts down the engine
 	void CleanUp();
-
 	//draw loop
 	void Draw();
-
 	//run main loop
 	void Run();
-
-	FrameData& GetCurrentFrame() { return frames_[frame_number_ % kFRAME_OVERLAP]; }
-
+	
 	GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
-
 	void UpdateScene();
-
 	void DrawObject(CommandBuffer* cmd, const RenderObject& r, RenderInfo& render_info);
 
 private:
-	void InitVulkan();
-
-	void InitSwapchain();
-
-	void InitCommands();
-
-	void InitSyncStructures();
-
-	void InitDescriptors();
-
 	void InitPipelines();
-
 	void InitBackgounrdPipelines();
-
 	void InitImGui();
-
 	void InitDefaultData();
-
 	void InitTaskSystem();
-
-	void ResizeSwapchain();
-
-	void CreateSwapchain(uint32_t width, uint32_t height);
-
-	void DestroySwapchain();
-
 	void DrawBackground(CommandBuffer* cmd);
-
 	void DrawImGui(CommandBuffer* cmd, VkImageView target_image_view);
-
 	void DrawGeometry(CommandBuffer* cmd);
-
 	const std::string GetAssetPath(const std::string& path) const;
-
-	
-private:
-	// swapchain stuff
-	VkSwapchainKHR swapchain_;
-
-	VkFormat swapchain_image_format_;
-
-	std::vector<VkImage> swapchain_images_;
-
-	std::vector<VkImageView> swapchain_image_views_;
-
-	VkExtent2D swapchain_extent_;
-	
 };
