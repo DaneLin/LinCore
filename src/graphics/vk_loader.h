@@ -1,12 +1,15 @@
 ﻿#pragma once
-#include <vk_types.h>
-#include "vk_descriptors.h"
+// std
 #include <unordered_map>
 #include <filesystem>
-#include "config.h"
-#include <TaskScheduler.h>
 #include <future>
-#include <logging.h>
+// external
+#include <TaskScheduler.h>
+// lincore
+#include "fundation/config.h"
+#include "fundation/logging.h"
+#include "graphics/vk_types.h"
+#include "graphics/vk_descriptors.h"
 
 namespace fastgltf
 {
@@ -30,7 +33,7 @@ namespace lincore
 	{
 		FileLoadRequestType type;
 		char path[512];			 // URI type
-		const void *memory_data; // vector and bufferview type
+		const void* memory_data; // vector and bufferview type
 		size_t memory_size;
 		size_t buffer_offset; // buffer view
 		std::function<void(TextureHandle)> callback;
@@ -39,7 +42,7 @@ namespace lincore
 	// upload request
 	struct UploadRequest
 	{
-		void *data;
+		void* data;
 		size_t size;
 		VkFormat format;
 		VkExtent3D extent;
@@ -62,13 +65,13 @@ namespace lincore
 	class AsyncLoader
 	{
 	public:
-		void Init(enki::TaskScheduler *task_scheduler);
+		void Init(enki::TaskScheduler* task_scheduler);
 		void Shutdown();
 
 		void Update();
 
-		void RequestFileLoad(const char *path, std::function<void(TextureHandle)> callback);
-		void RequestImageUpload(void *data, VkExtent3D extent, VkFormat format, std::function<void(TextureHandle)> callback);
+		void RequestFileLoad(const char* path, std::function<void(TextureHandle)> callback);
+		void RequestImageUpload(void* data, VkExtent3D extent, VkFormat format, std::function<void(TextureHandle)> callback);
 
 		void RequestVectorLoad(const void* data, size_t size, std::function<void(TextureHandle)> callback);
 
@@ -77,7 +80,7 @@ namespace lincore
 		std::shared_ptr<AsyncLoaderState> GetState() { return state_; }
 
 	private:
-		enki::TaskScheduler *task_scheduler_{nullptr};
+		enki::TaskScheduler* task_scheduler_{ nullptr };
 		std::shared_ptr<AsyncLoaderState> state_ = std::make_shared<AsyncLoaderState>();
 
 
@@ -94,14 +97,14 @@ namespace lincore
 	{
 		void Execute() override
 		{
-			while (task_scheduler->GetIsRunning()&& execute)
+			while (task_scheduler->GetIsRunning() && execute)
 			{
 				task_scheduler->WaitForNewPinnedTasks();
 				task_scheduler->RunPinnedTasks();
 			}
 		}
 
-		enki::TaskScheduler *task_scheduler;
+		enki::TaskScheduler* task_scheduler;
 		std::atomic<bool> execute{ true };
 	};
 
@@ -123,8 +126,8 @@ namespace lincore
 			}
 		}
 
-		AsyncLoader *async_loader;
-		enki::TaskScheduler *task_scheduler;
+		AsyncLoader* async_loader;
+		enki::TaskScheduler* task_scheduler;
 		std::shared_ptr<AsyncLoaderState> state;
 	};
 
@@ -142,14 +145,14 @@ namespace lincore
 			bindless_set_ = bindless_set;
 		}
 
-		TextureID AddTexture(VkDevice device, const VkImageView &image_view, VkSampler sampler)
+		TextureID AddTexture(VkDevice device, const VkImageView& image_view, VkSampler sampler)
 		{
 			// 检查是否已存在
 			for (uint32_t i = 0; i < cache_.size(); i++)
 			{
 				if (cache_[i].imageView == image_view && cache_[i].sampler == sampler)
 				{
-					return TextureID{i};
+					return TextureID{ i };
 				}
 			}
 			// 检查是否超出最大数量
@@ -164,15 +167,15 @@ namespace lincore
 			VkDescriptorImageInfo image_info{
 				.sampler = sampler,
 				.imageView = image_view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
 			cache_.push_back(image_info);
 
 			// 更新bindless descriptor set
 			DescriptorWriter writer;
-			writer.WriteImageArray(kBINDLESS_TEXTURE_BINDING, idx, {image_info}, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+			writer.WriteImageArray(kBINDLESS_TEXTURE_BINDING, idx, { image_info }, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 			writer.UpdateSet(device, bindless_set_);
 
-			return TextureID{idx};
+			return TextureID{ idx };
 		}
 
 	private:
@@ -213,7 +216,7 @@ namespace lincore
 	struct PerPassData
 	{
 	public:
-		T &operator[](MeshPassType pass)
+		T& operator[](MeshPassType pass)
 		{
 			switch (pass)
 			{
@@ -228,7 +231,7 @@ namespace lincore
 			return data[0];
 		}
 
-		void Clear(T &&val)
+		void Clear(T&& val)
 		{
 			for (int i = 0; i < 3; i++)
 			{
@@ -265,7 +268,7 @@ namespace lincore
 			ClearAll();
 		}
 
-		virtual void Draw(const glm::mat4 &top_matrix, DrawContext &ctx) override;
+		virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) override;
 
 	private:
 		void ClearAll();

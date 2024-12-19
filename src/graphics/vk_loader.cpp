@@ -1,26 +1,25 @@
 ﻿
-#include <vk_loader.h>
+#include "graphics/vk_loader.h"
+// std
+#include <iostream>
+// external
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-#include <iostream>
-
-#include "vk_device.h"
-#include "vk_engine.h"
-#include "vk_initializers.h"
-#include "vk_types.h"
-
 #include <glm/gtx/quaternion.hpp>
-
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/core.hpp>
-
-#include "logging.h"
+// lincore
+#include "fundation/logging.h"
+#include "graphics/vk_device.h"
+#include "graphics/vk_engine.h"
+#include "graphics/vk_initializers.h"
+#include "graphics/vk_types.h"
 
 
 namespace lincore
 {
-	std::optional<TextureHandle> LoadImage(fastgltf::Asset &asset, fastgltf::Image &image, const std::filesystem::path &gltf_parent_path)
+	std::optional<TextureHandle> LoadImage(fastgltf::Asset& asset, fastgltf::Image& image, const std::filesystem::path& gltf_parent_path)
 	{
 		VulkanEngine* engine = &VulkanEngine::Get();
 		auto promise = std::make_shared<std::promise<std::optional<TextureHandle>>>();
@@ -28,8 +27,8 @@ namespace lincore
 
 		std::visit(
 			fastgltf::visitor{
-				[](auto &arg) {},
-				[&](fastgltf::sources::URI &file_path)
+				[](auto& arg) {},
+				[&](fastgltf::sources::URI& file_path)
 				{
 					assert(file_path.fileByteOffset == 0);
 					assert(file_path.uri.isLocalPath());
@@ -52,7 +51,7 @@ namespace lincore
 															  }
 														  });
 				},
-				[&](fastgltf::sources::Vector &vector)
+				[&](fastgltf::sources::Vector& vector)
 				{
 					engine->async_loader_.RequestVectorLoad(
 						vector.bytes.data(),
@@ -69,13 +68,13 @@ namespace lincore
 							}
 						});
 				},
-				[&](fastgltf::sources::BufferView &view)
+				[&](fastgltf::sources::BufferView& view)
 				{
-					auto &bufferView = asset.bufferViews[view.bufferViewIndex];
-					auto &buffer = asset.buffers[bufferView.bufferIndex];
+					auto& bufferView = asset.bufferViews[view.bufferViewIndex];
+					auto& buffer = asset.buffers[bufferView.bufferIndex];
 
-					std::visit(fastgltf::visitor{[](auto &arg) {},
-												 [&](fastgltf::sources::Array &vector)
+					std::visit(fastgltf::visitor{[](auto& arg) {},
+												 [&](fastgltf::sources::Array& vector)
 												 {
 													 engine->async_loader_.RequestBufferViewLoad(
 														 vector.bytes.data(),
@@ -94,7 +93,7 @@ namespace lincore
 														 });
 												 }},
 							   buffer.data);
-				}},
+				} },
 			image.data);
 
 		return future.get();
@@ -136,7 +135,7 @@ namespace lincore
 
 	void AddMeshBufferToGlobalBuffers(std::span<uint32_t> indices, std::span<Vertex> vertices)
 	{
-		VulkanEngine *engine = &VulkanEngine::Get();
+		VulkanEngine* engine = &VulkanEngine::Get();
 
 		uint32_t vertex_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.vertex_data.size());
 		uint32_t index_offset = static_cast<uint32_t>(engine->global_mesh_buffer_.index_data.size());
@@ -151,7 +150,7 @@ namespace lincore
 
 		std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
 		scene->gpu_device = gpu_device;
-		LoadedGLTF &file = *scene.get();
+		LoadedGLTF& file = *scene.get();
 
 		fastgltf::Parser parser{};
 
@@ -195,16 +194,16 @@ namespace lincore
 		}
 
 		// we can stimate the descriptors we will need accurately
-		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
+		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes = { {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3},
 																			 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3},
-																			 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}};
+																			 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1} };
 
 		file.descriptor_pool.Init(gpu_device->device_, static_cast<uint32_t>(gltf.materials.size()), sizes);
 
 		// load sampler
-		for (fastgltf::Sampler &sampler : gltf.samplers)
+		for (fastgltf::Sampler& sampler : gltf.samplers)
 		{
-			VkSamplerCreateInfo sampler_create_info = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr};
+			VkSamplerCreateInfo sampler_create_info = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .pNext = nullptr };
 			sampler_create_info.maxLod = VK_LOD_CLAMP_NONE;
 			sampler_create_info.minLod = 0;
 
@@ -227,9 +226,9 @@ namespace lincore
 		std::vector<std::shared_ptr<GLTFMaterial>> materials;
 
 		// load all textures
-		for (fastgltf::Image &image : gltf.images)
+		for (fastgltf::Image& image : gltf.images)
 		{
-			std::optional<TextureHandle> img = LoadImage( gltf, image, path.parent_path());
+			std::optional<TextureHandle> img = LoadImage(gltf, image, path.parent_path());
 
 			if (img.has_value())
 			{
@@ -249,17 +248,19 @@ namespace lincore
 		}
 		BufferCreation buffer_info{};
 		buffer_info.Reset()
-			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size())
+			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				ResourceUsageType::Immutable,
+				static_cast<uint32_t>(sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size()))
 			.SetPersistent(true);
 		buffer_info.initial_data = nullptr;
-		file.material_data_buffer_handle = gpu_device->resource_manager_.CreateBuffer(buffer_info);
+		file.material_data_buffer_handle = gpu_device->CreateResource(buffer_info);
 
-		Buffer* material_data_buffer = gpu_device->resource_manager_.GetBuffer(file.material_data_buffer_handle);
+		Buffer* material_data_buffer = gpu_device->GetResource<Buffer>(file.material_data_buffer_handle.index);
 		int data_index = 0;
 		GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants =
-			 static_cast<GLTFMetallic_Roughness::MaterialConstants*>(material_data_buffer->mapped_data);
+			static_cast<GLTFMetallic_Roughness::MaterialConstants*>(material_data_buffer->mapped_data);
 
-		for (fastgltf::Material &mat : gltf.materials)
+		for (fastgltf::Material& mat : gltf.materials)
 		{
 			std::shared_ptr<GLTFMaterial> new_mat = std::make_shared<GLTFMaterial>();
 			materials.push_back(new_mat);
@@ -300,8 +301,8 @@ namespace lincore
 				material_resources.color_sampler = file.samplers[sampler];
 			}
 
-			constants.color_tex_id =gpu_device->texture_cache_.AddTexture(gpu_device->device_, gpu_device->resource_manager_.GetTexture(material_resources.color_image)->vk_image_view, material_resources.color_sampler).index;
-			constants.metal_rought_tex_id = gpu_device->texture_cache_.AddTexture(gpu_device->device_, gpu_device->resource_manager_.GetTexture(material_resources.metal_rough_image)->vk_image_view, material_resources.metal_rought_sampler).index;
+			constants.color_tex_id = gpu_device->texture_cache_.AddTexture(gpu_device->device_, gpu_device->GetResource<Texture>(material_resources.color_image.index)->vk_image_view, material_resources.color_sampler).index;
+			constants.metal_rought_tex_id = gpu_device->texture_cache_.AddTexture(gpu_device->device_, gpu_device->GetResource<Texture>(material_resources.metal_rough_image.index)->vk_image_view, material_resources.metal_rought_sampler).index;
 
 			// write material parameter to buffer
 			sceneMaterialConstants[data_index] = constants;
@@ -316,7 +317,7 @@ namespace lincore
 		std::vector<Vertex> vertices;
 		int mesh_index = 0;
 
-		for (fastgltf::Mesh &mesh : gltf.meshes)
+		for (fastgltf::Mesh& mesh : gltf.meshes)
 		{
 			std::shared_ptr<MeshAsset> new_mesh = std::make_shared<MeshAsset>();
 			meshes.push_back(new_mesh);
@@ -329,7 +330,7 @@ namespace lincore
 			size_t global_index_offset = VulkanEngine::Get().global_mesh_buffer_.index_data.size();
 			size_t global_vertex_offset = VulkanEngine::Get().global_mesh_buffer_.vertex_data.size();
 
-			for (auto &&p : mesh.primitives)
+			for (auto&& p : mesh.primitives)
 			{
 				GeoSurface new_surface;
 				new_surface.start_index = (uint32_t)indices.size();
@@ -339,10 +340,10 @@ namespace lincore
 
 				// load indexes
 				{
-					fastgltf::Accessor &indexaccessor = gltf.accessors[p.indicesAccessor.value()];
+					fastgltf::Accessor& indexaccessor = gltf.accessors[p.indicesAccessor.value()];
 					indices.reserve(indices.size() + indexaccessor.count);
 
-					fastgltf::iterateAccessor<std::uint32_t>(gltf, 
+					fastgltf::iterateAccessor<std::uint32_t>(gltf,
 						indexaccessor,
 						[&](std::uint32_t idx)
 						{
@@ -352,17 +353,17 @@ namespace lincore
 
 				// load vertex positions
 				{
-					fastgltf::Accessor &posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
+					fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
 					vertices.resize(vertices.size() + posAccessor.count);
 
-					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, 
+					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf,
 						posAccessor,
 						[&](glm::vec3 v, size_t index)
 						{
 							Vertex newvtx;
 							newvtx.position = v;
-							newvtx.normal = {1, 0, 0};
-							newvtx.color = glm::vec4{1.f};
+							newvtx.normal = { 1, 0, 0 };
+							newvtx.color = glm::vec4{ 1.f };
 							newvtx.uv_x = 0;
 							newvtx.uv_y = 0;
 							vertices[initial_vtx + index] = newvtx;
@@ -374,7 +375,7 @@ namespace lincore
 				if (normals != p.attributes.end())
 				{
 
-					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, 
+					fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf,
 						gltf.accessors[(*normals).accessorIndex],
 						[&](glm::vec3 v, size_t index)
 						{
@@ -387,7 +388,7 @@ namespace lincore
 				if (uv != p.attributes.end())
 				{
 
-					fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, 
+					fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf,
 						gltf.accessors[(*uv).accessorIndex],
 						[&](glm::vec2 v, size_t index)
 						{
@@ -401,7 +402,7 @@ namespace lincore
 				if (colors != p.attributes.end())
 				{
 
-					fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, 
+					fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf,
 						gltf.accessors[(*colors).accessorIndex],
 						[&](glm::vec4 v, size_t index)
 						{
@@ -450,14 +451,14 @@ namespace lincore
 		}
 
 		// load all nodes and their meshes
-		for (fastgltf::Node &node : gltf.nodes)
+		for (fastgltf::Node& node : gltf.nodes)
 		{
 			std::shared_ptr<Node> new_node;
 
 			if (node.meshIndex.has_value())
 			{
 				new_node = std::make_shared<MeshNode>();
-				static_cast<MeshNode *>(new_node.get())->mesh = meshes[*node.meshIndex];
+				static_cast<MeshNode*>(new_node.get())->mesh = meshes[*node.meshIndex];
 			}
 			else
 			{
@@ -468,7 +469,7 @@ namespace lincore
 
 			file.nodes[node.name.c_str()];
 
-			std::visit(fastgltf::visitor{[&](fastgltf::math::fmat4x4 matrix)
+			std::visit(fastgltf::visitor{ [&](fastgltf::math::fmat4x4 matrix)
 										 {
 											 memcpy(&new_node->local_transform, matrix.data(), sizeof(matrix));
 										 },
@@ -485,17 +486,17 @@ namespace lincore
 											 glm::mat4 sm = glm::scale(glm::mat4(1.f), sc);
 
 											 new_node->local_transform = tm * rm * sm;
-										 }},
-					   node.transform);
+										 } },
+				node.transform);
 		}
 
 		// run loop again to setup transform hierarchy
 		for (int i = 0; i < gltf.nodes.size(); ++i)
 		{
-			fastgltf::Node &node = gltf.nodes[i];
-			std::shared_ptr<Node> &scene_node = nodes[i];
+			fastgltf::Node& node = gltf.nodes[i];
+			std::shared_ptr<Node>& scene_node = nodes[i];
 
-			for (auto &c : node.children)
+			for (auto& c : node.children)
 			{
 				scene_node->children.push_back(nodes[c]);
 				nodes[c]->parent = scene_node;
@@ -503,20 +504,20 @@ namespace lincore
 		}
 
 		// find the top nodes, with no parents
-		for (auto &node : nodes)
+		for (auto& node : nodes)
 		{
 			if (node->parent.lock() == nullptr)
 			{
 				file.top_nodes.push_back(node);
-				node->RefreshTransform(glm::mat4{1.f});
+				node->RefreshTransform(glm::mat4{ 1.f });
 			}
 		}
 		return scene;
 	}
 
-	void LoadedGLTF::Draw(const glm::mat4 &top_matrix, DrawContext &ctx)
+	void LoadedGLTF::Draw(const glm::mat4& top_matrix, DrawContext& ctx)
 	{
-		for (auto &node : top_nodes)
+		for (auto& node : top_nodes)
 		{
 			node->Draw(top_matrix, ctx);
 		}
@@ -546,13 +547,13 @@ namespace lincore
 		//	creator->DestroyImage(v);
 		//}
 
-		for (auto &sampler : samplers)
+		for (auto& sampler : samplers)
 		{
 			vkDestroySampler(dv, sampler, nullptr);
 		}
 	}
 
-	void AsyncLoader::Init(enki::TaskScheduler *task_scheduler)
+	void AsyncLoader::Init(enki::TaskScheduler* task_scheduler)
 	{
 		task_scheduler_ = task_scheduler;
 		state_->state = AsyncLoaderState::State::Running;
@@ -591,7 +592,7 @@ namespace lincore
 		}
 	}
 
-	void AsyncLoader::RequestFileLoad(const char *path, std::function<void(TextureHandle)> callback)
+	void AsyncLoader::RequestFileLoad(const char* path, std::function<void(TextureHandle)> callback)
 	{
 		if (state_->state != AsyncLoaderState::State::Running) return;
 
@@ -604,7 +605,7 @@ namespace lincore
 		state_->cv.notify_one();
 	}
 
-	void AsyncLoader::RequestImageUpload(void *data, VkExtent3D extent, VkFormat format, std::function<void(TextureHandle)> callback)
+	void AsyncLoader::RequestImageUpload(void* data, VkExtent3D extent, VkFormat format, std::function<void(TextureHandle)> callback)
 	{
 		UploadRequest request{};
 		request.data = data;
@@ -616,7 +617,7 @@ namespace lincore
 		upload_requests_.push_back(request);
 	}
 
-	void AsyncLoader::RequestVectorLoad(const void *data, size_t size, std::function<void(TextureHandle)> callback)
+	void AsyncLoader::RequestVectorLoad(const void* data, size_t size, std::function<void(TextureHandle)> callback)
 	{
 		if (state_->state != AsyncLoaderState::State::Running) return;
 
@@ -630,7 +631,7 @@ namespace lincore
 		state_->cv.notify_one();
 	}
 
-	void AsyncLoader::RequestBufferViewLoad(const void *data, size_t size, size_t offset, std::function<void(TextureHandle)> callback)
+	void AsyncLoader::RequestBufferViewLoad(const void* data, size_t size, size_t offset, std::function<void(TextureHandle)> callback)
 	{
 		if (state_->state != AsyncLoaderState::State::Running) return;
 
@@ -716,24 +717,24 @@ namespace lincore
 			if (state_->state != AsyncLoaderState::State::Running) break;
 
 			// Process upload as before...
-			size_t data_size = request.extent.depth * request.extent.width * request.extent.height * 4;
+			uint32_t data_size = static_cast<uint32_t>(request.extent.depth * request.extent.width * request.extent.height * 4);
 			BufferCreation buffer_info{};
 			buffer_info.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, ResourceUsageType::Immutable, data_size)
 				.SetDeviceOnly(false);
 			buffer_info.initial_data = request.data;
-			BufferHandle upload_buffer = VulkanEngine::Get().gpu_device_.resource_manager_.CreateBuffer(buffer_info);
+			BufferHandle upload_buffer = VulkanEngine::Get().gpu_device_.CreateResource(buffer_info);
 
 			TextureCreation texture_info{};
 			texture_info.SetSize(request.extent.width, request.extent.height, request.extent.depth)
 				.SetFormatType(request.format, TextureType::Texture2D)
 				.SetFlags(TextureFlags::RenderTarget_mask | TextureFlags::Compute_mask)
 				.SetMips(request.enable_mips ? 0 : 1);  // 0 for auto-generate mips
-			TextureHandle texture = VulkanEngine::Get().gpu_device_.resource_manager_.CreateTexture(texture_info);
+			TextureHandle texture = VulkanEngine::Get().gpu_device_.CreateResource(texture_info);
 
 			VulkanEngine::Get().gpu_device_.command_buffer_manager_.ImmediateSubmit(
 				[&](CommandBuffer* cmd) {
-					Buffer* upload_buffer_ptr = VulkanEngine::Get().gpu_device_.resource_manager_.GetBuffer(upload_buffer);
-					Texture* texture_ptr = VulkanEngine::Get().gpu_device_.resource_manager_.GetTexture(texture);
+					Buffer* upload_buffer_ptr = VulkanEngine::Get().gpu_device_.GetResource<Buffer>(upload_buffer.index);
+					Texture* texture_ptr = VulkanEngine::Get().gpu_device_.GetResource<Texture>(texture.index);
 
 					cmd->TransitionImage(texture_ptr->vk_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 

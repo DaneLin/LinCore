@@ -1,5 +1,5 @@
 ﻿#pragma once
-
+// std
 #include <memory>
 #include <optional>
 #include <string>
@@ -8,17 +8,16 @@
 #include <array>
 #include <functional>
 #include <deque>
-
+// external
 #include "volk.h"
 #include <vulkan/vk_enum_string_helper.h>
 #include <vk_mem_alloc.h>
-
 #include <fmt/core.h>
-
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
-#include "vk_resources.h"
-#include "resources.h"
+// lincore
+#include "fundation/resources.h"
+#include "graphics/vk_resources.h"
 
 namespace lincore
 {
@@ -66,15 +65,11 @@ namespace lincore
 	// holds the resources needed for a mesh
 	struct GPUMeshBuffers
 	{
-		/*AllocatedBuffer<uint32_t> index_buffer;
-		AllocatedBuffer<Vertex> vertex_buffer;*/
-		lincore::BufferHandle index_buffer_handle;
-		lincore::BufferHandle vertex_buffer_handle;
+		BufferHandle index_buffer_handle;
+		BufferHandle vertex_buffer_handle;
 		size_t indirect_index;
 		VkDeviceAddress vertex_buffer_address;
 	};
-
-
 
 	// push constants for our mesh object draws
 	struct alignas(16) GPUDrawPushConstants

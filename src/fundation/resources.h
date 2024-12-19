@@ -1,8 +1,8 @@
 #pragma once
-
+// external
 #include "vulkan/vulkan.h"
 #include "vk_mem_alloc.h"
-
+// lincore
 #include "gpu_enums.h"
 
 namespace lincore
@@ -11,14 +11,14 @@ namespace lincore
 
 	static const uint32_t k_invalid_index = 0xffffffff;
 
-	static const uint32_t k_buffers_pool_size                 = 16384;
-	static const uint32_t k_textures_pool_size                = 512;
-	static const uint32_t k_render_passes_pool_size           = 256;
-	static const uint32_t k_descriptor_set_layouts_pool_size  = 128;
-	static const uint32_t k_pipelines_pool_size               = 128;
-	static const uint32_t k_shaders_pool_size                 = 128;
-	static const uint32_t k_descriptor_sets_pool_size         = 4096;
-	static const uint32_t k_samplers_pool_size                = 32;
+	static const uint32_t k_buffers_pool_size = 16384;
+	static const uint32_t k_textures_pool_size = 512;
+	static const uint32_t k_render_passes_pool_size = 256;
+	static const uint32_t k_descriptor_set_layouts_pool_size = 128;
+	static const uint32_t k_pipelines_pool_size = 128;
+	static const uint32_t k_shaders_pool_size = 128;
+	static const uint32_t k_descriptor_sets_pool_size = 4096;
+	static const uint32_t k_samplers_pool_size = 32;
 
 	typedef uint32_t ResourceHandle;
 
@@ -270,7 +270,7 @@ namespace lincore
 		TextureViewCreation& SetName(const char* name);
 		TextureViewCreation& SetViewType(VkImageViewType view_type);
 	}; // struct TextureViewCreation
-	
+
 	struct SamplerCreation
 	{
 		VkFilter min_filter = VK_FILTER_NEAREST;
@@ -652,7 +652,7 @@ namespace lincore
 		ResourceUsageType::Enum usage = ResourceUsageType::Immutable;
 		uint32_t size = 0;
 		uint32_t global_offset = 0;    // Offset into global constant, if dynamic
- 
+
 		uint32_t pool_index = 0;
 		BufferHandle handle;
 		BufferHandle parent_buffer;
@@ -814,7 +814,7 @@ namespace lincore
 		uint32_t z : 10;
 		uint32_t pad : 2;
 	}; // struct ComputeLocalSize
-	
+
 
 	// Enum translations. Use tables or switches depending on the case. ///////
 	const char* ToCompilerExtension(VkShaderStageFlagBits value);

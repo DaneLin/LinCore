@@ -148,35 +148,35 @@ namespace lincore
 
 	namespace TextureType {
 		enum Enum {
-			Texture1D, 
-			Texture2D, 
-			Texture3D, 
-			TextureCube, 
-			Texture_1D_Array, 
-			Texture_2D_Array, 
-			Texture_Cube_Array, 
+			Texture1D,
+			Texture2D,
+			Texture3D,
+			TextureCube,
+			Texture_1D_Array,
+			Texture_2D_Array,
+			Texture_Cube_Array,
 			Count
 		};
 
 		enum Mask {
-			Texture1D_mask = 1 << 0, 
-			Texture2D_mask = 1 << 1, 
-			Texture3D_mask = 1 << 2, 
-			TextureCube_mask = 1 << 3, 
-			Texture_1D_Array_mask = 1 << 4, 
-			Texture_2D_Array_mask = 1 << 5, 
-			Texture_Cube_Array_mask = 1 << 6, 
+			Texture1D_mask = 1 << 0,
+			Texture2D_mask = 1 << 1,
+			Texture3D_mask = 1 << 2,
+			TextureCube_mask = 1 << 3,
+			Texture_1D_Array_mask = 1 << 4,
+			Texture_2D_Array_mask = 1 << 5,
+			Texture_Cube_Array_mask = 1 << 6,
 			Count_mask = 1 << 7
 		};
 
 		static const char* s_value_names[] = {
-			"Texture1D", 
-			"Texture2D", 
-			"Texture3D", 
-			"TextureCube", 
-			"Texture_1D_Array", 
-			"Texture_2D_Array", 
-			"Texture_Cube_Array", 
+			"Texture1D",
+			"Texture2D",
+			"Texture3D",
+			"TextureCube",
+			"Texture_1D_Array",
+			"Texture_2D_Array",
+			"Texture_Cube_Array",
 			"Count"
 		};
 
@@ -187,22 +187,22 @@ namespace lincore
 
 	namespace VertexComponentFormat {
 		enum Enum {
-			Float, 
-			Float2, 
-			Float3, 
-			Float4, 
-			Mat4, 
-			Byte, 
-			Byte4N, 
-			UByte, 
-			UByte4N, 
-			Short2, 
-			Short2N, 
-			Short4, 
-			Short4N, 
-			Uint, 
-			Uint2, 
-			Uint4, 
+			Float,
+			Float2,
+			Float3,
+			Float4,
+			Mat4,
+			Byte,
+			Byte4N,
+			UByte,
+			UByte4N,
+			Short2,
+			Short2N,
+			Short4,
+			Short4N,
+			Uint,
+			Uint2,
+			Uint4,
 			Count
 		};
 

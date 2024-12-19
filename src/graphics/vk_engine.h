@@ -1,18 +1,16 @@
 ﻿#pragma once
-
-#include <vk_types.h>
-#include <vk_initializers.h>
-// bootstrap library
+// external
 #include "VkBootstrap.h"
-
-#include <vk_descriptors.h>
-#include "camera.h"
-#include "vk_shaders.h"
-#include "config.h"
-#include "vk_loader.h"
 #include "TaskScheduler.h"
-#include <command_buffer.h>
-#include "vk_device.h"
+// lincore
+#include "fundation/config.h"
+#include "graphics/vk_descriptors.h"
+#include "graphics/vk_device.h"
+#include "graphics/vk_loader.h"
+#include "graphics/camera.h"
+#include "graphics/vk_shaders.h"
+#include "graphics/vk_types.h"
+#include "graphics/vk_initializers.h"
 
 namespace lincore
 {

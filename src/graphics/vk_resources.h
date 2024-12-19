@@ -1,14 +1,16 @@
 #pragma once
-
+// std
 #include <mutex>
 #include <shared_mutex>
 #include <queue>
 #include <unordered_map>
-#include <gpu_enums.h>
+// external
 #include <vk_mem_alloc.h>
+// lincore
+#include "fundation/gpu_enums.h"
+#include "fundation/resources.h"
+#include "fundation/pool_structure.h"
 
-#include "resources.h"
-#include "pool_structure.h"
 
 namespace lincore
 {
@@ -74,22 +76,22 @@ namespace lincore
 		void CreateTextureResource(TextureHandle handle);
 
 		bool IsViewTypeCompatible(TextureType::Enum texture_type, VkImageViewType view_type) {
-			switch(texture_type) {
-				case TextureType::Texture1D:
-					return view_type == VK_IMAGE_VIEW_TYPE_1D || 
-						   view_type == VK_IMAGE_VIEW_TYPE_1D_ARRAY;
-				case TextureType::Texture2D:
-					return view_type == VK_IMAGE_VIEW_TYPE_2D || 
-						   view_type == VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-				case TextureType::Texture3D:
-					return view_type == VK_IMAGE_VIEW_TYPE_3D;
-				case TextureType::TextureCube:
-					return view_type == VK_IMAGE_VIEW_TYPE_CUBE || 
-						   view_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-				case TextureType::Texture_Cube_Array:
-					return view_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-				default:
-					return false;
+			switch (texture_type) {
+			case TextureType::Texture1D:
+				return view_type == VK_IMAGE_VIEW_TYPE_1D ||
+					view_type == VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+			case TextureType::Texture2D:
+				return view_type == VK_IMAGE_VIEW_TYPE_2D ||
+					view_type == VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+			case TextureType::Texture3D:
+				return view_type == VK_IMAGE_VIEW_TYPE_3D;
+			case TextureType::TextureCube:
+				return view_type == VK_IMAGE_VIEW_TYPE_CUBE ||
+					view_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+			case TextureType::Texture_Cube_Array:
+				return view_type == VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+			default:
+				return false;
 			}
 		}
 

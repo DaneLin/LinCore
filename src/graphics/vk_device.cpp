@@ -1,16 +1,18 @@
 
 #include "vk_device.h"
+// std
 #include <iostream>
-#include "logging.h"
 #include <set>
 #include <vector>
 #include <algorithm>
+// external
 #include <SDL_vulkan.h>
 #include <volk/volk.h>
 #include <SDL.h>
 #include <glm/packing.hpp>
-
-#include "vk_pipelines.h"
+// lincore
+#include "fundation/logging.h"
+#include "graphics/vk_pipelines.h"
 
 namespace lincore
 {
@@ -26,7 +28,7 @@ namespace lincore
 			return false;
 		}
 
-		
+
 		command_buffer_manager_.Init(this, kNUM_RENDER_THREADS);
 		pipeline_cache_.Init(device_, cache_file_path);
 		profiler_.Init(device_, properties_.limits.timestampPeriod);
@@ -543,62 +545,13 @@ namespace lincore
 			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Texture2D)
 			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth)
 			.SetFlags(TextureFlags::Compute_mask | TextureFlags::RenderTarget_mask);
-		
-		// hardcoding the draw format to 32 bit float
-		// draw_image_.format = VK_FORMAT_R16G16B16A16_SFLOAT;
-		// draw_image_.extent = draw_image_extent;
-		// VkImageUsageFlags draw_image_usages{};
-		// draw_image_usages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-		// draw_image_usages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-		// draw_image_usages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-		// draw_image_usages |= VK_IMAGE_USAGE_STORAGE_BIT;
-
-		draw_image_handle_ =  resource_manager_.CreateTexture(image_info);
-
-		// VkImageCreateInfo rimg_info = vkinit::ImageCreateInfo(draw_image_.format, draw_image_usages, draw_image_extent);
-
-		// // for the draw image, we want to allocate it from gpu local memory
-		// VmaAllocationCreateInfo rimg_allocinfo{};
-		// rimg_allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-		// rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-		// // allocate and create the image
-		// vmaCreateImage(vma_allocator_, &rimg_info, &rimg_allocinfo, &draw_image_.image, &draw_image_.allocation, nullptr);
-
-		// // build a image-view for the draw image to use for rendering
-		// VkImageViewCreateInfo rview_info = vkinit::ImageViewCreateInfo(draw_image_.format, draw_image_.image, VK_IMAGE_ASPECT_COLOR_BIT);
-
-		// VK_CHECK(vkCreateImageView(device_, &rview_info, nullptr, &draw_image_.view));
+		draw_image_handle_ = CreateResource(image_info);
 
 		image_info.Reset()
 			.SetFormatType(VK_FORMAT_D32_SFLOAT, TextureType::Texture2D)
 			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth)
 			.SetFlags(TextureFlags::Compute_mask);
-
-		depth_image_handle_ = resource_manager_.CreateTexture(image_info);
-
-		// depth_image_.format = VK_FORMAT_D32_SFLOAT;
-		// depth_image_.extent = draw_image_extent;
-		// VkImageUsageFlags depth_image_usages{};
-		// depth_image_usages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-		// VkImageCreateInfo dimg_info = vkinit::ImageCreateInfo(depth_image_.format, depth_image_usages, draw_image_extent);
-
-		// // allocate and create the image
-		// vmaCreateImage(vma_allocator_, &dimg_info, &rimg_allocinfo, &depth_image_.image, &depth_image_.allocation, nullptr);
-
-		// VkImageViewCreateInfo dview_info = vkinit::ImageViewCreateInfo(depth_image_.format, depth_image_.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-
-		// VK_CHECK(vkCreateImageView(device_, &dview_info, nullptr, &depth_image_.view));
-
-		// add the image to the deletion queue
-		// main_deletion_queue_.PushFunction([=]()
-		// 	{
-		// 		vkDestroyImageView(device_, draw_image_.view, nullptr);
-		// 		vmaDestroyImage(vma_allocator_, draw_image_.image, draw_image_.allocation);
-
-		// 		vkDestroyImageView(device_, depth_image_.view, nullptr);
-		// 		vmaDestroyImage(vma_allocator_, depth_image_.image, depth_image_.allocation); });
+		depth_image_handle_ = CreateResource(image_info);
 
 		return true;
 	}
@@ -614,16 +567,15 @@ namespace lincore
 			.SetSize(1, 1, 1)
 			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
 			.SetFlags(TextureFlags::Default);
-
-		default_resources_.images.white_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+		default_resources_.images.white_image = CreateResource(image_info);
 
 		uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66, 0.66, 0.66, 1));
 		image_info.SetName("default grey image").SetData((void*)&grey);
-		default_resources_.images.grey_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&grey, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+		default_resources_.images.grey_image = CreateResource(image_info);
 
 		uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
 		image_info.SetName("default black image").SetData((void*)&black);
-		default_resources_.images.black_image = resource_manager_.CreateTexture(image_info);// CreateImage((void*)&black, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+		default_resources_.images.black_image = CreateResource(image_info);
 
 		// checkerboard image
 		uint32_t magenta = glm::packUnorm4x8(glm::vec4(1, 0, 1, 1));
@@ -638,10 +590,9 @@ namespace lincore
 		image_info.SetName("default checkerboard image")
 			.SetData(pixels.data())
 			.SetSize(16, 16, 1);
-		default_resources_.images.error_checker_board_image = resource_manager_.CreateTexture(image_info);// CreateImage(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+		default_resources_.images.error_checker_board_image = CreateResource(image_info);
 
 		VkSamplerCreateInfo sampler_create_info = { .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
-
 		sampler_create_info.magFilter = VK_FILTER_NEAREST;
 		sampler_create_info.minFilter = VK_FILTER_NEAREST;
 
@@ -649,7 +600,6 @@ namespace lincore
 
 		sampler_create_info.magFilter = VK_FILTER_LINEAR;
 		sampler_create_info.minFilter = VK_FILTER_LINEAR;
-
 		vkCreateSampler(device_, &sampler_create_info, nullptr, &default_resources_.samplers.linear);
 
 		main_deletion_queue_.PushFunction([&]()
@@ -716,12 +666,6 @@ namespace lincore
 		this->width = static_cast<uint16_t>(width);
 		this->height = static_cast<uint16_t>(height);
 		window = handle;
-		return *this;
-	}
-
-	GpuDeviceCreation& GpuDeviceCreation::SetNumThreads(uint32_t value)
-	{
-		num_threads = value;
 		return *this;
 	}
 }

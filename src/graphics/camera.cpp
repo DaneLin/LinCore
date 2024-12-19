@@ -1,7 +1,7 @@
 ﻿#include "camera.h"
+// external
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
-
 #include "imgui.h"
 
 constexpr float MAX_MOVING_SPEED = 10.f;
@@ -16,16 +16,16 @@ glm::mat4 Camera::GetViewMatrix()
 
 glm::mat4 Camera::GetRotationMatrix()
 {
-	glm::quat pitch_rotation = glm::angleAxis(pitch_, glm::vec3{1.f, 0.f, 0.f});
-	glm::quat yaw_rotation = glm::angleAxis(yaw_, glm::vec3{0.f, -1.f, 0.f});
+	glm::quat pitch_rotation = glm::angleAxis(pitch_, glm::vec3{ 1.f, 0.f, 0.f });
+	glm::quat yaw_rotation = glm::angleAxis(yaw_, glm::vec3{ 0.f, -1.f, 0.f });
 
 	return glm::toMat4(yaw_rotation) * glm::toMat4(pitch_rotation);
 }
 
-void Camera::ProcessSdlEvent(SDL_Event &e)
+void Camera::ProcessSdlEvent(SDL_Event& e)
 {
 	// 获取 ImGui IO 状态
-	ImGuiIO &io = ImGui::GetIO();
+	ImGuiIO& io = ImGui::GetIO();
 
 	// 如果 ImGui 需要捕获键盘输入或鼠标输入，则不进行相机的事件处理
 	if (io.WantCaptureMouse || io.WantCaptureKeyboard)

@@ -1,20 +1,21 @@
-﻿#include <vk_pipelines.h>
+﻿#include "graphics/vk_pipelines.h"
+// std
 #include <fstream>
-#include <vk_initializers.h>
-
-#include "logging.h"
+// lincore
+#include "fundation/logging.h"
+#include "graphics/vk_initializers.h"
 
 namespace lincore
 {
 	void PipelineBuilder::Clear()
 	{
-		input_assembly_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-		rasterizer_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+		input_assembly_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
+		rasterizer_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 		color_blend_attachment_ = {};
-		multisampling_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+		multisampling_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
 		pipeline_layout_ = {};
-		depth_stencil_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-		render_info_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+		depth_stencil_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+		render_info_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
 		shader_stages_.clear();
 	}
 
@@ -51,10 +52,10 @@ namespace lincore
 		color_blending.pAttachments = &color_blend_attachment_;
 
 		// completely clear vertexinputstatecreateinfo, as we have no need for it
-		VkPipelineVertexInputStateCreateInfo vertex_input_info = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+		VkPipelineVertexInputStateCreateInfo vertex_input_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
 
 		// build the actual pipeline
-		VkGraphicsPipelineCreateInfo pipeline_info = {.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
+		VkGraphicsPipelineCreateInfo pipeline_info = { .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
 		// connect the renderinfo to the pNext extension mechanism
 		pipeline_info.pNext = &render_info_;
 
@@ -70,9 +71,9 @@ namespace lincore
 		pipeline_info.layout = pipeline_layout_;
 
 		// setting up dynamic state
-		VkDynamicState state[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+		VkDynamicState state[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
-		VkPipelineDynamicStateCreateInfo dynamic_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
+		VkPipelineDynamicStateCreateInfo dynamic_state = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
 		dynamic_state.pDynamicStates = &state[0];
 		dynamic_state.dynamicStateCount = 2;
 
@@ -101,7 +102,7 @@ namespace lincore
 			vkinit::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
 	}
 
-	void PipelineBuilder::SetShaders(ShaderEffect *effect)
+	void PipelineBuilder::SetShaders(ShaderEffect* effect)
 	{
 		shader_stages_.clear();
 		effect->FillStage(shader_stages_);

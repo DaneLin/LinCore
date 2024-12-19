@@ -1,14 +1,10 @@
 ﻿#pragma once
-#include <vk_types.h>
-#include "vk_shaders.h"
+// lincore
+#include "graphics/vk_types.h"
+#include "graphics/vk_shaders.h"
 
 namespace lincore
 {
-	namespace vkutils
-	{
-
-	} // namespace vkutils
-
 	class PipelineCache
 	{
 	public:
@@ -52,7 +48,7 @@ namespace lincore
 
 		void SetShaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader);
 
-		void SetShaders(ShaderEffect *effect);
+		void SetShaders(ShaderEffect* effect);
 
 		void SetInputTopology(VkPrimitiveTopology topology);
 

@@ -1,33 +1,28 @@
 //> includes
 #include "vk_engine.h"
+// std
+#include <chrono>
+#include <thread>
+// external
 #include <SDL.h>
 #include <SDL_vulkan.h>
-
-
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
-
-#include <vk_initializers.h>
-#include <vk_types.h>
-#include <vk_pipelines.h>
-#include <vk_profiler.h>
-#include <vk_loader.h>
-
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_vulkan.h"
-
-#include <chrono>
-#include <thread>
-#include <glm/gtx/transform.hpp>
-
-#include <cvars.h>
-#include <logging.h>
-
 #include <volk.h>
-#include "frustum_cull.h"
-
-#include "vk_device.h"
+#include <glm/gtx/transform.hpp>
+// lincore
+#include "fundation/cvars.h"
+#include "fundation/logging.h"
+#include "graphics/vk_initializers.h"
+#include "graphics/vk_types.h"
+#include "graphics/vk_pipelines.h"
+#include "graphics/vk_profiler.h"
+#include "graphics/vk_loader.h"
+#include "graphics/frustum_cull.h"
+#include "graphics/vk_device.h"
 
 namespace lincore
 {
@@ -63,8 +58,7 @@ namespace lincore
 			thread_cmd->BeginSecondary(inheritance_info);
 
 #if LC_DRAW_INDIRECT
-			//thread_cmd->BindIndexBuffer(engine->gpu_device_.resource_manager_.GetBuffer(engine->global_mesh_buffer_.index_buffer_handle).vk_buffer, 0, VK_INDEX_TYPE_UINT32);
-			thread_cmd->BindIndexBuffer(engine->gpu_device_.resource_manager_.GetBuffer(engine->global_mesh_buffer_.index_buffer_handle)->vk_buffer, 0, VK_INDEX_TYPE_UINT32);
+			thread_cmd->BindIndexBuffer(engine->gpu_device_.GetResource<Buffer>(engine->global_mesh_buffer_.index_buffer_handle.index)->vk_buffer, 0, VK_INDEX_TYPE_UINT32);
 #endif
 
 			thread_cmd->BindDescriptorSets(VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -456,38 +450,17 @@ namespace lincore
 		buffer_creation.Reset()
 			.SetName("vertex_buffer")
 			.Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			 	ResourceUsageType::Immutable, 
-			 	vertex_buffer_size)
+				ResourceUsageType::Immutable,
+				vertex_buffer_size)
 			.SetDeviceOnly(true);
-		new_surface.vertex_buffer_handle = gpu_device_.resource_manager_.CreateBuffer(buffer_creation);
+		new_surface.vertex_buffer_handle = gpu_device_.CreateResource(buffer_creation);
 
-		// BufferCreationInfo vertex_buffer_info{};
-		// vertex_buffer_info.Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY, vertex_buffer_size);
-		// new_surface.vertex_buffer_handle = gpu_device_.resource_manager_.CreateBuffer(vertex_buffer_info);
-
-		// // find the address of the vertex buffer
-		// VkBufferDeviceAddressInfo deviceAddressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = gpu_device_.resource_manager_.GetBuffer(new_surface.vertex_buffer_handle).buffer };
-		// new_surface.vertex_buffer_address = vkGetBufferDeviceAddress(gpu_device_.device_, &deviceAddressInfo);
-
-		// create index buffer
 		buffer_creation
 			.SetName("Index buffer")
-			.Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-				ResourceUsageType::Immutable, 
+			.Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+				ResourceUsageType::Immutable,
 				index_buffer_size);
-		new_surface.index_buffer_handle = gpu_device_.resource_manager_.CreateBuffer(buffer_creation);
-
-		// BufferCreationInfo index_buffer_info{};
-		// index_buffer_info.Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, index_buffer_size);
-		// new_surface.index_buffer_handle = gpu_device_.resource_manager_.CreateBuffer(index_buffer_info);
-
-		// buffer_creation.Reset()
-		// 	.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, ResourceUsageType::Immutable, vertex_buffer_size + index_buffer_size);
-
-		// BufferCreationInfo staging_buffer_info{};
-		// staging_buffer_info.Reset().Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY, vertex_buffer_size + index_buffer_size);
-		// BufferHandle staging_buffer_handle = gpu_device_.resource_manager_.CreateBuffer(staging_buffer_info);
-		// AllocatedBufferUntyped& staging = gpu_device_.resource_manager_.GetBuffer(staging_buffer_handle);
+		new_surface.index_buffer_handle = gpu_device_.CreateResource(buffer_creation);
 
 		// staging buffer
 		BufferCreation staging_buffer_creation{};
@@ -495,10 +468,10 @@ namespace lincore
 			.SetName("Staging Buffer")
 			.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, ResourceUsageType::Immutable, vertex_buffer_size + index_buffer_size)
 			.SetPersistent(true);
-		BufferHandle staging_buffer_handle = gpu_device_.resource_manager_.CreateBuffer(staging_buffer_creation);
-		Buffer* staging = gpu_device_.resource_manager_.GetBuffer(staging_buffer_handle);
+		BufferHandle staging_buffer_handle = gpu_device_.CreateResource(staging_buffer_creation);
+		Buffer* staging = gpu_device_.GetResource<Buffer>(staging_buffer_handle.index);
 
-		void* data = staging->vma_allocation->GetMappedData() ;
+		void* data = staging->vma_allocation->GetMappedData();
 
 		memcpy(data, vertices.data(), vertex_buffer_size);
 		memcpy((char*)data + vertex_buffer_size, indices.data(), index_buffer_size);
@@ -510,14 +483,17 @@ namespace lincore
 				vertex_copy.srcOffset = 0;
 				vertex_copy.size = vertex_buffer_size;
 
-				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging->vk_buffer, gpu_device_.resource_manager_.GetBuffer(new_surface.vertex_buffer_handle)->vk_buffer, 1, &vertex_copy);
+				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging->vk_buffer, gpu_device_.GetResource<Buffer>(new_surface.vertex_buffer_handle.index)->vk_buffer, 1, &vertex_copy);
 
 				VkBufferCopy index_copy{ 0 };
 				index_copy.dstOffset = 0;
 				index_copy.srcOffset = vertex_buffer_size;
 				index_copy.size = index_buffer_size;
 
-				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging->vk_buffer, gpu_device_.resource_manager_.GetBuffer(new_surface.index_buffer_handle)->vk_buffer, 1, &index_copy); }, gpu_device_.graphics_queue_);
+				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging->vk_buffer, gpu_device_.GetResource<Buffer>(new_surface.index_buffer_handle.index)->vk_buffer, 1, &index_copy); }, gpu_device_.graphics_queue_);
+
+		// clean up staging buffer
+		gpu_device_.DestroyResource(staging_buffer_handle);
 
 		return new_surface;
 	}
@@ -547,7 +523,7 @@ namespace lincore
 		gradient.layout = gradient_effect->built_layout_;
 
 		gradient.descriptor_binder.SetShader(gradient_effect);
-		gradient.descriptor_binder.BindImage("image", 
+		gradient.descriptor_binder.BindImage("image",
 			{ .sampler = VK_NULL_HANDLE, .imageView = gpu_device_.GetDrawImage()->vk_image_view, .imageLayout = VK_IMAGE_LAYOUT_GENERAL });
 		gradient.descriptor_binder.BuildSets(gpu_device_.device_, gpu_device_.descriptor_allocator_);
 
@@ -655,21 +631,15 @@ namespace lincore
 		material_resources.metal_rough_image = gpu_device_.default_resources_.images.white_image;
 		material_resources.metal_rought_sampler = gpu_device_.default_resources_.samplers.linear;
 
-		// set the uniform buffer for the material data
-		// BufferCreationInfo buffer_info{};
-		// buffer_info.Reset().Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, sizeof(GLTFMetallic_Roughness::MaterialConstants));
-		// BufferHandle material_constants_handle = gpu_device_.resource_manager_.CreateBuffer(buffer_info);
-		// AllocatedBufferUntyped& material_constants = gpu_device_.resource_manager_.GetBuffer(material_constants_handle);// CreateBuffer(sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
 		BufferCreation buffer_info{};
 		buffer_info.Reset()
 			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(GLTFMetallic_Roughness::MaterialConstants))
 			.SetPersistent(true);
-		BufferHandle material_constants_handle = gpu_device_.resource_manager_.CreateBuffer(buffer_info);
-		Buffer* material_constants = gpu_device_.resource_manager_.GetBuffer(material_constants_handle);
+		BufferHandle material_constants_handle = gpu_device_.CreateResource(buffer_info);
+		Buffer* material_constants = gpu_device_.GetResource<Buffer>(material_constants_handle.index);
 
 		// write the buffer
-		GLTFMetallic_Roughness::MaterialConstants* scene_uniform_data = 
+		GLTFMetallic_Roughness::MaterialConstants* scene_uniform_data =
 			(GLTFMetallic_Roughness::MaterialConstants*)material_constants->vma_allocation->GetMappedData();
 		scene_uniform_data->color_factors = glm::vec4(1, 1, 1, 1);
 		scene_uniform_data->metal_rough_factors = glm::vec4(1, 0.5, 0, 0);
@@ -677,7 +647,7 @@ namespace lincore
 		material_resources.data_buffer = material_constants_handle;
 		material_resources.data_buffer_offset = 0;
 
-		dafault_data_ = metal_rough_material_.WriteMaterial( MeshPassType::kMainColor, material_resources, gpu_device_.descriptor_allocator_);
+		dafault_data_ = metal_rough_material_.WriteMaterial(MeshPassType::kMainColor, material_resources, gpu_device_.descriptor_allocator_);
 	}
 
 	void VulkanEngine::InitTaskSystem()
@@ -768,25 +738,18 @@ namespace lincore
 				const RenderObject& A = main_draw_context_.opaque_surfaces[iA];
 				const RenderObject& B = main_draw_context_.opaque_surfaces[iB];
 				if (A.material == B.material) {
-					return gpu_device_.resource_manager_.GetBuffer(A.index_buffer_handle)->vk_buffer < gpu_device_.resource_manager_.GetBuffer(B.index_buffer_handle)->vk_buffer;
+					return gpu_device_.GetResource<Buffer>(A.index_buffer_handle.index)->vk_buffer < gpu_device_.GetResource<Buffer>(B.index_buffer_handle.index)->vk_buffer;
 				}
 				else {
 					return A.material < B.material;
 				} });
 
-
-				// allocate a new uniform buffer for the scene data
-				// BufferCreationInfo buffer_info{};
-				// buffer_info.Reset().Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, sizeof(GPUSceneData));
-				// BufferHandle gpu_handle = gpu_device_.resource_manager_.CreateBuffer(buffer_info);
-				// AllocatedBufferUntyped& gpu_scene_data_buffer = gpu_device_.resource_manager_.GetBuffer(gpu_handle);// CreateBuffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-
 				BufferCreation buffer_info{};
 				buffer_info.Reset()
 					.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(GPUSceneData))
 					.SetPersistent(true);
-				BufferHandle gpu_handle = gpu_device_.resource_manager_.CreateBuffer(buffer_info);
-				Buffer* gpu_scene_data_buffer = gpu_device_.resource_manager_.GetBuffer(gpu_handle);
+				BufferHandle gpu_handle = gpu_device_.CreateResource(buffer_info);
+				Buffer* gpu_scene_data_buffer = gpu_device_.GetResource<Buffer>(gpu_handle.index);
 
 				// write the buffer
 				GPUSceneData* scene_uniform_data = (GPUSceneData*)gpu_scene_data_buffer->vma_allocation->GetMappedData();
@@ -799,7 +762,7 @@ namespace lincore
 					DescriptorWriter writer;
 					writer.WriteBuffer(0, gpu_scene_data_buffer->vk_buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 #if LC_DRAW_INDIRECT
-					writer.WriteBuffer(1, gpu_device_.resource_manager_.GetBuffer(global_mesh_buffer_.vertex_buffer_handle)->vk_buffer, sizeof(Vertex) * global_mesh_buffer_.vertex_data.size(), 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+					writer.WriteBuffer(1, gpu_device_.GetResource<Buffer>(global_mesh_buffer_.vertex_buffer_handle.index)->vk_buffer, sizeof(Vertex) * global_mesh_buffer_.vertex_data.size(), 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 #endif // LC_DRAW_INDIRECT
 					writer.UpdateSet(gpu_device_.device_, global_descriptor);
 				}
@@ -906,14 +869,14 @@ namespace lincore
 		gpu_draw_indirect_push_constants.world_matrix = r.transform;
 		cmd->PushConstants(r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawIndirectPushConstants), &gpu_draw_indirect_push_constants);
 
-		cmd->DrawIndexedIndirect(gpu_device_.resource_manager_.GetBuffer(global_mesh_buffer_.indirect_command_buffer_handle)->vk_buffer,
+		cmd->DrawIndexedIndirect(gpu_device_.GetResource<Buffer>(global_mesh_buffer_.indirect_command_buffer_handle.index)->vk_buffer,
 			static_cast<uint32_t>(r.indirect_draw_index * sizeof(VkDrawIndexedIndirectCommand)),
 			static_cast<uint32_t>(sizeof(VkDrawIndexedIndirectCommand)));
 #else
 		// rebind index buffer if needed
-		if (gpu_device_.resource_manager_.GetBuffer(r.index_buffer_handle).buffer != render_info.last_index_buffer)
+		if (gpu_device_.GetResource<Buffer>(r.index_buffer_handle.index).buffer != render_info.last_index_buffer)
 		{
-			render_info.last_index_buffer = gpu_device_.resource_manager_.GetBuffer(r.index_buffer_handle).buffer;
+			render_info.last_index_buffer = gpu_device_.GetResource<Buffer>(r.index_buffer_handle.index).buffer;
 			cmd->BindIndexBuffer(render_info.last_index_buffer, 0, VK_INDEX_TYPE_UINT32);
 		}
 		// calculate final mesh matrix
@@ -1058,7 +1021,7 @@ namespace lincore
 		matData.set = descriptor_allocator.Allocate(engine->gpu_device_.device_, material_layout);
 
 		writer.Clear();
-		writer.WriteBuffer(0, engine->gpu_device_.resource_manager_.GetBuffer(resources.data_buffer)->vk_buffer, sizeof(MaterialConstants), resources.data_buffer_offset, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		writer.WriteBuffer(0, engine->gpu_device_.GetResource<Buffer>(resources.data_buffer.index)->vk_buffer, sizeof(MaterialConstants), resources.data_buffer_offset, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		writer.UpdateSet(engine->gpu_device_.device_, matData.set);
 
 		return matData;
@@ -1110,49 +1073,29 @@ namespace lincore
 				ResourceUsageType::Immutable,
 				vertex_buffer_size)
 			.SetDeviceOnly(true);
-		 vertex_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(buffer_info);
+		vertex_buffer_handle = engine->gpu_device_.CreateResource(buffer_info);
 
 		buffer_info.Reset()
 			.Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				ResourceUsageType::Immutable,
 				index_buffer_size)
 			.SetDeviceOnly(true);
-		 index_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(buffer_info);
+		index_buffer_handle = engine->gpu_device_.CreateResource(buffer_info);
 
 		buffer_info.Reset()
 			.Set(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				ResourceUsageType::Immutable,
 				command_buffer_size)
 			.SetDeviceOnly(true);
-		 indirect_command_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(buffer_info);
+		indirect_command_buffer_handle = engine->gpu_device_.CreateResource(buffer_info);
 
 		buffer_info.Reset()
 			.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 				ResourceUsageType::Immutable,
 				vertex_buffer_size + index_buffer_size + command_buffer_size)
 			.SetPersistent(true);
-		BufferHandle staging_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(buffer_info);
-		Buffer* staging_buffer = engine->gpu_device_.resource_manager_.GetBuffer(staging_buffer_handle);
-
-		// BufferCreationInfo index_buffer_info{};
-		// index_buffer_info.Reset().Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		// 	VMA_MEMORY_USAGE_GPU_ONLY,
-		// 	index_buffer_size);
-		// BufferCreationInfo indirect_buffer_info{};
-		// indirect_buffer_info.Reset().Set(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		// 	VMA_MEMORY_USAGE_GPU_ONLY,
-		// 	command_buffer_size);
-		// BufferCreationInfo staging_buffer_info{};
-		// staging_buffer_info.Reset().Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		// 	VMA_MEMORY_USAGE_CPU_ONLY,
-		// 	vertex_buffer_size + index_buffer_size + command_buffer_size);
-
-		// vertex_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(vertex_buffer_info);
-		// index_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(index_buffer_info);
-		// indirect_command_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(indirect_buffer_info);
-		// BufferHandle staging_buffer_handle = engine->gpu_device_.resource_manager_.CreateBuffer(staging_buffer_info);
-
-		// AllocatedBufferUntyped& staging_buffer = engine->gpu_device_.resource_manager_.GetBuffer(staging_buffer_handle);
+		BufferHandle staging_buffer_handle = engine->gpu_device_.CreateResource(buffer_info);
+		Buffer* staging_buffer = engine->gpu_device_.GetResource<Buffer>(staging_buffer_handle.index);
 
 		void* data = staging_buffer->vma_allocation->GetMappedData();
 		memcpy(data, vertex_data.data(), vertex_buffer_size);
@@ -1166,23 +1109,25 @@ namespace lincore
 				vertex_copy.srcOffset = 0;
 				vertex_copy.size = vertex_buffer_size;
 
-				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging_buffer->vk_buffer, engine->gpu_device_.resource_manager_.GetBuffer(vertex_buffer_handle)->vk_buffer, 1, &vertex_copy);
+				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging_buffer->vk_buffer, engine->gpu_device_.GetResource<Buffer>(vertex_buffer_handle.index)->vk_buffer, 1, &vertex_copy);
 
 				VkBufferCopy index_copy{ 0 };
 				index_copy.dstOffset = 0;
 				index_copy.srcOffset = vertex_buffer_size;
 				index_copy.size = index_buffer_size;
 
-				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging_buffer->vk_buffer, engine->gpu_device_.resource_manager_.GetBuffer(index_buffer_handle)->vk_buffer, 1, &index_copy);
+				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging_buffer->vk_buffer, engine->gpu_device_.GetResource<Buffer>(index_buffer_handle.index)->vk_buffer, 1, &index_copy);
 
 				VkBufferCopy command_copy{ 0 };
 				command_copy.dstOffset = 0;
 				command_copy.srcOffset = vertex_buffer_size + index_buffer_size;
 				command_copy.size = command_buffer_size;
 
-				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging_buffer->vk_buffer, engine->gpu_device_.resource_manager_.GetBuffer(indirect_command_buffer_handle)->vk_buffer, 1, &command_copy);
+				vkCmdCopyBuffer(cmd->vk_command_buffer_, staging_buffer->vk_buffer, engine->gpu_device_.GetResource<Buffer>(indirect_command_buffer_handle.index)->vk_buffer, 1, &command_copy);
 			},
 			engine->gpu_device_.graphics_queue_);
+
+		engine->gpu_device_.resource_manager_.DestroyBuffer(staging_buffer_handle);
 
 		//engine->gpu_device_.resource_manager_.DestroyBuffer(staging_buffer_handle);
 	}

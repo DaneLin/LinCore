@@ -1,11 +1,10 @@
-﻿#include "command_buffer.h"
-#include "vk_engine.h"
-#include "logging.h"
+﻿#include "vk_command_buffer.h"
+// lincore
+#include "graphics/vk_engine.h"
+#include "fundation/logging.h"
 
 namespace lincore
 {
-
-
 	void CommandBuffer::Init(CommandBufferLevel level)
 	{
 		level_ = level;
@@ -210,7 +209,7 @@ namespace lincore
 
 	void CommandBuffer::UploadTextureData(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
 	{
-		//TODO: replace with resource manager
+		// TODO: replace with resource manager
 		/*TextureHandle image = CreateImage(data, size, format, usage, mipmapped);
 		TransitionImage(image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);*/
 	}

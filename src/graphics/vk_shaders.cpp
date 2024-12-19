@@ -1,18 +1,19 @@
 ﻿#include "vk_shaders.h"
-#include "vk_initializers.h"
-#include "logging.h"
-
-#include "vk_engine.h"
-
+// std
 #include <fstream>
 #include <algorithm>
+// external
 #include "spirv_reflect.h"
 #include <spirv-headers/spirv.h>
+// fundation
+#include "fundation/logging.h"
+#include "graphics/vk_initializers.h"
+#include "graphics/vk_engine.h"
 
 namespace lincore
 {
 
-	bool vkutil::LoadShader(VkDevice device, const char *file_path, ShaderModule *out_shader_module)
+	bool vkutil::LoadShader(VkDevice device, const char* file_path, ShaderModule* out_shader_module)
 	{
 		std::ifstream file(file_path, std::ios::ate | std::ios::binary);
 
@@ -28,11 +29,11 @@ namespace lincore
 
 		file.seekg(0);
 
-		file.read((char *)buffer.data(), file_size);
+		file.read((char*)buffer.data(), file_size);
 
 		file.close();
 
-		VkShaderModuleCreateInfo create_info = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .pNext = nullptr};
+		VkShaderModuleCreateInfo create_info = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .pNext = nullptr };
 		create_info.codeSize = buffer.size() * sizeof(uint32_t);
 		create_info.pCode = buffer.data();
 
@@ -45,12 +46,12 @@ namespace lincore
 	}
 
 	// FNV-1a 32bit hashing algorithm.
-	constexpr uint32_t kFnv1a32(char const *s, std::size_t count)
+	constexpr uint32_t kFnv1a32(char const* s, std::size_t count)
 	{
 		return ((count ? kFnv1a32(s, count - 1) : 2166136261u) ^ s[count]) * 16777619u;
 	}
 
-	uint32_t vkutil::HashDescriptorLayoutInfo(VkDescriptorSetLayoutCreateInfo *info)
+	uint32_t vkutil::HashDescriptorLayoutInfo(VkDescriptorSetLayoutCreateInfo* info)
 	{
 		// put all the data into a string and then hash the string
 		std::stringstream ss;
@@ -60,7 +61,7 @@ namespace lincore
 
 		for (uint32_t i = 0; i < info->bindingCount; ++i)
 		{
-			const VkDescriptorSetLayoutBinding &binding = info->pBindings[i];
+			const VkDescriptorSetLayoutBinding& binding = info->pBindings[i];
 
 			ss << binding.binding;
 			ss << binding.descriptorCount;
@@ -72,9 +73,9 @@ namespace lincore
 		return kFnv1a32(str.c_str(), str.length());
 	}
 
-	void ShaderEffect::AddStage(ShaderModule *shader_module, VkShaderStageFlagBits stage)
+	void ShaderEffect::AddStage(ShaderModule* shader_module, VkShaderStageFlagBits stage)
 	{
-		ShaderStage newStage = {shader_module, stage};
+		ShaderStage newStage = { shader_module, stage };
 		stages_.push_back(newStage);
 	}
 
@@ -85,13 +86,13 @@ namespace lincore
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
 	};
 
-	void ShaderEffect::ReflectLayout(VkDevice device, ReflectionOverrides *overrides, int override_count, uint32_t override_constant_size)
+	void ShaderEffect::ReflectLayout(VkDevice device, ReflectionOverrides* overrides, int override_count, uint32_t override_constant_size)
 	{
 		std::vector<DescriptorSetLayoutData> set_Layouts;
 
 		std::vector<VkPushConstantRange> constant_ranges;
 
-		for (auto &s : stages_)
+		for (auto& s : stages_)
 		{
 			SpvReflectShaderModule spv_module;
 			SpvReflectResult result = spvReflectCreateShaderModule(s.module->code.size() * sizeof(uint32_t), s.module->code.data(), &spv_module);
@@ -100,21 +101,21 @@ namespace lincore
 			result = spvReflectEnumerateDescriptorSets(&spv_module, &count, nullptr);
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-			std::vector<SpvReflectDescriptorSet *> sets(count);
+			std::vector<SpvReflectDescriptorSet*> sets(count);
 			result = spvReflectEnumerateDescriptorSets(&spv_module, &count, sets.data());
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
 			for (size_t idx = 0; idx < sets.size(); idx++)
 			{
-				const SpvReflectDescriptorSet &reflectSet = *(sets[idx]);
+				const SpvReflectDescriptorSet& reflectSet = *(sets[idx]);
 
 				DescriptorSetLayoutData layout = {};
 
 				layout.bindings.resize(reflectSet.binding_count);
 				for (uint32_t i_binding = 0; i_binding < reflectSet.binding_count; i_binding++)
 				{
-					const SpvReflectDescriptorBinding &reflectBinding = *(reflectSet.bindings[i_binding]);
-					VkDescriptorSetLayoutBinding &layoutBinding = layout.bindings[i_binding];
+					const SpvReflectDescriptorBinding& reflectBinding = *(reflectSet.bindings[i_binding]);
+					VkDescriptorSetLayoutBinding& layoutBinding = layout.bindings[i_binding];
 					layoutBinding.binding = reflectBinding.binding;
 					layoutBinding.descriptorType = static_cast<VkDescriptorType>(reflectBinding.descriptor_type);
 
@@ -153,7 +154,7 @@ namespace lincore
 			result = spvReflectEnumeratePushConstantBlocks(&spv_module, &count, nullptr);
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-			std::vector<SpvReflectBlockVariable *> pconstants(count);
+			std::vector<SpvReflectBlockVariable*> pconstants(count);
 			result = spvReflectEnumeratePushConstantBlocks(&spv_module, &count, pconstants.data());
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
@@ -172,18 +173,18 @@ namespace lincore
 
 		for (int i = 0; i < 4; i++)
 		{
-			DescriptorSetLayoutData &layout = merged_layouts[i];
+			DescriptorSetLayoutData& layout = merged_layouts[i];
 
 			layout.set_number = i;
 
 			layout.create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 
 			std::unordered_map<int, VkDescriptorSetLayoutBinding> binds;
-			for (auto &s : set_Layouts)
+			for (auto& s : set_Layouts)
 			{
 				if (s.set_number == i)
 				{
-					for (auto &b : s.bindings)
+					for (auto& b : s.bindings)
 					{
 						auto it = binds.find(b.binding);
 						if (it == binds.end())
@@ -205,8 +206,8 @@ namespace lincore
 			}
 
 			// sort the bindings, for hash purposes
-			std::sort(layout.bindings.begin(), layout.bindings.end(), [](VkDescriptorSetLayoutBinding &a, VkDescriptorSetLayoutBinding &b)
-					  { return a.binding < b.binding; });
+			std::sort(layout.bindings.begin(), layout.bindings.end(), [](VkDescriptorSetLayoutBinding& a, VkDescriptorSetLayoutBinding& b)
+				{ return a.binding < b.binding; });
 
 			layout.create_info.bindingCount = static_cast<uint32_t>(layout.bindings.size());
 			layout.create_info.pBindings = layout.bindings.data();
@@ -248,9 +249,9 @@ namespace lincore
 		VK_CHECK(vkCreatePipelineLayout(device, &pipelineCreateInfo, nullptr, &built_layout_));
 	}
 
-	void ShaderEffect::FillStage(std::vector<VkPipelineShaderStageCreateInfo> &pipeline_stages)
+	void ShaderEffect::FillStage(std::vector<VkPipelineShaderStageCreateInfo>& pipeline_stages)
 	{
-		for (auto &s : stages_)
+		for (auto& s : stages_)
 		{
 			pipeline_stages.push_back(vkinit::PipelineShaderStageCreateInfo(s.stage, s.module->module));
 		}
@@ -259,7 +260,7 @@ namespace lincore
 	VkPipelineBindPoint ShaderEffect::GetBindPoint() const
 	{
 
-		for (const auto &stage : stages_)
+		for (const auto& stage : stages_)
 		{
 			switch (stage.stage)
 			{
@@ -283,12 +284,12 @@ namespace lincore
 		}
 	}
 
-	void ShaderDescriptorBinder::BindBuffer(const char *name, const VkDescriptorBufferInfo &BufferInfo)
+	void ShaderDescriptorBinder::BindBuffer(const char* name, const VkDescriptorBufferInfo& BufferInfo)
 	{
 		BindDynamicBuffer(name, -1, BufferInfo);
 	}
 
-	void ShaderDescriptorBinder::BindImage(const char *name, const VkDescriptorImageInfo &image_info)
+	void ShaderDescriptorBinder::BindImage(const char* name, const VkDescriptorImageInfo& image_info)
 	{
 		if (shaders_ == nullptr)
 		{
@@ -299,9 +300,9 @@ namespace lincore
 		auto found = shaders_->bindings_.find(name);
 		if (found != shaders_->bindings_.end())
 		{
-			const ShaderEffect::ReflectedBinding &bind = (*found).second;
+			const ShaderEffect::ReflectedBinding& bind = (*found).second;
 
-			for (auto &write : image_writes_)
+			for (auto& write : image_writes_)
 			{
 				if (write.dst_binding == bind.binding && write.dst_set == bind.set)
 				{
@@ -325,7 +326,7 @@ namespace lincore
 		}
 	}
 
-	void ShaderDescriptorBinder::BindDynamicBuffer(const char *name, uint32_t offset, const VkDescriptorBufferInfo &BufferInfo)
+	void ShaderDescriptorBinder::BindDynamicBuffer(const char* name, uint32_t offset, const VkDescriptorBufferInfo& BufferInfo)
 	{
 		if (shaders_ == nullptr)
 		{
@@ -336,9 +337,9 @@ namespace lincore
 		auto found = shaders_->bindings_.find(name);
 		if (found != shaders_->bindings_.end())
 		{
-			const ShaderEffect::ReflectedBinding &bind = (*found).second;
+			const ShaderEffect::ReflectedBinding& bind = (*found).second;
 
-			for (auto &write : buffer_writes_)
+			for (auto& write : buffer_writes_)
 			{
 				if (write.dst_binding == bind.binding && write.dst_set == bind.set)
 				{
@@ -384,75 +385,75 @@ namespace lincore
 		}
 	}
 
-	void ShaderDescriptorBinder::BuildSets(VkDevice device, DescriptorAllocatorGrowable &allocator)
+	void ShaderDescriptorBinder::BuildSets(VkDevice device, DescriptorAllocatorGrowable& allocator)
 	{
 		std::array<std::vector<VkWriteDescriptorSet>, 4> writes{};
 
-		std::sort(buffer_writes_.begin(), buffer_writes_.end(), [](BufferWriteDescriptor &a, BufferWriteDescriptor &b)
-				  {
-			if (b.dst_binding == a.dst_binding) {
-				return a.dst_set < b.dst_set;
-			}
-			else {
-				return a.dst_binding < b.dst_binding;
-			} });
-
-		// reset the dynamic offsets
-		for (auto &s : set_offsets_)
-		{
-			s.count = 0;
-		}
-
-		for (BufferWriteDescriptor &w : buffer_writes_)
-		{
-			uint32_t set = w.dst_set;
-			VkWriteDescriptorSet write = vkinit::WriteDescriptorBuffer(w.descriptor_type, VK_NULL_HANDLE, &w.BufferInfo, w.dst_binding);
-
-			writes[set].push_back(write);
-
-			// dynamic offsets
-			if (w.descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
-				w.descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
+		std::sort(buffer_writes_.begin(), buffer_writes_.end(), [](BufferWriteDescriptor& a, BufferWriteDescriptor& b)
 			{
-				DynOffset &offsetSet = set_offsets_[set];
-				offsetSet.offset[offsetSet.count] = w.dynamic_offset;
-				offsetSet.count++;
-			}
-		}
-
-		for (ImageWriteDescriptor &w : image_writes_)
-		{
-			uint32_t set = w.dst_set;
-			VkWriteDescriptorSet write = vkinit::WriteDescriptorImage(w.descriptor_type, VK_NULL_HANDLE, &w.image_info, w.dst_binding);
-
-			writes[set].push_back(write);
-		}
-
-		for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i)
-		{
-			if (writes[i].size() > 0)
-			{
-				if (cached_descriptor_sets_[i] == VK_NULL_HANDLE)
-				{
-					// alloc
-					auto layout = shaders_->set_layouts_[i];
-
-					VkDescriptorSet new_descriptor = allocator.Allocate(device, layout);
-
-					for (auto &w : writes[i])
-					{
-						w.dstSet = new_descriptor;
-					}
-
-					vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes[i].size()), writes[i].data(), 0, nullptr);
-
-					cached_descriptor_sets_[i] = new_descriptor;
+				if (b.dst_binding == a.dst_binding) {
+					return a.dst_set < b.dst_set;
 				}
-			}
-		}
+				else {
+					return a.dst_binding < b.dst_binding;
+				} });
+
+				// reset the dynamic offsets
+				for (auto& s : set_offsets_)
+				{
+					s.count = 0;
+				}
+
+				for (BufferWriteDescriptor& w : buffer_writes_)
+				{
+					uint32_t set = w.dst_set;
+					VkWriteDescriptorSet write = vkinit::WriteDescriptorBuffer(w.descriptor_type, VK_NULL_HANDLE, &w.BufferInfo, w.dst_binding);
+
+					writes[set].push_back(write);
+
+					// dynamic offsets
+					if (w.descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
+						w.descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
+					{
+						DynOffset& offsetSet = set_offsets_[set];
+						offsetSet.offset[offsetSet.count] = w.dynamic_offset;
+						offsetSet.count++;
+					}
+				}
+
+				for (ImageWriteDescriptor& w : image_writes_)
+				{
+					uint32_t set = w.dst_set;
+					VkWriteDescriptorSet write = vkinit::WriteDescriptorImage(w.descriptor_type, VK_NULL_HANDLE, &w.image_info, w.dst_binding);
+
+					writes[set].push_back(write);
+				}
+
+				for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i)
+				{
+					if (writes[i].size() > 0)
+					{
+						if (cached_descriptor_sets_[i] == VK_NULL_HANDLE)
+						{
+							// alloc
+							auto layout = shaders_->set_layouts_[i];
+
+							VkDescriptorSet new_descriptor = allocator.Allocate(device, layout);
+
+							for (auto& w : writes[i])
+							{
+								w.dstSet = new_descriptor;
+							}
+
+							vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes[i].size()), writes[i].data(), 0, nullptr);
+
+							cached_descriptor_sets_[i] = new_descriptor;
+						}
+					}
+				}
 	}
 
-	void ShaderDescriptorBinder::SetShader(ShaderEffect *new_shader)
+	void ShaderDescriptorBinder::SetShader(ShaderEffect* new_shader)
 	{
 		// invalidate nonequal layouts
 		if (shaders_ && shaders_ != new_shader)
@@ -480,22 +481,22 @@ namespace lincore
 		shaders_ = new_shader;
 	}
 
-	ShaderEffect *ShaderCache::GetShaderEffect()
+	ShaderEffect* ShaderCache::GetShaderEffect()
 	{
-		ShaderEffect *result = new ShaderEffect();
+		ShaderEffect* result = new ShaderEffect();
 		shader_effect_cache_.push_back(result);
 		return result;
 	}
 
-	ShaderEffect *ShaderCache::GetShaderEffect(const std::string &path, VkShaderStageFlagBits stage)
+	ShaderEffect* ShaderCache::GetShaderEffect(const std::string& path, VkShaderStageFlagBits stage)
 	{
-		ShaderEffect *result = new ShaderEffect();
+		ShaderEffect* result = new ShaderEffect();
 		result->AddStage(GetShader(path), stage);
 		shader_effect_cache_.push_back(result);
 		return result;
 	}
 
-	ShaderModule *ShaderCache::GetShader(const std::string &path)
+	ShaderModule* ShaderCache::GetShader(const std::string& path)
 	{
 		auto it = module_cache_.find(path);
 		if (it == module_cache_.end())
@@ -516,11 +517,11 @@ namespace lincore
 
 	void ShaderCache::Clear()
 	{
-		for (auto &[k, v] : module_cache_)
+		for (auto& [k, v] : module_cache_)
 		{
 			vkDestroyShaderModule(VulkanEngine::Get().gpu_device_.device_, v.module, nullptr);
 		}
-		for (ShaderEffect *effect : shader_effect_cache_)
+		for (ShaderEffect* effect : shader_effect_cache_)
 		{
 			delete effect;
 		}
