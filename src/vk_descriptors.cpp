@@ -2,7 +2,7 @@
 #include <vk_loader.h>
 #include <logging.h>
 
-namespace lc
+namespace lincore
 {
 	void DescriptorLayoutBuilder::AddBinding(uint32_t binding, VkDescriptorType type, uint32_t descriptor_count)
 	{
@@ -276,4 +276,4 @@ namespace lc
 
 		vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes_.size()), writes_.data(), 0, nullptr);
 	}
-}
+} // namespace lincore

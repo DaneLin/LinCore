@@ -1,369 +1,646 @@
 #include "vk_resources.h"
-#include "vk_engine.h"
+#include "vk_device.h"
 
-TextureCreationInfo &TextureCreationInfo::SetSize(uint32_t width, uint32_t height, uint32_t depth)
+namespace lincore
 {
-    extent.width = width;
-    extent.height = height;
-    extent.depth = depth;
-    return *this;
-}
+    static void VulkanCreateTextureView(GpuDevice& gpu, const TextureViewCreation& creation, Texture* texture) {
 
-TextureCreationInfo& TextureCreationInfo::SetSize(VkExtent3D size)
-{
-	extent = size;
-	return *this;
-}
+        //// Create the image view
+        VkImageViewCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+        info.image = texture->vk_image;
+        info.format = texture->vk_format;
 
-TextureCreationInfo &TextureCreationInfo::SetFormatType(VkFormat fmt, TextureType::Enum tex_type)
-{
-    format = fmt;
-    type = tex_type;
-    return *this;
-}
+        if (TextureFormat::HasDepthOrStencil(texture->vk_format)) {
 
-TextureCreationInfo &TextureCreationInfo::SetFlags(uint32_t mips, VkImageCreateFlags create_flags)
-{
-    mip_levels = mips;
-    flags = create_flags;
-    return *this;
-}
-
-TextureCreationInfo &TextureCreationInfo::SetLayout(VkImageLayout layout)
-{
-    initial_layout = layout;
-    return *this;
-}
-
-TextureCreationInfo &TextureCreationInfo::SetUsage(VkImageUsageFlags usage_flags)
-{
-    usage = usage_flags;
-    return *this;
-}
-
-TextureCreationInfo &TextureCreationInfo::SetData(void *data)
-{
-    initial_data = data;
-    return *this;
-}
-
-// Helper function to set array layers based on texture type
-void TextureCreationInfo::SetArrayLayers(uint32_t layers)
-{
-    array_layers = layers;
-    if (type == TextureType::Texture_Cube_Array)
-    {
-        array_layers *= 6; // Cube maps need 6 faces per array layer
-    }
-}
-
-TextureCreationInfo& TextureCreationInfo::SetName(const char* buffer_name)
-{
-    name = buffer_name;
-    return *this;
-}
-
-// Helper function to validate creation info based on texture type
-bool TextureCreationInfo::Validate() const
-{
-    switch (type)
-    {
-    case TextureType::Texture1D:
-    case TextureType::Texture_1D_Array:
-        return extent.width > 0 && extent.height == 1 && extent.depth == 1;
-    case TextureType::Texture2D:
-    case TextureType::Texture_2D_Array:
-        return extent.width > 0 && extent.height > 0 && extent.depth == 1;
-    case TextureType::Texture3D:
-        return extent.width > 0 && extent.height > 0 && extent.depth > 0;
-    case TextureType::Texture_Cube_Array:
-        return extent.width > 0 && extent.height > 0 && extent.depth == 1 &&
-               (array_layers % 6) == 0 && extent.width == extent.height;
-    default:
-        return false;
-    }
-}
-
-BufferCreationInfo &BufferCreationInfo::Reset()
-{
-    usage = 0;
-    size = 0;
-    memory_usage = VMA_MEMORY_USAGE_UNKNOWN;
-    initial_data = nullptr;
-    name = nullptr;
-    return *this;
-}
-
-BufferCreationInfo &BufferCreationInfo::Set(VkBufferUsageFlags flags, VmaMemoryUsage mem_usage, VkDeviceSize buffer_size)
-{
-    usage = flags;
-    memory_usage = mem_usage;
-    size = buffer_size;
-    return *this;
-}
-
-BufferCreationInfo &BufferCreationInfo::SetData(void *data)
-{
-    initial_data = data;
-    return *this;
-}
-
-BufferCreationInfo &BufferCreationInfo::SetName(const char *buffer_name)
-{
-    name = buffer_name;
-    return *this;
-}
-
-BufferHandle ResourceManager::CreateBuffer(const BufferCreationInfo &info)
-{
-    BufferHandle handle = buffer_pool_.Allocate();
-
-    {
-        std::unique_lock lock(creation_info_mutex_);
-        buffer_creation_infos_[handle] = info;
-    }
-
-    // Create the actual buffer resource
-    CreateBufferResource(handle);
-
-    return handle;
-}
-
-void ResourceManager::CreateBufferResource(BufferHandle handle)
-{
-    BufferCreationInfo info;
-    {
-        std::shared_lock lock(creation_info_mutex_);
-        info = buffer_creation_infos_[handle];
-    }
-
-    // Create buffer using VMA
-    VkBufferCreateInfo buffer_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    buffer_info.size = info.size;
-    buffer_info.usage = info.usage;
-
-    VmaAllocationCreateInfo alloc_info = {};
-    alloc_info.usage = info.memory_usage;
-    alloc_info.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_STRATEGY_BEST_FIT_BIT;
-    AllocatedBufferUntyped buffer;
-    vmaCreateBuffer(gpu_device_->allocator_, &buffer_info, &alloc_info,
-                    &buffer.buffer, &buffer.allocation, &buffer.info);
-
-    // Store the created buffer
-    buffer_pool_.Set(handle, std::move(buffer));
-}
-
-AllocatedBufferUntyped &ResourceManager::GetBuffer(BufferHandle handle)
-{
-    return buffer_pool_.Get(handle);
-}
-
-void ResourceManager::DestroyBuffer(BufferHandle handle)
-{
-    AllocatedBufferUntyped &buffer = GetBuffer(handle);
-    vmaDestroyBuffer(gpu_device_->allocator_, buffer.buffer, buffer.allocation);
-
-    {
-        std::unique_lock lock(creation_info_mutex_);
-        buffer_creation_infos_.erase(handle);
-    }
-
-    buffer_pool_.Free(handle);
-}
-
-TextureHandle ResourceManager::CreateTexture(const TextureCreationInfo &info)
-{
-    TextureHandle handle = texture_pool_.Allocate();
-
-    {
-        std::unique_lock lock(creation_info_mutex_);
-        texture_creation_infos_[handle] = info;
-    }
-
-    // Create the actual texture resource
-    CreateTextureResource(handle);
-
-    return handle;
-}
-
-void ResourceManager::CreateTextureResource(TextureHandle handle)
-{
-    TextureCreationInfo info;
-    {
-        std::shared_lock lock(creation_info_mutex_);
-        info = texture_creation_infos_[handle];
-    }
-
-    // Validate creation info
-    if (!info.Validate())
-    {
-        throw std::runtime_error("Invalid texture creation info");
-    }
-
-    // Create image using VMA
-    VkImageCreateInfo imageInfo = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-
-    // Set image type based on texture type
-    switch (info.type)
-    {
-    case TextureType::Texture1D:
-    case TextureType::Texture_1D_Array:
-        imageInfo.imageType = VK_IMAGE_TYPE_1D;
-        break;
-    case TextureType::Texture2D:
-    case TextureType::Texture_2D_Array:
-    case TextureType::Texture_Cube_Array:
-        imageInfo.imageType = VK_IMAGE_TYPE_2D;
-        break;
-    case TextureType::Texture3D:
-        imageInfo.imageType = VK_IMAGE_TYPE_3D;
-        break;
-    default:
-        throw std::runtime_error("Unsupported texture type");
-    }
-
-    // Set image creation flags
-    if (info.type == TextureType::Texture_Cube_Array)
-    {
-        imageInfo.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    }
-
-    imageInfo.format = info.format;
-    imageInfo.extent = info.extent;
-    imageInfo.mipLevels = info.mip_levels;
-    imageInfo.arrayLayers = info.array_layers;
-    imageInfo.samples = info.samples;
-    imageInfo.tiling = info.tiling;
-    imageInfo.usage = info.usage;
-    imageInfo.initialLayout = info.initial_layout;
-    imageInfo.flags |= info.flags;
-
-    VmaAllocationCreateInfo alloc_info = {};
-    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-
-    AllocatedImage image;
-    image.format = info.format;
-    image.extent = info.extent;
-
-    vmaCreateImage(gpu_device_->allocator_, &imageInfo, &alloc_info,
-                   &image.image, &image.allocation, nullptr);
-
-    // Create image view
-    VkImageViewCreateInfo viewInfo = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-    viewInfo.image = image.image;
-    viewInfo.format = info.format;
-
-    // Set view type based on texture type
-    switch (info.type)
-    {
-    case TextureType::Texture1D:
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D;
-        break;
-    case TextureType::Texture2D:
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        break;
-    case TextureType::Texture3D:
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
-        break;
-    case TextureType::Texture_1D_Array:
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_1D_ARRAY;
-        break;
-    case TextureType::Texture_2D_Array:
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-        break;
-    case TextureType::Texture_Cube_Array:
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
-        break;
-    default:
-        throw std::runtime_error("Unsupported texture type");
-    }
-
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = info.mip_levels;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = info.array_layers;
-
-    VkResult result = vkCreateImageView(gpu_device_->device_, &viewInfo, nullptr, &image.view);
-    if (result != VK_SUCCESS)
-    {
-        vmaDestroyImage(gpu_device_->allocator_, image.image, image.allocation);
-        throw std::runtime_error("Failed to create image view");
-    }
-
-    // Store the created image
-    texture_pool_.Set(handle, std::move(image));
-}
-
-AllocatedImage &ResourceManager::GetTexture(TextureHandle handle)
-{
-    return texture_pool_.Get(handle);
-}
-
-void ResourceManager::DestroyTexture(TextureHandle handle)
-{
-    AllocatedImage &image = GetTexture(handle);
-    vkDestroyImageView(gpu_device_->device_, image.view, nullptr);
-    vmaDestroyImage(gpu_device_->allocator_, image.image, image.allocation);
-
-    {
-        std::unique_lock lock(creation_info_mutex_);
-        texture_creation_infos_.erase(handle);
-    }
-
-    texture_pool_.Free(handle);
-}
-
-void ResourceManager::Init(GPUDevice* gpu_device)
-{
-    gpu_device_ = gpu_device;
-}
-
-void ResourceManager::CleanUp()
-{
-    // Destroy all remaining resources
-    std::vector<BufferHandle> buffers;
-    std::vector<TextureHandle> textures;
-
-    {
-        std::shared_lock lock(creation_info_mutex_);
-        for (const auto &pair : buffer_creation_infos_)
-        {
-            buffers.push_back(pair.first);
+            info.subresourceRange.aspectMask = TextureFormat::HasDepth(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0;
+            // TODO:gs
+            //info.subresourceRange.aspectMask |= TextureFormat::has_stencil( creation.format ) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0;
         }
-        for (const auto &pair : texture_creation_infos_)
-        {
-            textures.push_back(pair.first);
+        else {
+            info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        }
+
+        info.viewType = creation.view_type;
+        info.subresourceRange.baseMipLevel = creation.sub_resource.mip_base_level;
+        info.subresourceRange.levelCount = creation.sub_resource.mip_level_count;
+        info.subresourceRange.baseArrayLayer = creation.sub_resource.array_base_layer;
+        info.subresourceRange.layerCount = creation.sub_resource.array_layer_count;
+        VK_CHECK(vkCreateImageView(gpu.device_, &info, nullptr, &texture->vk_image_view));
+
+        gpu.SetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)texture->vk_image_view, creation.name);
+    }
+
+    static VkImageUsageFlags VulkanGetImageUsage(const TextureCreation& creation) {
+        const bool is_render_target = (creation.flags & TextureFlags::RenderTarget_mask) == TextureFlags::RenderTarget_mask;
+        const bool is_compute_used = (creation.flags & TextureFlags::Compute_mask) == TextureFlags::Compute_mask;
+        const bool is_shading_rate_texture = (creation.flags & TextureFlags::ShadingRate_mask) == TextureFlags::ShadingRate_mask;
+
+        // Default to always readable from shader.
+        VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+
+        if (TextureFormat::HasDepthOrStencil(creation.format)) {
+            // Depth/Stencil textures are normally textures you render into.
+            usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+            usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        } else {
+            usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+            usage |= is_render_target ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : 0;
+            // 只有非深度/模板纹理才能用作存储图像
+            usage |= is_compute_used ? VK_IMAGE_USAGE_STORAGE_BIT : 0;
+        }
+
+        usage |= is_shading_rate_texture ? VK_IMAGE_USAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR : 0;
+
+        return usage;
+    }
+
+    static void VulkanCreateTexture(GpuDevice& gpu, const TextureCreation& creation, TextureHandle handle, Texture* texture) {
+
+        bool is_cubemap = false;
+        uint32_t layer_count = creation.array_layer_count;
+        if (creation.type == TextureType::TextureCube || creation.type == TextureType::Texture_Cube_Array) {
+            is_cubemap = true;
+        }
+
+        const bool is_sparse_texture = (creation.flags & TextureFlags::Sparse_mask) == TextureFlags::Sparse_mask;
+
+        texture->vk_extent = { creation.width, creation.height, creation.depth };
+        texture->mip_base_level = 0;        // For new textures, we have a view that is for all mips and layers.
+        texture->array_base_layer = 0;      // For new textures, we have a view that is for all mips and layers.
+        texture->array_layer_count = layer_count;
+        texture->mip_level_count = creation.mip_level_count;
+        texture->type = creation.type;
+        texture->name = creation.name;
+        texture->vk_format = creation.format;
+        texture->vk_usage = VulkanGetImageUsage(creation);
+        texture->sampler = nullptr;
+        texture->flags = creation.flags;
+        texture->parent_texture = k_invalid_texture;
+        texture->alias_texture = k_invalid_texture;
+
+        //// Create the image
+        VkImageCreateInfo image_info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+        image_info.format = texture->vk_format;
+        image_info.flags = (is_cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0) | (is_sparse_texture ? (VK_IMAGE_CREATE_SPARSE_RESIDENCY_BIT | VK_IMAGE_CREATE_SPARSE_BINDING_BIT) : 0);
+        image_info.imageType = ToVkImageType(texture->type);
+        image_info.extent.width = creation.width;
+        image_info.extent.height = creation.height;
+        image_info.extent.depth = creation.depth;
+        image_info.mipLevels = creation.mip_level_count;
+        image_info.arrayLayers = layer_count;
+        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image_info.usage = texture->vk_usage;
+        image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VmaAllocationCreateInfo memory_info{};
+        memory_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+        LOGI("Creating tex %s", creation.name);
+
+        if (creation.alias.index == k_invalid_texture.index) {
+            if (is_sparse_texture) {
+                VK_CHECK(vkCreateImage(gpu.device_, &image_info, nullptr, &texture->vk_image));
+            }
+            else {
+                VK_CHECK(vmaCreateImage(gpu.vma_allocator_, &image_info, &memory_info,
+                    &texture->vk_image, &texture->vma_allocation, nullptr));
+
+#if defined (_DEBUG)
+                vmaSetAllocationName(gpu.vma_allocator_, texture->vma_allocation, creation.name);
+#endif // _DEBUG
+            }
+        }
+        else {
+            Texture* alias_texture = (Texture*)gpu.resource_manager_.GetTexture(creation.alias);
+            assert(alias_texture != nullptr);
+            assert(!is_sparse_texture);
+
+            texture->vma_allocation = 0;
+            VK_CHECK(vmaCreateAliasingImage(gpu.vma_allocator_, alias_texture->vma_allocation, &image_info, &texture->vk_image));
+            texture->alias_texture = creation.alias;
+        }
+
+        gpu.SetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)texture->vk_image, creation.name);
+
+        // Create default texture view.
+        TextureViewCreation tvc;
+        tvc.SetMips(0, creation.mip_level_count).SetArray(0, layer_count).SetName(creation.name).SetViewType(ToVkImageViewType(creation.type));
+
+        VulkanCreateTextureView(gpu, tvc, texture);
+        texture->state = RESOURCE_STATE_UNDEFINED;
+
+        // Add deferred bindless update.
+        if (gpu.bindless_supported_) {
+            ResourceUpdate resource_update{ ResourceUpdateType::Texture, texture->handle.index, gpu.current_frame_, 0 };
+            gpu.bindless_texture_updates_.emplace_back(resource_update);
         }
     }
 
-    for (auto handle : buffers)
-    {
-        DestroyBuffer(handle);
+    void ResourceManager::ProcessPendingDeletions() {
+        std::lock_guard<std::mutex> lock(deletion_queue_mutex_);
+        
+        const uint32_t current_frame = gpu_device_->current_frame_;
+        const uint32_t previous_frame = (current_frame == 0) ? kFRAME_OVERLAP - 1 : current_frame - 1;
+        
+        // 找到第一个不是上一帧的资源的位置
+        auto delete_end = resource_deletion_queue_.begin();
+        while (delete_end != resource_deletion_queue_.end()) {
+            const ResourceUpdate& update = *delete_end;
+            
+            // 只删除上一帧的资源
+            if (update.current_frame != previous_frame) {
+                break;
+            }
+            
+            ++delete_end;
+        }
+
+        // 处理所有可以删除的资源
+        for (auto it = resource_deletion_queue_.begin(); it != delete_end; ++it) {
+            const ResourceUpdate& update = *it;
+            switch (update.type) {
+                case ResourceUpdateType::Texture: {
+                    Texture* texture = texture_pool_.Get(update.handle);
+                    if (texture) {
+                        if (texture->parent_texture.index == k_invalid_texture.index) {
+                            if (texture->vk_image && texture->vma_allocation) {
+                                vmaDestroyImage(gpu_device_->vma_allocator_,
+                                    texture->vk_image, texture->vma_allocation);
+                                texture->vk_image = VK_NULL_HANDLE;
+                                texture->vma_allocation = nullptr;
+                            }
+                        }
+                        if (texture->vk_image_view) {
+                            vkDestroyImageView(gpu_device_->device_,
+                                texture->vk_image_view, nullptr);
+                            texture->vk_image_view = VK_NULL_HANDLE;
+                        }
+                        texture_pool_.Release(texture);
+                    }
+                    break;
+                }
+                case ResourceUpdateType::Buffer: {
+                    Buffer* buffer = buffer_pool_.Get(update.handle);
+                    if (buffer && buffer->vk_buffer) {
+                        vmaDestroyBuffer(gpu_device_->vma_allocator_,
+                            buffer->vk_buffer, buffer->vma_allocation);
+                        buffer->vk_buffer = VK_NULL_HANDLE;
+                        buffer->vma_allocation = nullptr;
+                        buffer_pool_.Release(buffer);
+                    }
+                    break;
+                }
+                // TODO : 添加其他资源类型的处理...
+            }
+        }
+
+        // 一次性删除所有已处理的资源
+        if (delete_end != resource_deletion_queue_.begin()) {
+            resource_deletion_queue_.erase(resource_deletion_queue_.begin(), delete_end);
+        }
     }
 
-    for (auto handle : textures)
-    {
-        DestroyTexture(handle);
+    BufferHandle ResourceManager::CreateBuffer(const BufferCreation& creation) {
+        Buffer* buffer = buffer_pool_.Obtain();
+        if (!buffer) {
+            return k_invalid_buffer;
+        }
+
+        buffer->handle.index = buffer->pool_index;
+        buffer->name = creation.name;
+        buffer->type_flags = creation.type_flags;
+        buffer->usage = creation.usage;
+        buffer->size = creation.size;
+        buffer->parent_buffer = k_invalid_buffer;
+        buffer->global_offset = 0;
+
+        // Cache creation info
+        {
+            std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
+            buffer_creation_infos_[buffer->handle] = creation;
+        }
+
+        CreateBufferResource(buffer->handle);
+        return buffer->handle;
     }
-}
 
-ExecutionBarrier& ExecutionBarrier::Reset()
-{
-    num_image_barriers = num_buffer_barriers = 0;
-    return *this;
-}
+    void ResourceManager::CreateBufferResource(BufferHandle handle) {
+        Buffer* buffer = GetBuffer(handle);
+        if (!buffer) return;
 
-ExecutionBarrier& ExecutionBarrier::AddImageBarrier(const ImageBarrier& barrier)
-{
-    image_barriers[num_image_barriers++] = barrier;
+        const BufferCreation& creation = buffer_creation_infos_[handle];
 
-    return *this;
-}
+        // Create the buffer
+        VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        buffer_info.size = creation.size;
+        buffer_info.usage = creation.type_flags;
+        buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-ExecutionBarrier& ExecutionBarrier::AddBufferBarrier(const BufferBarrier& barrier)
-{
-    buffer_barriers[num_buffer_barriers++] = barrier;
+        VmaAllocationCreateInfo alloc_info = {};
+        alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+        alloc_info.flags = creation.persistent ? VMA_ALLOCATION_CREATE_MAPPED_BIT : 0;
+        alloc_info.requiredFlags = creation.device_only
+            ? 0
+            : VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        alloc_info.preferredFlags = creation.device_only
+            ? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+            : 0;
 
-    return *this;
-}
+        // Add host access flags based on usage
+        if (creation.initial_data || !creation.device_only) {
+            alloc_info.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT; // Allow write access
+        }
+
+        VmaAllocationInfo allocation_info;
+        VK_CHECK(vmaCreateBuffer(gpu_device_->vma_allocator_, &buffer_info, &alloc_info,
+            &buffer->vk_buffer, &buffer->vma_allocation, &allocation_info));
+
+        buffer->vk_device_memory = allocation_info.deviceMemory;
+        buffer->vk_device_size = creation.size;
+        buffer->mapped_data = (void*)allocation_info.pMappedData;
+
+        if (creation.name) {
+            gpu_device_->SetDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->vk_buffer, creation.name);
+        }
+
+        // Upload initial data if present
+        if (creation.initial_data) {
+            void* data;
+            vmaMapMemory(gpu_device_->vma_allocator_, buffer->vma_allocation, &data);
+            memcpy(data, creation.initial_data, creation.size);
+            vmaUnmapMemory(gpu_device_->vma_allocator_, buffer->vma_allocation);
+        }
+    }
+
+    Buffer* ResourceManager::GetBuffer(BufferHandle handle) {
+        return buffer_pool_.Get(handle.index);
+    }
+
+    void ResourceManager::DestroyBuffer(BufferHandle handle) {
+        Buffer* buffer = GetBuffer(handle);
+        if (!buffer) return;
+
+        // 将资源添加到删除队列
+        {
+            std::lock_guard<std::mutex> lock(deletion_queue_mutex_);
+            ResourceUpdate update;
+            update.type = ResourceUpdateType::Buffer;
+            update.handle = handle.index;
+            update.current_frame = gpu_device_->current_frame_;
+            update.deleting = 1;
+            resource_deletion_queue_.push_back(update);
+        }
+
+        {
+            std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
+            buffer_creation_infos_.erase(handle);
+        }
+    }
+
+    void ResourceManager::Init(GpuDevice* gpu_device) {
+        gpu_device_ = gpu_device;
+
+        buffer_pool_.Init(k_buffers_pool_size);
+        texture_pool_.Init(k_textures_pool_size);
+        pipeline_pool_.Init(k_pipelines_pool_size);
+        sampler_pool_.Init(k_samplers_pool_size);
+        descriptor_set_layout_pool_.Init(k_descriptor_set_layouts_pool_size);
+        descriptor_set_pool_.Init(k_descriptor_sets_pool_size);
+        render_pass_pool_.Init(k_render_passes_pool_size);
+        framebuffer_pool_.Init(k_render_passes_pool_size);
+        shader_state_pool_.Init(k_shaders_pool_size);
+    }
+
+    void ResourceManager::Shutdown() {
+        // 将所有活跃的资源加入删除队列
+        {
+            std::lock_guard<std::mutex> lock(deletion_queue_mutex_);
+            const uint32_t current_frame = gpu_device_->current_frame_;
+
+            // 添加所有 Buffer
+            for (uint32_t i = 0; i < k_buffers_pool_size; ++i) {
+                Buffer* buffer = buffer_pool_.Get(i);
+                if (buffer && buffer->vk_buffer) {
+                    ResourceUpdate update;
+                    update.type = ResourceUpdateType::Buffer;
+                    update.handle = i;
+                    update.current_frame = current_frame - 1;  // 确保会在下次处理时被删除
+                    update.deleting = 1;
+                    resource_deletion_queue_.push_back(update);
+                }
+            }
+
+            // 添加所有 Texture
+            for (uint32_t i = 0; i < k_textures_pool_size; ++i) {
+                Texture* texture = texture_pool_.Get(i);
+                if (texture && (texture->vk_image || texture->vk_image_view)) {
+                    ResourceUpdate update;
+                    update.type = ResourceUpdateType::Texture;
+                    update.handle = i;
+                    update.current_frame = current_frame - 1;  // 确保会在下次处理时被删除
+                    update.deleting = 1;
+                    resource_deletion_queue_.push_back(update);
+                }
+            }
+
+            // 将已在队列中的资源也标记为上一帧
+            for (auto& update : resource_deletion_queue_) {
+                update.current_frame = current_frame - 1;
+            }
+        }
+        
+        // 处理所有资源的删除
+        ProcessPendingDeletions();
+
+        // 清理资源池
+        buffer_pool_.Shutdown();
+        texture_pool_.Shutdown();
+        pipeline_pool_.Shutdown();
+        sampler_pool_.Shutdown();
+        descriptor_set_layout_pool_.Shutdown();
+        descriptor_set_pool_.Shutdown();
+        render_pass_pool_.Shutdown();
+        framebuffer_pool_.Shutdown();
+        shader_state_pool_.Shutdown();
+
+        // 清空创建信息
+        {
+            std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
+            buffer_creation_infos_.clear();
+            texture_creation_infos_.clear();
+            pipeline_creation_infos_.clear();
+            sampler_creation_infos_.clear();
+            descriptor_set_layout_creation_infos_.clear();
+            descriptor_set_creation_infos_.clear();
+            render_pass_creation_infos_.clear();
+            framebuffer_creation_infos_.clear();
+            shader_state_creation_infos_.clear();
+        }
+
+        gpu_device_ = nullptr;
+    }
+
+    TextureHandle ResourceManager::CreateTexture(const TextureCreation& creation) {
+        Texture* texture = texture_pool_.Obtain();
+        if (!texture) {
+            return k_invalid_texture;
+        }
+
+        texture->handle.index = texture->pool_index;
+        texture->name = creation.name;
+        texture->vk_extent = { creation.width, creation.height, creation.depth };
+        texture->array_layer_count = creation.array_layer_count;
+        texture->mip_level_count = creation.mip_level_count;
+        texture->type = creation.type;
+        texture->flags = creation.flags;
+        texture->vk_format = creation.format;
+        texture->parent_texture = k_invalid_texture;
+        texture->alias_texture = creation.alias;
+
+        // Cache creation info
+        {
+            std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
+            texture_creation_infos_[texture->handle] = creation;
+        }
+
+        CreateTextureResource(texture->handle);
+        return texture->handle;
+    }
+
+    void ResourceManager::CreateTextureResource(TextureHandle handle) {
+        Texture* texture = GetTexture(handle);
+        if (!texture) return;
+
+        const TextureCreation& creation = texture_creation_infos_[handle];
+
+        // Create the image
+        VkImageCreateInfo image_info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+        image_info.imageType = ToVkImageType(texture->type);
+        image_info.format = texture->vk_format;
+        image_info.extent = texture->vk_extent;
+        image_info.mipLevels = texture->mip_level_count;
+        image_info.arrayLayers = texture->array_layer_count;
+        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        image_info.usage = VulkanGetImageUsage(creation);
+        image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        if (texture->type == TextureType::TextureCube || texture->type == TextureType::Texture_Cube_Array) {
+            image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        }
+
+        if (texture->sparse) {
+            image_info.flags |= VK_IMAGE_CREATE_SPARSE_RESIDENCY_BIT | VK_IMAGE_CREATE_SPARSE_BINDING_BIT;
+        }
+
+        // 处理别名纹理
+        if (texture->alias_texture.index != k_invalid_texture.index) {
+            Texture* alias_texture = GetTexture(texture->alias_texture);
+            if (!alias_texture) return;
+
+            texture->vma_allocation = 0;
+            VK_CHECK(vmaCreateAliasingImage(gpu_device_->vma_allocator_, 
+                alias_texture->vma_allocation, &image_info, &texture->vk_image));
+        } else {
+            VmaAllocationCreateInfo alloc_info = {};
+            alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+            alloc_info.flags = 0;
+            alloc_info.preferredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+            VmaAllocationInfo allocation_info;
+            VK_CHECK(vmaCreateImage(gpu_device_->vma_allocator_, &image_info, &alloc_info,
+                &texture->vk_image, &texture->vma_allocation, &allocation_info));
+        }
+
+        if (creation.name) {
+            gpu_device_->SetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)texture->vk_image, creation.name);
+        }
+
+        // Create the image view
+        VkImageViewCreateInfo view_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+        view_info.image = texture->vk_image;
+        view_info.viewType = ToVkImageViewType(texture->type);
+        view_info.format = texture->vk_format;
+
+        if (TextureFormat::HasDepthOrStencil(texture->vk_format)) {
+            view_info.subresourceRange.aspectMask = TextureFormat::HasDepth(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0;
+            view_info.subresourceRange.aspectMask |= TextureFormat::HasStencil(texture->vk_format) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0;
+        }
+        else {
+            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        }
+
+        view_info.subresourceRange.baseMipLevel = 0;
+        view_info.subresourceRange.levelCount = texture->mip_level_count;
+        view_info.subresourceRange.baseArrayLayer = 0;
+        view_info.subresourceRange.layerCount = texture->array_layer_count;
+
+        VK_CHECK(vkCreateImageView(gpu_device_->device_, &view_info, nullptr, &texture->vk_image_view));
+
+        if (creation.name) {
+            gpu_device_->SetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)texture->vk_image_view, creation.name);
+        }
+
+        // 设置初始状态
+        texture->state = RESOURCE_STATE_UNDEFINED;
+
+        // Upload initial data if present
+        if (creation.initial_data) {
+            // Create staging buffer
+            BufferCreation staging_buffer_creation{};
+            staging_buffer_creation.Reset()
+                .SetName("Texture upload staging buffer")
+                .Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, ResourceUsageType::Immutable, texture->vk_extent.width * texture->vk_extent.height * texture->vk_extent.depth * 4)
+				.SetData(creation.initial_data)
+                .SetPersistent(true);
+
+            BufferHandle staging_buffer = CreateBuffer(staging_buffer_creation);
+
+            // Transition image layout for transfer
+            gpu_device_->command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd)
+                {
+					UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_COPY_DEST, 0, texture->mip_level_count, false);
+
+                    VkBufferImageCopy region = {};
+                    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                    region.imageSubresource.mipLevel = 0;
+                    region.imageSubresource.baseArrayLayer = 0;
+                    region.imageSubresource.layerCount = texture->array_layer_count;
+                    region.imageExtent = texture->vk_extent;
+
+                    vkCmdCopyBufferToImage(cmd->GetCommandBuffer(), GetBuffer(staging_buffer)->vk_buffer, texture->vk_image,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+
+                    UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_SHADER_RESOURCE, 0, texture->mip_level_count, false);
+					
+				}, gpu_device_->graphics_queue_);
+
+            //CommandBuffer* cmd = gpu_device_->GetCommandBuffer(true);
+            //UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_COPY_DEST, 0, texture->mip_level_count, false);
+            //gpu_device_->command_buffer_manager_.ImmediateSubmit([cmd](CommandBuffer* /*unused*/) {}, gpu_device_->graphics_queue_);
+
+            //// Copy buffer to image
+            //cmd = gpu_device_->GetCommandBuffer(true);
+            //VkBufferImageCopy region = {};
+            //region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            //region.imageSubresource.mipLevel = 0;
+            //region.imageSubresource.baseArrayLayer = 0;
+            //region.imageSubresource.layerCount = texture->array_layer_count;
+            //region.imageExtent = texture->vk_extent;
+
+            //vkCmdCopyBufferToImage(cmd->GetCommandBuffer(), GetBuffer(staging_buffer)->vk_buffer, texture->vk_image,
+            //    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+            //gpu_device_->command_buffer_manager_.ImmediateSubmit([cmd](CommandBuffer* /*unused*/) {}, gpu_device_->graphics_queue_);
+
+            //// Transition image layout for shader access
+            //cmd = gpu_device_->GetCommandBuffer(true);
+            //UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_SHADER_RESOURCE, 0, texture->mip_level_count, false);
+            //gpu_device_->command_buffer_manager_.ImmediateSubmit([cmd](CommandBuffer* /*unused*/) {}, gpu_device_->graphics_queue_);
+
+            // Update texture state
+            texture->state = RESOURCE_STATE_SHADER_RESOURCE;
+
+            // Destroy staging buffer
+            DestroyBuffer(staging_buffer);
+        }
+    }
+
+    TextureHandle ResourceManager::CreateTextureView(const TextureViewCreation& creation) {
+        Texture* parent_texture = GetTexture(creation.parent_texture);
+        if (!parent_texture) {
+            return k_invalid_texture;
+        }
+
+        // 验证视图类型与纹理类型的兼容性
+        if (!IsViewTypeCompatible(parent_texture->type, creation.view_type)) {
+            return k_invalid_texture;
+        }
+
+        Texture* texture = texture_pool_.Obtain();
+        if (!texture) {
+            return k_invalid_texture;
+        }
+
+        // Copy most properties from parent
+        texture->handle.index = texture->pool_index;
+        texture->name = creation.name;
+        texture->vk_extent = parent_texture->vk_extent;
+        texture->vk_format = parent_texture->vk_format;
+        texture->vk_image = parent_texture->vk_image;
+        texture->vk_usage = parent_texture->vk_usage;
+        texture->type = parent_texture->type;
+        texture->flags = parent_texture->flags;
+        texture->sparse = parent_texture->sparse;
+        texture->vma_allocation = parent_texture->vma_allocation;
+        texture->parent_texture = creation.parent_texture;
+        texture->state = parent_texture->state;
+
+        // Set view-specific properties
+        texture->mip_base_level = creation.sub_resource.mip_base_level;
+        texture->mip_level_count = creation.sub_resource.mip_level_count;
+        texture->array_base_layer = creation.sub_resource.array_base_layer;
+        texture->array_layer_count = creation.sub_resource.array_layer_count;
+
+        // Create image view for the texture view
+        VkImageViewCreateInfo view_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+        view_info.image = texture->vk_image;
+        view_info.viewType = creation.view_type;
+        view_info.format = texture->vk_format;
+
+        if (TextureFormat::HasDepthOrStencil(texture->vk_format)) {
+            view_info.subresourceRange.aspectMask = TextureFormat::HasDepth(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0;
+            view_info.subresourceRange.aspectMask |= TextureFormat::HasStencil(texture->vk_format) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0;
+        }
+        else {
+            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        }
+
+        view_info.subresourceRange.baseMipLevel = texture->mip_base_level;
+        view_info.subresourceRange.levelCount = texture->mip_level_count;
+        view_info.subresourceRange.baseArrayLayer = texture->array_base_layer;
+        view_info.subresourceRange.layerCount = texture->array_layer_count;
+
+        VK_CHECK(vkCreateImageView(gpu_device_->device_, &view_info, nullptr, &texture->vk_image_view));
+
+        if (creation.name) {
+            gpu_device_->SetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)texture->vk_image_view, creation.name);
+        }
+
+        return texture->handle;
+    }
+
+    Texture* ResourceManager::GetTexture(TextureHandle handle) {
+        return texture_pool_.Get(handle.index);
+    }
+
+    const Texture* ResourceManager::GetTexture(TextureHandle handle) const {
+        return texture_pool_.Get(handle.index);
+    }
+
+    void ResourceManager::DestroyTexture(TextureHandle handle) {
+        Texture* texture = GetTexture(handle);
+        if (!texture) return;
+
+        // 将资源添加到删除队列
+        {
+            std::lock_guard<std::mutex> lock(deletion_queue_mutex_);
+            ResourceUpdate update;
+            update.type = ResourceUpdateType::Texture;
+            update.handle = handle.index;
+            update.current_frame = gpu_device_->current_frame_;
+            update.deleting = 1;
+            resource_deletion_queue_.push_back(update);
+        }
+
+        {
+            std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
+            texture_creation_infos_.erase(handle);
+        }
+    }
+
+} // namespace lincore

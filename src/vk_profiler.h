@@ -5,7 +5,7 @@
 #include <array>
 #include <unordered_map>
 
-namespace vkutils
+namespace lincore
 {
     class VulkanProfiler;
 

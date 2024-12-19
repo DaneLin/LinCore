@@ -2,7 +2,7 @@
 
 #include <vk_types.h>
 
-namespace lc
+namespace lincore
 {
 	struct DescriptorLayoutBuilder
 	{
@@ -54,4 +54,4 @@ namespace lc
 		void UpdateSet(VkDevice device, VkDescriptorSet set);
 	};
 
-}
+} // namespace lincore

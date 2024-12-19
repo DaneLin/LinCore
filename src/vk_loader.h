@@ -14,10 +14,10 @@ namespace fastgltf
 	struct Image;
 }
 
-class VulkanEngine;
-
-namespace lc
+namespace lincore
 {
+	class VulkanEngine;
+
 	enum class FileLoadRequestType
 	{
 		kURI,
@@ -33,7 +33,7 @@ namespace lc
 		const void *memory_data; // vector and bufferview type
 		size_t memory_size;
 		size_t buffer_offset; // buffer view
-		std::function<void(AllocatedImage)> callback;
+		std::function<void(TextureHandle)> callback;
 	};
 
 	// upload request
@@ -44,7 +44,7 @@ namespace lc
 		VkFormat format;
 		VkExtent3D extent;
 		bool enable_mips;
-		std::function<void(AllocatedImage)> callback;
+		std::function<void(TextureHandle)> callback;
 	};
 
 
@@ -67,12 +67,12 @@ namespace lc
 
 		void Update();
 
-		void RequestFileLoad(const char *path, std::function<void(AllocatedImage)> callback);
-		void RequestImageUpload(void *data, VkExtent3D extent, VkFormat format, std::function<void(AllocatedImage)> callback);
+		void RequestFileLoad(const char *path, std::function<void(TextureHandle)> callback);
+		void RequestImageUpload(void *data, VkExtent3D extent, VkFormat format, std::function<void(TextureHandle)> callback);
 
-		void RequestVectorLoad(const void* data, size_t size, std::function<void(AllocatedImage)> callback);
+		void RequestVectorLoad(const void* data, size_t size, std::function<void(TextureHandle)> callback);
 
-		void RequestBufferViewLoad(const void* data, size_t size, size_t offset, std::function<void(AllocatedImage)> callback);
+		void RequestBufferViewLoad(const void* data, size_t size, size_t offset, std::function<void(TextureHandle)> callback);
 
 		std::shared_ptr<AsyncLoaderState> GetState() { return state_; }
 
@@ -168,7 +168,7 @@ namespace lc
 			cache_.push_back(image_info);
 
 			// 更新bindless descriptor set
-			lc::DescriptorWriter writer;
+			DescriptorWriter writer;
 			writer.WriteImageArray(kBINDLESS_TEXTURE_BINDING, idx, {image_info}, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 			writer.UpdateSet(device, bindless_set_);
 
@@ -245,7 +245,7 @@ namespace lc
 		// storage for all the data on a given glTF file
 		std::unordered_map<std::string, std::shared_ptr<MeshAsset>> meshes;
 		std::unordered_map<std::string, std::shared_ptr<Node>> nodes;
-		std::unordered_map<std::string, AllocatedImage> images;
+		std::unordered_map<std::string, TextureHandle> images;
 		std::unordered_map<std::string, std::shared_ptr<GLTFMaterial>> materials;
 
 		// nodes that dont have a parent, for iterating through the file in tree order
@@ -253,12 +253,12 @@ namespace lc
 
 		std::vector<VkSampler> samplers;
 
-		lc::DescriptorAllocatorGrowable descriptor_pool;
+		DescriptorAllocatorGrowable descriptor_pool;
 
 		BufferHandle material_data_buffer_handle;
 
 		//VulkanEngine *creator;
-		GPUDevice* gpu_device;
+		GpuDevice* gpu_device;
 
 		~LoadedGLTF()
 		{
@@ -272,5 +272,5 @@ namespace lc
 	};
 
 	void AddMeshBufferToGlobalBuffers(std::span<uint32_t> indices, std::span<Vertex> vertices);
-	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(GPUDevice* gpu_device, std::string_view file_path);
+	std::optional<std::shared_ptr<LoadedGLTF>> LoadGltf(GpuDevice* gpu_device, std::string_view file_path);
 } // namespace lc

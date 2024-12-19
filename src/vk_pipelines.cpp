@@ -4,24 +4,17 @@
 
 #include "logging.h"
 
-namespace lc
+namespace lincore
 {
 	void PipelineBuilder::Clear()
 	{
 		input_assembly_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
-
 		rasterizer_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
-
 		color_blend_attachment_ = {};
-
 		multisampling_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-
 		pipeline_layout_ = {};
-
 		depth_stencil_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
-
 		render_info_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-
 		shader_stages_.clear();
 	}
 
@@ -108,7 +101,7 @@ namespace lc
 			vkinit::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
 	}
 
-	void PipelineBuilder::SetShaders(lc::ShaderEffect *effect)
+	void PipelineBuilder::SetShaders(ShaderEffect *effect)
 	{
 		shader_stages_.clear();
 		effect->FillStage(shader_stages_);

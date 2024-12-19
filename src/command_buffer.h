@@ -3,6 +3,10 @@
 #include <vk_types.h>
 #include <config.h>
 
+namespace lincore
+{
+
+
 enum class CommandBufferLevel
 {
 	kPrimary,
@@ -78,12 +82,12 @@ public:
 	// Push constants
 	void PushConstants(VkPipelineLayout layout, VkShaderStageFlags stage_flags, uint32_t offset, uint32_t size, const void* values);
 
-	VkCommandBuffer GetCommandBuffer() const { return command_buffer_; }
+	VkCommandBuffer GetCommandBuffer()  { return vk_command_buffer_; }
 	bool IsRecording() const { return is_recording_; }
 	CommandBufferLevel GetLevel() const { return level_; }
 
 
-	VkCommandBuffer command_buffer_{ VK_NULL_HANDLE };
+	VkCommandBuffer vk_command_buffer_{ VK_NULL_HANDLE };
 	// Clear value for each attachment with depth/stencil at the end.
 	VkClearValue clear_values_[kMAX_IMAGE_OUTPUT + 1];
 
@@ -108,7 +112,7 @@ public:
 	static constexpr uint32_t MAX_COMMAND_BUFFERS_PER_THREAD = 8;
 	static constexpr uint32_t MAX_SECONDARY_COMMAND_BUFFERS = 16;
 
-	void Init(GPUDevice* gpu_device, uint32_t num_threads);
+	void Init(GpuDevice* gpu_device, uint32_t num_threads);
 	void Shutdown();
 
 	void ResetPools(uint32_t frame_index);
@@ -118,7 +122,7 @@ public:
 	void ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue);
 
 private:
-	GPUDevice* gpu_device_{ nullptr };
+	GpuDevice* gpu_device_{ nullptr };
 	
 	uint32_t GetPoolIndex(uint32_t frame_index, uint32_t thread_index);
 
@@ -141,3 +145,5 @@ private:
 };
 
 
+
+}

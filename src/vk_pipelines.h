@@ -2,7 +2,7 @@
 #include <vk_types.h>
 #include "vk_shaders.h"
 
-namespace lc
+namespace lincore
 {
 	namespace vkutils
 	{

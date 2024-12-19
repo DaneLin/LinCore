@@ -9,7 +9,7 @@
 #include "spirv_reflect.h"
 #include <spirv-headers/spirv.h>
 
-namespace lc
+namespace lincore
 {
 
 	bool vkutil::LoadShader(VkDevice device, const char *file_path, ShaderModule *out_shader_module)

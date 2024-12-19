@@ -3,11 +3,9 @@
 #include <vk_types.h>
 #include "vk_descriptors.h"
 
-class VulkanEngine;
-
-namespace lc
+namespace lincore
 {
-
+    class VulkanEngine;
     // Represents a compiled shader module with its SPIR-V code.
     struct ShaderModule
     {
@@ -127,4 +125,4 @@ namespace lc
         std::vector<ShaderEffect *> shader_effect_cache_;
     };
 
-} // namespace lc
+} // namespace 

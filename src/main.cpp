@@ -2,7 +2,7 @@
 
 int main(int argc, char *argv[])
 {
-	VulkanEngine engine;
+	lincore::VulkanEngine engine;
 
 	engine.Init();
 
