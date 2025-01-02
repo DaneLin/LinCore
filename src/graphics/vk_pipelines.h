@@ -5,10 +5,16 @@
 
 namespace lincore
 {
+
+	namespace render_graph
+	{
+		enum class PassType;
+		class PassResource;
+	}
+
 	class PipelineCache
 	{
 	public:
-
 		void Init(VkDevice device, const std::string cache_file_path);
 		void CleanUp();
 
@@ -26,6 +32,30 @@ namespace lincore
 		std::string cache_file_path_;
 	};
 
+	// Pipeline状态配置
+	struct PipelineStateConfig {
+		// 图形管线配置
+		VkPrimitiveTopology topology{VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST};
+		VkPolygonMode polygon_mode{VK_POLYGON_MODE_FILL};
+		VkCullModeFlags cull_mode{VK_CULL_MODE_BACK_BIT};
+		VkFrontFace front_face{VK_FRONT_FACE_CLOCKWISE};
+		
+		// 深度测试配置
+		bool depth_test{true};
+		bool depth_write{true};
+		VkCompareOp depth_compare_op{VK_COMPARE_OP_LESS};
+		
+		// 混合模式
+		enum class BlendMode {
+			None,
+			Additive,
+			AlphaBlend
+		} blend_mode{BlendMode::None};
+
+		// 获取默认配置
+		static PipelineStateConfig GetDefault(PassType type);
+	};
+		
 	class PipelineBuilder
 	{
 	public:
@@ -45,10 +75,11 @@ namespace lincore
 		void Clear();
 
 		VkPipeline BuildPipeline(VkDevice device, VkPipelineCache cache = VK_NULL_HANDLE);
+		void ApplyConfig(const PipelineStateConfig& config);
 
 		void SetShaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader);
 
-		void SetShaders(ShaderEffect* effect);
+		void SetShaders(ShaderEffect *effect);
 
 		void SetInputTopology(VkPrimitiveTopology topology);
 
@@ -71,6 +102,20 @@ namespace lincore
 		void EnableBlendingAdditive();
 
 		void EnableBlendingAlphablend();
+	};
+
+	class ComputePipelineBuilder
+	{
+	public:
+		void Clear();
+
+		VkPipeline BuildPipeline(VkDevice device, VkPipelineLayout layout, VkPipelineCache cache = VK_NULL_HANDLE);
+
+		void SetShader(VkShaderModule compute_shader);
+		void SetShader(ShaderEffect *effect);
+
+	private:
+		std::vector<VkPipelineShaderStageCreateInfo> shader_stages_;
 	};
 
 } // namespace lc

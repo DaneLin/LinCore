@@ -7,14 +7,12 @@
 // external
 #include <vk_mem_alloc.h>
 // lincore
-#include "fundation/gpu_enums.h"
-#include "fundation/resources.h"
-#include "fundation/pool_structure.h"
-
+#include "foundation/gpu_enums.h"
+#include "foundation/resources.h"
+#include "foundation/data_structure.h"
 
 namespace lincore
 {
-	class VulkanEngine;
 	class GpuDevice;
 
 	class ResourceManager {
@@ -45,7 +43,8 @@ namespace lincore
 		void DestroyPipeline(PipelineHandle handle);
 
 		// Sampler resource creation and management
-		SamplerHandle CreateSampler(const SamplerCreation& info);
+		SamplerHandle CreateSampler(const SamplerCreation& creation);
+		Sampler* GetSampler(SamplerHandle handle);
 		void DestroySampler(SamplerHandle handle);
 
 		// Descriptor Set Layout resource creation and management

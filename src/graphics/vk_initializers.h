@@ -28,6 +28,8 @@ namespace vkinit
 
 	VkRenderingInfo RenderingInfo(VkExtent2D render_extent, VkRenderingAttachmentInfo* color_attachment, VkRenderingAttachmentInfo* depth_attachment);
 
+	VkRenderingInfo RenderingInfo(VkExtent2D render_extent, std::vector<VkRenderingAttachmentInfo>& color_attachments, VkRenderingAttachmentInfo* depth_attachment);
+
 	VkImageSubresourceRange ImageSubresourceRange(VkImageAspectFlags aspect_mask);
 
 	VkSemaphoreSubmitInfo SemaphoreSubmitInfo(VkPipelineStageFlags2 stage_mask, VkSemaphore semaphore);
@@ -49,4 +51,6 @@ namespace vkinit
 	VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo();
 
 	VkPipelineShaderStageCreateInfo PipelineShaderStageCreateInfo(VkShaderStageFlagBits stage, VkShaderModule shader_module, const char* entry = "main");
+
+	VkSamplerCreateInfo SamplerCreateInfo(VkFilter magFilter = VK_FILTER_LINEAR, VkFilter minFilter = VK_FILTER_LINEAR);
 } // namespace vkinit

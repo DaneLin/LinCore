@@ -5,6 +5,13 @@ cmake_minimum_required (VERSION 3.8)
 
 project ("LinCore")
 
+# Set UTF-8 as default encoding for file handling and output
+if(WIN32)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /utf-8")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /utf-8")
+    set(CMAKE_EXECUTE_PROCESS_COMMAND_ECHO STDOUT)
+endif()
+
 find_package(Vulkan REQUIRED)
 
 add_subdirectory(third_party)

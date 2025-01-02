@@ -1,7 +1,6 @@
 ﻿#include "graphics/vk_descriptors.h"
 // lincore
-#include "graphics/vk_loader.h"
-#include "fundation/logging.h"
+#include "foundation/logging.h"
 
 namespace lincore
 {
@@ -20,7 +19,7 @@ namespace lincore
 		bindings.clear();
 	}
 
-	VkDescriptorSetLayout DescriptorLayoutBuilder::Build(VkDevice device, VkShaderStageFlags shader_stages, void* pNext, VkDescriptorSetLayoutCreateFlags flags)
+	VkDescriptorSetLayout DescriptorLayoutBuilder::Build(VkDevice device, VkShaderStageFlags shader_stages, void *pNext, VkDescriptorSetLayoutCreateFlags flags)
 	{
 
 		bool is_bindless = (flags & VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
@@ -34,15 +33,16 @@ namespace lincore
 			if (!bindings.empty())
 			{
 				// 修改:确保最后一个 binding(纹理数组)有正确的描述符数量
-				for (auto& bind : bindings)
+				for (auto &bind : bindings)
 				{
 					if (bind.binding == kBINDLESS_TEXTURE_BINDING)
 					{
 						bind.descriptorCount = kMAX_BINDLESS_RESOURCES;
 					}
 				}
-				bindFlags.back() |= VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT |
-					VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+				bindFlags.back() |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+									VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+									VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
 			}
 
 			bindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -51,7 +51,7 @@ namespace lincore
 			bindingFlags.pNext = pNext;
 		}
 
-		for (auto& bind : bindings)
+		for (auto &bind : bindings)
 		{
 			bind.stageFlags |= shader_stages;
 		}
@@ -61,7 +61,7 @@ namespace lincore
 			.pNext = is_bindless ? &bindingFlags : pNext,
 			.flags = flags,
 			.bindingCount = static_cast<uint32_t>(bindings.size()),
-			.pBindings = bindings.data() };
+			.pBindings = bindings.data()};
 
 		VkDescriptorSetLayout set;
 		VK_CHECK(vkCreateDescriptorSetLayout(device, &info, nullptr, &set));
@@ -115,7 +115,7 @@ namespace lincore
 		full_pools_.clear();
 	}
 
-	VkDescriptorSet DescriptorAllocatorGrowable::Allocate(VkDevice device, VkDescriptorSetLayout layout, void* ptr_next)
+	VkDescriptorSet DescriptorAllocatorGrowable::Allocate(VkDevice device, VkDescriptorSetLayout layout, void *ptr_next)
 	{
 		VkDescriptorPool pool_to_use = GetPool(device);
 
@@ -171,7 +171,7 @@ namespace lincore
 		{
 			pool_sizes.push_back(VkDescriptorPoolSize{
 				.type = ratio.type,
-				.descriptorCount = static_cast<uint32_t>(ratio.ratio * set_count) });
+				.descriptorCount = static_cast<uint32_t>(ratio.ratio * set_count)});
 		}
 
 		VkDescriptorPoolCreateInfo pool_info = {};
@@ -189,12 +189,12 @@ namespace lincore
 
 	void DescriptorWriter::WriteImage(int binding, VkImageView image, VkSampler sampler, VkImageLayout layout, VkDescriptorType type)
 	{
-		VkDescriptorImageInfo& info = image_infos_.emplace_back(VkDescriptorImageInfo{
+		VkDescriptorImageInfo &info = image_infos_.emplace_back(VkDescriptorImageInfo{
 			.sampler = sampler,
 			.imageView = image,
-			.imageLayout = layout });
+			.imageLayout = layout});
 
-		VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
 		write.dstBinding = binding;
 		write.dstSet = VK_NULL_HANDLE;
@@ -207,12 +207,12 @@ namespace lincore
 
 	void DescriptorWriter::WriteBuffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type)
 	{
-		VkDescriptorBufferInfo& info = buffer_infos_.emplace_back(VkDescriptorBufferInfo{
+		VkDescriptorBufferInfo &info = buffer_infos_.emplace_back(VkDescriptorBufferInfo{
 			.buffer = buffer,
 			.offset = offset,
-			.range = size });
+			.range = size});
 
-		VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 
 		write.dstBinding = binding;
 		write.dstSet = VK_NULL_HANDLE;
@@ -223,15 +223,15 @@ namespace lincore
 		writes_.push_back(write);
 	}
 
-	void DescriptorWriter::WriteImageArray(int binding, uint32_t dst_array_element, const std::vector<VkDescriptorImageInfo>& image_info_array, VkDescriptorType type)
+	void DescriptorWriter::WriteImageArray(int binding, uint32_t dst_array_element, const std::vector<VkDescriptorImageInfo> &image_info_array, VkDescriptorType type)
 	{
 		size_t start_idx = image_infos_.size();
-		for (const auto& info : image_info_array)
+		for (const auto &info : image_info_array)
 		{
 			image_infos_.push_back(info);
 		}
 
-		VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 		write.dstBinding = binding;
 		write.dstArrayElement = dst_array_element;
 		write.dstSet = VK_NULL_HANDLE;
@@ -242,15 +242,15 @@ namespace lincore
 		writes_.push_back(write);
 	}
 
-	void DescriptorWriter::WriteBufferArray(int binding, uint32_t dst_array_element, const std::vector<VkDescriptorBufferInfo>& bufferInfoArray, VkDescriptorType type)
+	void DescriptorWriter::WriteBufferArray(int binding, uint32_t dst_array_element, const std::vector<VkDescriptorBufferInfo> &bufferInfoArray, VkDescriptorType type)
 	{
 		size_t start_idx = buffer_infos_.size();
-		for (const auto& info : bufferInfoArray)
+		for (const auto &info : bufferInfoArray)
 		{
 			buffer_infos_.push_back(info);
 		}
 
-		VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+		VkWriteDescriptorSet write = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
 		write.dstBinding = binding;
 		write.dstArrayElement = dst_array_element;
 		write.dstSet = VK_NULL_HANDLE;
@@ -270,7 +270,7 @@ namespace lincore
 
 	void DescriptorWriter::UpdateSet(VkDevice device, VkDescriptorSet set)
 	{
-		for (auto& write : writes_)
+		for (auto &write : writes_)
 		{
 			write.dstSet = set;
 		}

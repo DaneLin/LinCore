@@ -1,10 +1,13 @@
 #pragma once
+// std
 #include <vector>
 #include <cstdint>
 #include <memory>
 #include <cassert>
 #include <type_traits>
-#include "logging.h"
+#include <deque>
+// lincore
+#include "foundation/logging.h"
 
 namespace lincore
 {
@@ -28,17 +31,18 @@ namespace lincore
 				uint32_t allocation_size = pool_size * resource_size;
 				memory.resize(allocation_size);
 				free_indices.resize(pool_size);
-
+				ready_flags.resize(pool_size, false);
+			
 				// 初始化可用索引列表
 				for (uint32_t i = 0; i < pool_size; ++i) {
 					free_indices[i] = i;
 				}
-
+			
 				free_indices_head = 0;
 				pool_size_ = pool_size;
 				resource_size_ = resource_size;
 				used_indices = 0;
-
+			
 				return true;
 			}
 			catch (...) {
@@ -51,14 +55,15 @@ namespace lincore
 			if (free_indices_head > 0) {
 				// 打印未释放的资源信息
 				for (uint32_t i = 0; i < free_indices_head; ++i) {
-					LOGI("Resource %zu was not released", free_indices[i]);
+					LOGI("Resource {} was not released", free_indices[i]);
 				}
 			}
-
+			
 			assert(used_indices == 0 && "Resources still in use during shutdown");
-
+			
 			memory.clear();
 			free_indices.clear();
+			ready_flags.clear();
 			free_indices_head = 0;
 			pool_size_ = 0;
 			resource_size_ = 0;
@@ -69,6 +74,7 @@ namespace lincore
 			if (free_indices_head < pool_size_) {
 				const uint32_t free_index = free_indices[free_indices_head++];
 				++used_indices;
+				ready_flags[free_index] = false;
 				return free_index;
 			}
 			return k_invalid_index;
@@ -78,9 +84,10 @@ namespace lincore
 			assert(handle != k_invalid_index && "Invalid handle");
 			assert(free_indices_head > 0 && "No resources to release");
 			assert(handle < pool_size_ && "Handle out of range");
-
+			
 			--free_indices_head;
 			free_indices[free_indices_head] = handle;
+			ready_flags[handle] = false;
 			--used_indices;
 		}
 
@@ -94,11 +101,22 @@ namespace lincore
 			return memory.data() + handle * resource_size_;
 		}
 
+		bool IsReady(uint32_t handle) const {
+			if (handle >= pool_size_) return false;
+			return ready_flags[handle];
+		}
+
+		void SetReady(uint32_t handle, bool ready) {
+			if (handle >= pool_size_) return;
+			ready_flags[handle] = ready;
+		}
+
 		static constexpr uint32_t k_invalid_index = UINT32_MAX;
 
 	private:
 		std::vector<uint8_t> memory;
 		std::vector<uint32_t> free_indices;
+		std::vector<bool> ready_flags;
 		uint32_t free_indices_head{ 0 };
 		uint32_t pool_size_{ 0 };
 		uint32_t resource_size_{ 0 };
@@ -155,6 +173,14 @@ namespace lincore
 			return static_cast<const T*>(pool.AccessResource(index));
 		}
 
+		bool IsReady(uint32_t index) const {
+			return pool.IsReady(index);
+		}
+
+		void SetReady(uint32_t index, bool ready) {
+			pool.SetReady(index, ready);
+		}
+
 	private:
 		template<typename U>
 		struct has_pool_index {
@@ -170,6 +196,28 @@ namespace lincore
 		static constexpr bool has_pool_index_v = has_pool_index<U>::value;
 
 		ResourcePool pool;
+	};
+
+
+	struct DeletionQueue
+	{
+		std::deque<std::function<void()>> deletors;
+
+		void PushFunction(std::function<void()>&& function)
+		{
+			deletors.push_back(function);
+		};
+
+		void Flush()
+		{
+			// reverse iterate the deletion queue to execute all the functions
+			for (auto it = deletors.rbegin(); it != deletors.rend(); it++)
+			{
+				(*it)();
+			}
+
+			deletors.clear();
+		}
 	};
 
 } // namespace lincore

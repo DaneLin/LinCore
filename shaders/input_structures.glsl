@@ -8,18 +8,18 @@ layout(set = 0, binding = 0) uniform SceneData {
     vec4 sunlightColor;
 } sceneData;
 
-
 layout(set = 1, binding = 0) uniform GLTFMaterialData {
     vec4 colorFactors;
     vec4 metal_rough_factors;
-    uint colorTexID;      // 改为textureID 
-    uint metalRoughTexID; // 改为textureID
+    uint colorTexID;      
+    uint metalRoughTexID; 
     uint padding[2];
 } materialData;
 
-// 全局bindless texture数组
 layout(set = 2, binding = 11) uniform sampler2D textures[];
 
-// 通过索引访问texture
+
+
+// 通锟斤拷锟斤拷锟斤拷锟斤拷锟斤拷texture
 #define getColorTexture() textures[materialData.colorTexID]
 #define getMetalRoughTexture() textures[materialData.metalRoughTexID]

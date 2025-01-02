@@ -1,25 +1,26 @@
-﻿#include "vk_shaders.h"
+#include "vk_shaders.h"
 // std
 #include <fstream>
 #include <algorithm>
 // external
 #include "spirv_reflect.h"
 #include <spirv-headers/spirv.h>
-// fundation
-#include "fundation/logging.h"
+#include <vulkan/vulkan.h>
+// foundation
+#include "foundation/logging.h"
 #include "graphics/vk_initializers.h"
-#include "graphics/vk_engine.h"
+#include "graphics/vk_device.h"
 
 namespace lincore
 {
 
-	bool vkutil::LoadShader(VkDevice device, const char* file_path, ShaderModule* out_shader_module)
+	bool vkutil::LoadShader(VkDevice device, const char *file_path, ShaderModule *out_shader_module)
 	{
 		std::ifstream file(file_path, std::ios::ate | std::ios::binary);
 
 		if (!file.is_open())
 		{
-			LOGE("Failed to open file: %s", file_path);
+			LOGE("Failed to open file: {}", file_path);
 			return false;
 		}
 
@@ -29,11 +30,11 @@ namespace lincore
 
 		file.seekg(0);
 
-		file.read((char*)buffer.data(), file_size);
+		file.read((char *)buffer.data(), file_size);
 
 		file.close();
 
-		VkShaderModuleCreateInfo create_info = { .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .pNext = nullptr };
+		VkShaderModuleCreateInfo create_info = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .pNext = nullptr};
 		create_info.codeSize = buffer.size() * sizeof(uint32_t);
 		create_info.pCode = buffer.data();
 
@@ -46,12 +47,12 @@ namespace lincore
 	}
 
 	// FNV-1a 32bit hashing algorithm.
-	constexpr uint32_t kFnv1a32(char const* s, std::size_t count)
+	constexpr uint32_t kFnv1a32(char const *s, std::size_t count)
 	{
 		return ((count ? kFnv1a32(s, count - 1) : 2166136261u) ^ s[count]) * 16777619u;
 	}
 
-	uint32_t vkutil::HashDescriptorLayoutInfo(VkDescriptorSetLayoutCreateInfo* info)
+	uint32_t vkutil::HashDescriptorLayoutInfo(VkDescriptorSetLayoutCreateInfo *info)
 	{
 		// put all the data into a string and then hash the string
 		std::stringstream ss;
@@ -61,7 +62,7 @@ namespace lincore
 
 		for (uint32_t i = 0; i < info->bindingCount; ++i)
 		{
-			const VkDescriptorSetLayoutBinding& binding = info->pBindings[i];
+			const VkDescriptorSetLayoutBinding &binding = info->pBindings[i];
 
 			ss << binding.binding;
 			ss << binding.descriptorCount;
@@ -73,9 +74,9 @@ namespace lincore
 		return kFnv1a32(str.c_str(), str.length());
 	}
 
-	void ShaderEffect::AddStage(ShaderModule* shader_module, VkShaderStageFlagBits stage)
+	void ShaderEffect::AddStage(ShaderModule *shader_module, VkShaderStageFlagBits stage)
 	{
-		ShaderStage newStage = { shader_module, stage };
+		ShaderStage newStage = {shader_module, stage};
 		stages_.push_back(newStage);
 	}
 
@@ -84,15 +85,46 @@ namespace lincore
 		uint32_t set_number;
 		VkDescriptorSetLayoutCreateInfo create_info;
 		std::vector<VkDescriptorSetLayoutBinding> bindings;
+		std::vector<VkDescriptorBindingFlags> binding_flags;
+		VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags_create_info;
 	};
 
-	void ShaderEffect::ReflectLayout(VkDevice device, ReflectionOverrides* overrides, int override_count, uint32_t override_constant_size)
+	ShaderEffect::ShaderEffect(GpuDevice *gpu_device, const std::string &name)
+		: gpu_device_(gpu_device), built_layout_(VK_NULL_HANDLE), name_(name)
+	{
+		for (int i = 0; i < 4; i++)
+		{
+			set_layouts_[i] = VK_NULL_HANDLE;
+			set_hashes_[i] = 0;
+			cached_descriptor_sets_[i] = VK_NULL_HANDLE;
+		}
+	}
+
+	ShaderEffect::~ShaderEffect()
+	{
+		if (built_layout_ != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(gpu_device_->device_, built_layout_, nullptr);
+		}
+
+		for (auto layout : set_layouts_)
+		{
+			if (layout != VK_NULL_HANDLE)
+			{
+				vkDestroyDescriptorSetLayout(gpu_device_->device_, layout, nullptr);
+			}
+		}
+	}
+
+	void ShaderEffect::ReflectLayout(uint32_t override_constant_size)
 	{
 		std::vector<DescriptorSetLayoutData> set_Layouts;
 
 		std::vector<VkPushConstantRange> constant_ranges;
+		// 清除现有的绑定
+		bindings_.clear();
 
-		for (auto& s : stages_)
+		for (auto &s : stages_)
 		{
 			SpvReflectShaderModule spv_module;
 			SpvReflectResult result = spvReflectCreateShaderModule(s.module->code.size() * sizeof(uint32_t), s.module->code.data(), &spv_module);
@@ -101,33 +133,26 @@ namespace lincore
 			result = spvReflectEnumerateDescriptorSets(&spv_module, &count, nullptr);
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-			std::vector<SpvReflectDescriptorSet*> sets(count);
+			std::vector<SpvReflectDescriptorSet *> sets(count);
 			result = spvReflectEnumerateDescriptorSets(&spv_module, &count, sets.data());
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
 			for (size_t idx = 0; idx < sets.size(); idx++)
 			{
-				const SpvReflectDescriptorSet& reflectSet = *(sets[idx]);
+				const SpvReflectDescriptorSet &reflectSet = *(sets[idx]);
 
 				DescriptorSetLayoutData layout = {};
-
 				layout.bindings.resize(reflectSet.binding_count);
+				bool is_bindless = false;
 				for (uint32_t i_binding = 0; i_binding < reflectSet.binding_count; i_binding++)
 				{
-					const SpvReflectDescriptorBinding& reflectBinding = *(reflectSet.bindings[i_binding]);
-					VkDescriptorSetLayoutBinding& layoutBinding = layout.bindings[i_binding];
+					const SpvReflectDescriptorBinding &reflectBinding = *(reflectSet.bindings[i_binding]);
+					VkDescriptorSetLayoutBinding &layoutBinding = layout.bindings[i_binding];
 					layoutBinding.binding = reflectBinding.binding;
 					layoutBinding.descriptorType = static_cast<VkDescriptorType>(reflectBinding.descriptor_type);
 
-					for (int ov = 0; ov < override_count; ov++)
-					{
-						if (strcmp(reflectBinding.name, overrides[ov].name) == 0)
-						{
-							layoutBinding.descriptorType = overrides[ov].overriden_type;
-						}
-					}
-
-					layoutBinding.descriptorCount = 1;
+					is_bindless = reflectBinding.binding == kBINDLESS_TEXTURE_BINDING;
+					layoutBinding.descriptorCount = is_bindless ? kMAX_BINDLESS_RESOURCES : 1;
 					for (uint32_t i_dim = 0; i_dim < reflectBinding.array.dims_count; ++i_dim)
 					{
 						layoutBinding.descriptorCount *= reflectBinding.array.dims[i_dim];
@@ -150,11 +175,10 @@ namespace lincore
 			}
 
 			// push constants
-
 			result = spvReflectEnumeratePushConstantBlocks(&spv_module, &count, nullptr);
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-			std::vector<SpvReflectBlockVariable*> pconstants(count);
+			std::vector<SpvReflectBlockVariable *> pconstants(count);
 			result = spvReflectEnumeratePushConstantBlocks(&spv_module, &count, pconstants.data());
 			assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
@@ -173,18 +197,18 @@ namespace lincore
 
 		for (int i = 0; i < 4; i++)
 		{
-			DescriptorSetLayoutData& layout = merged_layouts[i];
+			DescriptorSetLayoutData &layout = merged_layouts[i];
 
 			layout.set_number = i;
 
 			layout.create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 
 			std::unordered_map<int, VkDescriptorSetLayoutBinding> binds;
-			for (auto& s : set_Layouts)
+			for (auto &s : set_Layouts)
 			{
 				if (s.set_number == i)
 				{
-					for (auto& b : s.bindings)
+					for (auto &b : s.bindings)
 					{
 						auto it = binds.find(b.binding);
 						if (it == binds.end())
@@ -206,18 +230,47 @@ namespace lincore
 			}
 
 			// sort the bindings, for hash purposes
-			std::sort(layout.bindings.begin(), layout.bindings.end(), [](VkDescriptorSetLayoutBinding& a, VkDescriptorSetLayoutBinding& b)
-				{ return a.binding < b.binding; });
+			std::sort(layout.bindings.begin(), layout.bindings.end(), [](VkDescriptorSetLayoutBinding &a, VkDescriptorSetLayoutBinding &b)
+					  { return a.binding < b.binding; });
 
 			layout.create_info.bindingCount = static_cast<uint32_t>(layout.bindings.size());
 			layout.create_info.pBindings = layout.bindings.data();
 			layout.create_info.flags = 0;
 			layout.create_info.pNext = 0;
 
+			// Add bindless support if needed
+			bool has_bindless = false;
+			for (const auto &binding : layout.bindings)
+			{
+				if (binding.binding == kBINDLESS_TEXTURE_BINDING)
+				{
+					has_bindless = true;
+					break;
+				}
+			}
+
+			if (has_bindless)
+			{
+				layout.create_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+
+				// Set up binding flags
+				layout.binding_flags.resize(layout.bindings.size(), VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT);
+				layout.binding_flags.back() |= VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+											   VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+
+				layout.binding_flags_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+				layout.binding_flags_create_info.bindingCount = static_cast<uint32_t>(layout.binding_flags.size());
+				layout.binding_flags_create_info.pBindingFlags = layout.binding_flags.data();
+				layout.binding_flags_create_info.pNext = nullptr;
+
+				layout.create_info.pNext = &layout.binding_flags_create_info;
+			}
+
 			if (layout.create_info.bindingCount > 0)
 			{
 				set_hashes_[i] = vkutil::HashDescriptorLayoutInfo(&layout.create_info);
-				vkCreateDescriptorSetLayout(device, &layout.create_info, nullptr, &set_layouts_[i]);
+				vkCreateDescriptorSetLayout(gpu_device_->device_, &layout.create_info, nullptr, &set_layouts_[i]);
+				gpu_device_->SetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (uint64_t)set_layouts_[i], (name_ + "_set_" + std::to_string(i)).c_str());
 			}
 			else
 			{
@@ -232,26 +285,27 @@ namespace lincore
 		pipelineCreateInfo.pushConstantRangeCount = static_cast<uint32_t>(constant_ranges.size());
 		pipelineCreateInfo.pPushConstantRanges = constant_ranges.data();
 
-		std::array<VkDescriptorSetLayout, 4> compactedLayouts;
+		std::array<VkDescriptorSetLayout, 4> compacted_layouts;
 		int s = 0;
 		for (int i = 0; i < 4; i++)
 		{
 			if (set_layouts_[i] != VK_NULL_HANDLE)
 			{
-				compactedLayouts[s] = set_layouts_[i];
+				compacted_layouts[s] = set_layouts_[i];
 				s++;
 			}
 		}
 
 		pipelineCreateInfo.setLayoutCount = s;
-		pipelineCreateInfo.pSetLayouts = compactedLayouts.data();
+		pipelineCreateInfo.pSetLayouts = compacted_layouts.data();
 
-		VK_CHECK(vkCreatePipelineLayout(device, &pipelineCreateInfo, nullptr, &built_layout_));
+		VK_CHECK(vkCreatePipelineLayout(gpu_device_->device_, &pipelineCreateInfo, nullptr, &built_layout_));
+		gpu_device_->SetDebugName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, (uint64_t)built_layout_, (name_ + "_layout").c_str());
 	}
 
-	void ShaderEffect::FillStage(std::vector<VkPipelineShaderStageCreateInfo>& pipeline_stages)
+	void ShaderEffect::FillStage(std::vector<VkPipelineShaderStageCreateInfo> &pipeline_stages)
 	{
-		for (auto& s : stages_)
+		for (auto &s : stages_)
 		{
 			pipeline_stages.push_back(vkinit::PipelineShaderStageCreateInfo(s.stage, s.module->module));
 		}
@@ -260,7 +314,7 @@ namespace lincore
 	VkPipelineBindPoint ShaderEffect::GetBindPoint() const
 	{
 
-		for (const auto& stage : stages_)
+		for (const auto &stage : stages_)
 		{
 			switch (stage.stage)
 			{
@@ -273,36 +327,20 @@ namespace lincore
 		return VK_PIPELINE_BIND_POINT_GRAPHICS; // 默认返回图形管线
 	}
 
-	ShaderEffect::~ShaderEffect()
-	{
-		for (int i = 0; i < 4; i++)
-		{
-			if (set_layouts_[i] != VK_NULL_HANDLE)
-			{
-				vkDestroyDescriptorSetLayout(VulkanEngine::Get().gpu_device_.device_, set_layouts_[i], nullptr);
-			}
-		}
-	}
-
-	void ShaderDescriptorBinder::BindBuffer(const char* name, const VkDescriptorBufferInfo& BufferInfo)
+	void ShaderEffect::BindBuffer(const char *name, const VkDescriptorBufferInfo &BufferInfo)
 	{
 		BindDynamicBuffer(name, -1, BufferInfo);
 	}
 
-	void ShaderDescriptorBinder::BindImage(const char* name, const VkDescriptorImageInfo& image_info)
+	void ShaderEffect::BindImage(const char *name, const VkDescriptorImageInfo &image_info)
 	{
-		if (shaders_ == nullptr)
-		{
-			LOGE("No shader set");
-			return;
-		}
 
-		auto found = shaders_->bindings_.find(name);
-		if (found != shaders_->bindings_.end())
+		auto found = bindings_.find(name);
+		if (found != bindings_.end())
 		{
-			const ShaderEffect::ReflectedBinding& bind = (*found).second;
+			const ShaderEffect::ReflectedBinding &bind = (*found).second;
 
-			for (auto& write : image_writes_)
+			for (auto &write : image_writes_)
 			{
 				if (write.dst_binding == bind.binding && write.dst_set == bind.set)
 				{
@@ -326,20 +364,14 @@ namespace lincore
 		}
 	}
 
-	void ShaderDescriptorBinder::BindDynamicBuffer(const char* name, uint32_t offset, const VkDescriptorBufferInfo& BufferInfo)
+	void ShaderEffect::BindDynamicBuffer(const char *name, uint32_t offset, const VkDescriptorBufferInfo &BufferInfo)
 	{
-		if (shaders_ == nullptr)
+		auto found = bindings_.find(name);
+		if (found != bindings_.end())
 		{
-			LOGE("No shader set");
-			return;
-		}
+			const ShaderEffect::ReflectedBinding &bind = (*found).second;
 
-		auto found = shaders_->bindings_.find(name);
-		if (found != shaders_->bindings_.end())
-		{
-			const ShaderEffect::ReflectedBinding& bind = (*found).second;
-
-			for (auto& write : buffer_writes_)
+			for (auto &write : buffer_writes_)
 			{
 				if (write.dst_binding == bind.binding && write.dst_set == bind.set)
 				{
@@ -374,157 +406,204 @@ namespace lincore
 		}
 	}
 
-	void ShaderDescriptorBinder::ApplyBinds(VkCommandBuffer cmd, VkPipelineLayout layout)
+	void ShaderEffect::ApplyBinds(VkCommandBuffer cmd)
 	{
 		for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i)
 		{
-			if (cached_descriptor_sets_[i] != VK_NULL_HANDLE)
+			// 不绑定bindless和空描述符集
+			if (cached_descriptor_sets_[i] != VK_NULL_HANDLE && i != kBINDLESS_TEXTURE_SET_ID)
 			{
-				vkCmdBindDescriptorSets(cmd, shaders_->GetBindPoint(), shaders_->built_layout_, static_cast<uint32_t>(i), 1, &cached_descriptor_sets_[i], set_offsets_[i].count, set_offsets_[i].offset.data());
+				vkCmdBindDescriptorSets(cmd, GetBindPoint(), built_layout_, static_cast<uint32_t>(i), 1, &cached_descriptor_sets_[i], set_offsets_[i].count, set_offsets_[i].offset.data());
 			}
 		}
 	}
 
-	void ShaderDescriptorBinder::BuildSets(VkDevice device, DescriptorAllocatorGrowable& allocator)
+	void ShaderEffect::BuildSets(DescriptorAllocatorGrowable *allocator)
 	{
 		std::array<std::vector<VkWriteDescriptorSet>, 4> writes{};
 
-		std::sort(buffer_writes_.begin(), buffer_writes_.end(), [](BufferWriteDescriptor& a, BufferWriteDescriptor& b)
+		std::sort(buffer_writes_.begin(), buffer_writes_.end(), [](BufferWriteDescriptor &a, BufferWriteDescriptor &b)
+				  {
+			if (b.dst_binding == a.dst_binding) {
+				return a.dst_set < b.dst_set;
+			}
+			else {
+				return a.dst_binding < b.dst_binding;
+			} });
+
+		// reset the dynamic offsets
+		for (auto &s : set_offsets_)
+		{
+			s.count = 0;
+		}
+
+		// clear cached descriptor sets
+		for (auto &set : cached_descriptor_sets_)
+		{
+			set = VK_NULL_HANDLE;
+		}
+
+		for (BufferWriteDescriptor &w : buffer_writes_)
+		{
+			uint32_t set = w.dst_set;
+			VkWriteDescriptorSet write = vkinit::WriteDescriptorBuffer(w.descriptor_type, VK_NULL_HANDLE, &w.BufferInfo, w.dst_binding);
+
+			writes[set].push_back(write);
+
+			// dynamic offsets
+			if (w.descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
+				w.descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
 			{
-				if (b.dst_binding == a.dst_binding) {
-					return a.dst_set < b.dst_set;
-				}
-				else {
-					return a.dst_binding < b.dst_binding;
-				} });
+				DynOffset &offsetSet = set_offsets_[set];
+				offsetSet.offset[offsetSet.count] = w.dynamic_offset;
+				offsetSet.count++;
+			}
+		}
 
-				// reset the dynamic offsets
-				for (auto& s : set_offsets_)
+		for (ImageWriteDescriptor &w : image_writes_)
+		{
+			uint32_t set = w.dst_set;
+			VkWriteDescriptorSet write = vkinit::WriteDescriptorImage(w.descriptor_type, VK_NULL_HANDLE, &w.image_info, w.dst_binding);
+
+			writes[set].push_back(write);
+		}
+
+		for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i)
+		{
+			if (writes[i].size() > 0)
+			{
+				if (cached_descriptor_sets_[i] == VK_NULL_HANDLE)
 				{
-					s.count = 0;
-				}
-
-				for (BufferWriteDescriptor& w : buffer_writes_)
-				{
-					uint32_t set = w.dst_set;
-					VkWriteDescriptorSet write = vkinit::WriteDescriptorBuffer(w.descriptor_type, VK_NULL_HANDLE, &w.BufferInfo, w.dst_binding);
-
-					writes[set].push_back(write);
-
-					// dynamic offsets
-					if (w.descriptor_type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC ||
-						w.descriptor_type == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
+					// alloc
+					auto layout = set_layouts_[i];
+					VkDescriptorSet new_descriptor;
+					if (allocator)
 					{
-						DynOffset& offsetSet = set_offsets_[set];
-						offsetSet.offset[offsetSet.count] = w.dynamic_offset;
-						offsetSet.count++;
+						new_descriptor = allocator->Allocate(gpu_device_->device_, layout);
 					}
-				}
-
-				for (ImageWriteDescriptor& w : image_writes_)
-				{
-					uint32_t set = w.dst_set;
-					VkWriteDescriptorSet write = vkinit::WriteDescriptorImage(w.descriptor_type, VK_NULL_HANDLE, &w.image_info, w.dst_binding);
-
-					writes[set].push_back(write);
-				}
-
-				for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i)
-				{
-					if (writes[i].size() > 0)
+					else
 					{
-						if (cached_descriptor_sets_[i] == VK_NULL_HANDLE)
-						{
-							// alloc
-							auto layout = shaders_->set_layouts_[i];
-
-							VkDescriptorSet new_descriptor = allocator.Allocate(device, layout);
-
-							for (auto& w : writes[i])
-							{
-								w.dstSet = new_descriptor;
-							}
-
-							vkUpdateDescriptorSets(device, static_cast<uint32_t>(writes[i].size()), writes[i].data(), 0, nullptr);
-
-							cached_descriptor_sets_[i] = new_descriptor;
-						}
+						new_descriptor = gpu_device_->descriptor_allocator_.Allocate(gpu_device_->device_, layout);
 					}
-				}
-	}
 
-	void ShaderDescriptorBinder::SetShader(ShaderEffect* new_shader)
-	{
-		// invalidate nonequal layouts
-		if (shaders_ && shaders_ != new_shader)
-		{
-			for (size_t i = 0; i < cached_descriptor_sets_.size(); i++)
-			{
-				if (new_shader->set_hashes_[i] != shaders_->set_hashes_[i])
-				{
-					cached_descriptor_sets_[i] = VK_NULL_HANDLE;
-				}
-				else if (new_shader->set_hashes_[i] == 0)
-				{
-					cached_descriptor_sets_[i] = VK_NULL_HANDLE;
+					for (auto &w : writes[i])
+					{
+						w.dstSet = new_descriptor;
+					}
+
+					vkUpdateDescriptorSets(gpu_device_->device_, static_cast<uint32_t>(writes[i].size()), writes[i].data(), 0, nullptr);
+					gpu_device_->SetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)new_descriptor, "ShaderEffect");
+					cached_descriptor_sets_[i] = new_descriptor;
 				}
 			}
 		}
-		else
+	}
+
+	ShaderManager::~ShaderManager()
+	{
+		for (auto &[path, module] : module_cache_)
 		{
-			for (size_t i = 0; i < cached_descriptor_sets_.size(); i++)
-			{
-				cached_descriptor_sets_[i] = VK_NULL_HANDLE;
-			}
+			delete module;
 		}
+		module_cache_.clear();
 
-		shaders_ = new_shader;
-	}
-
-	ShaderEffect* ShaderCache::GetShaderEffect()
-	{
-		ShaderEffect* result = new ShaderEffect();
-		shader_effect_cache_.push_back(result);
-		return result;
-	}
-
-	ShaderEffect* ShaderCache::GetShaderEffect(const std::string& path, VkShaderStageFlagBits stage)
-	{
-		ShaderEffect* result = new ShaderEffect();
-		result->AddStage(GetShader(path), stage);
-		shader_effect_cache_.push_back(result);
-		return result;
-	}
-
-	ShaderModule* ShaderCache::GetShader(const std::string& path)
-	{
-		auto it = module_cache_.find(path);
-		if (it == module_cache_.end())
-		{
-			ShaderModule newShader;
-
-			bool result = vkutil::LoadShader(VulkanEngine::Get().gpu_device_.device_, path.c_str(), &newShader);
-			if (!result)
-			{
-				LOGE("Error when compiling shader {}", path);
-				return nullptr;
-			}
-
-			module_cache_[path] = newShader;
-		}
-		return &module_cache_[path];
-	}
-
-	void ShaderCache::Clear()
-	{
-		for (auto& [k, v] : module_cache_)
-		{
-			vkDestroyShaderModule(VulkanEngine::Get().gpu_device_.device_, v.module, nullptr);
-		}
-		for (ShaderEffect* effect : shader_effect_cache_)
+		for (auto *effect : shader_effect_cache_)
 		{
 			delete effect;
 		}
-		module_cache_.clear();
+		shader_effect_cache_.clear();
 	}
+
+	void ShaderManager::Init(GpuDevice *gpu_device)
+	{
+		gpu_device_ = gpu_device;
+	}
+
+	void ShaderManager::Shutdown()
+	{
+		// 清理shader effects
+		for (auto *effect : shader_effect_cache_)
+		{
+			delete effect;
+		}
+		shader_effect_cache_.clear();
+
+		// 清理shader modules
+		for (auto &[path, module] : module_cache_)
+		{
+			if (module->module != VK_NULL_HANDLE)
+			{
+				vkDestroyShaderModule(gpu_device_->device_, module->module, nullptr);
+				module->module = VK_NULL_HANDLE;
+			}
+			delete module;
+		}
+		module_cache_.clear();
+
+		gpu_device_ = nullptr;
+	}
+
+	ShaderEffect *ShaderManager::GetShaderEffect(std::initializer_list<std::string> file_paths, const std::string &name)
+	{
+		ShaderEffect *effect = new ShaderEffect(gpu_device_, name);
+
+		for (const auto &path : file_paths)
+		{
+			// 加载shader module
+			ShaderModule *shader_module = GetShader(path);
+			if (!shader_module)
+			{
+				LOGE("Failed to load shader module: {}", path.c_str());
+				delete effect; // 清理已创建的effect
+				return nullptr;
+			}
+
+			// 使用SPIR-V反射获取shader stage
+			SpvReflectShaderModule spv_module;
+			SpvReflectResult result = spvReflectCreateShaderModule(
+				shader_module->code.size() * sizeof(uint32_t),
+				shader_module->code.data(),
+				&spv_module);
+
+			if (result != SPV_REFLECT_RESULT_SUCCESS)
+			{
+				delete effect;
+				return nullptr;
+			}
+
+			// 从SPIR-V反射中获取stage
+			VkShaderStageFlagBits stage = static_cast<VkShaderStageFlagBits>(spv_module.shader_stage);
+
+			// 清理反射数据
+			spvReflectDestroyShaderModule(&spv_module);
+
+			// 添加shader stage到同一个effect中
+			effect->AddStage(shader_module, stage);
+		}
+
+		shader_effect_cache_.push_back(effect);
+		return effect;
+	}
+
+	ShaderModule *ShaderManager::GetShader(const std::string &path)
+	{
+		// 检查缓存
+		auto it = module_cache_.find(path);
+		if (it != module_cache_.end())
+		{
+			return it->second;
+		}
+
+		// 创建新的shader module
+		auto *shader_module = new ShaderModule();
+		if (!vkutil::LoadShader(gpu_device_->device_, path.c_str(), shader_module))
+		{
+			delete shader_module;
+			return nullptr;
+		}
+
+		module_cache_[path] = shader_module;
+		return shader_module;
+	}
+
 }

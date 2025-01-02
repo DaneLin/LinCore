@@ -3,112 +3,33 @@
 #include "VkBootstrap.h"
 #include "TaskScheduler.h"
 // lincore
-#include "fundation/config.h"
+#include "foundation/config.h"
 #include "graphics/vk_descriptors.h"
 #include "graphics/vk_device.h"
-#include "graphics/vk_loader.h"
 #include "graphics/camera.h"
 #include "graphics/vk_shaders.h"
 #include "graphics/vk_types.h"
 #include "graphics/vk_initializers.h"
+#include "graphics/imgui_layer.h"
+
+
+#include "graphics/scene/scene_graph.h"
+#include "graphics/renderer/passes/sky_pass.h"
+#include "graphics/renderer/passes/culling_pass.h"
+#include "graphics/renderer/passes/mesh_pass.h"
 
 namespace lincore
 {
-	struct ComputePushConstants {
-		glm::vec4 data1;
-		glm::vec4 data2;
-		glm::vec4 data3;
-		glm::vec4 data4;
-	};
+	// forward declarations
+	class GpuDevice;
+	class CommandBuffer;
+	class ImGuiLayer;
+	class BackgroundRenderer;
 
-	struct ComputeEffect {
-		const char* name;
-		VkPipeline pipeline;
-		ShaderDescriptorBinder descriptor_binder;
-		VkPipelineLayout layout;
-		ComputePushConstants data;
-	};
-
-	struct GLTFMetallic_Roughness {
-		MaterialPipeline opaque_pipeline;
-		MaterialPipeline transparent_pipeline;
-		VkDescriptorSetLayout material_layout;
-
-		struct MaterialConstants {
-			glm::vec4 color_factors;
-			glm::vec4 metal_rough_factors;
-			// padding ,we need it anyway for uniform buffers
-			uint32_t color_tex_id;
-			uint32_t metal_rought_tex_id;
-			uint32_t pad1;
-			uint32_t pad2;
-			glm::vec4 extra[13];
-		};
-
-		struct MaterialResources {
-			TextureHandle color_image;
-			VkSampler color_sampler;
-			TextureHandle metal_rough_image;
-			VkSampler metal_rought_sampler;
-			BufferHandle data_buffer;
-			uint32_t data_buffer_offset;
-		};
-		VulkanEngine* engine;
-
-		DescriptorWriter writer;
-
-		void BuildPipelines(VulkanEngine* engine);
-
-		void ClearResources();
-
-		MaterialInstance WriteMaterial(MeshPassType pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptor_allocator);
-	};
-
-	struct RenderObject {
-		uint32_t index_count;
-
-		uint32_t first_index;
-
-		//VkBuffer index_buffer;
-		BufferHandle index_buffer_handle;
-
-		size_t indirect_draw_index;
-
-		MaterialInstance* material;
-
-		Bounds bounds;
-
-		glm::mat4 transform;
-
-		VkDeviceAddress vertex_buffer_address;
-	};
-
-	struct DrawContext {
-		std::vector<RenderObject> opaque_surfaces;
-
-		std::vector<RenderObject> transparent_surfaces;
-	};
-
-	struct MeshNode : public Node {
-		std::shared_ptr<MeshAsset> mesh;
-
-		virtual void Draw(const glm::mat4& top_matrix, DrawContext& ctx) override;
-	};
-
-	struct GlobalMeshBuffer {
-		BufferHandle vertex_buffer_handle;
-		BufferHandle index_buffer_handle;
-		BufferHandle indirect_command_buffer_handle;
-
-		std::vector<Vertex> vertex_data;
-		std::vector<uint32_t> index_data;
-		std::vector<VkDrawIndexedIndirectCommand> indirect_commands;
-
-		void UploadToGPU(VulkanEngine* engine);
-	};
-
-	class GpuDevice;  // Forward declaration
-
+	/**
+	 * @brief 引擎统计信息
+	 * 包含帧时间、三角形计数、绘制调用计数和场景更新时间
+	 */
 	struct EngineStats {
 		float frame_time;
 
@@ -121,20 +42,6 @@ namespace lincore
 		float mesh_draw_time;
 	};
 
-	struct RenderInfo
-	{
-		MaterialPipeline* last_pipeline = nullptr;
-		MaterialInstance* last_material = nullptr;
-		VkBuffer last_index_buffer = VK_NULL_HANDLE;
-
-		void Clear()
-		{
-			last_pipeline = nullptr;
-			last_material = nullptr;
-			last_index_buffer = VK_NULL_HANDLE;
-		}
-	};
-
 	class VulkanEngine {
 	public:
 
@@ -143,7 +50,7 @@ namespace lincore
 		bool freeze_rendering_{ false };
 		bool resize_requested_{ false };
 
-		VkExtent2D window_extent_{ 1700 , 900 };
+		VkExtent2D window_extent_{ 1920 , 1080 };
 
 		struct SDL_Window* window_{ nullptr };
 
@@ -151,31 +58,24 @@ namespace lincore
 
 		VkPipelineLayout mesh_pipeline_layout_;
 
-		std::vector<ComputeEffect> background_effects_;
 		int current_background_effect_{ 0 };
 		int current_scene_{ 0 };
-
-		MaterialInstance dafault_data_;
-
-		GLTFMetallic_Roughness metal_rough_material_;
 
 		DrawContext main_draw_context_;
 
 		Camera main_camera_;
 
-		std::unordered_map <std::string, std::shared_ptr<LoadedGLTF>> loaded_scenes_;
+		std::shared_ptr<scene::SceneGraph> scene_graph_;
 
 		EngineStats engine_stats_;
 
-		ShaderCache shader_cache_;
+		SkyBackgroundPass sky_background_pass_;
+		CullingPass culling_pass_;
+		MeshPass mesh_pass_;
 
-		enki::TaskScheduler render_task_scheduler_;
-		enki::TaskScheduler io_task_scheduler_;
-		RunPinnedTaskLoopTask run_pinned_task;
-		AsyncLoadTask async_load_task;
-		AsyncLoader async_loader_;
+		ImGuiLayer imgui_layer_;
 
-		GlobalMeshBuffer global_mesh_buffer_;
+		BufferHandle global_scene_data_buffer_;
 
 		GpuDevice gpu_device_;
 
@@ -190,19 +90,10 @@ namespace lincore
 		//run main loop
 		void Run();
 
-		GPUMeshBuffers UploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 		void UpdateScene();
-		void DrawObject(CommandBuffer* cmd, const RenderObject& r, RenderInfo& render_info);
 
 	private:
-		void InitPipelines();
-		void InitBackgounrdPipelines();
-		void InitImGui();
 		void InitDefaultData();
-		void InitTaskSystem();
-		void DrawBackground(CommandBuffer* cmd);
-		void DrawImGui(CommandBuffer* cmd, VkImageView target_image_view);
-		void DrawGeometry(CommandBuffer* cmd);
 		const std::string GetAssetPath(const std::string& path) const;
 	};
 

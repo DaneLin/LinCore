@@ -1,4 +1,5 @@
 ﻿#include "graphics/vk_initializers.h"
+#include "vk_initializers.h"
 
 //> init_cmd
 VkCommandPoolCreateInfo vkinit::CommandPoolCreateInfo(uint32_t queue_family_index,
@@ -175,6 +176,20 @@ VkRenderingInfo vkinit::RenderingInfo(VkExtent2D renderExtent, VkRenderingAttach
 
 	return render_info;
 }
+
+VkRenderingInfo vkinit::RenderingInfo(VkExtent2D render_extent, std::vector<VkRenderingAttachmentInfo>& color_attachments, VkRenderingAttachmentInfo * depth_attachment)
+{
+	VkRenderingInfo render_info{};
+	render_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	render_info.pNext = nullptr;
+
+	render_info.renderArea = VkRect2D{ VkOffset2D{0, 0}, render_extent };
+	render_info.layerCount = 1;
+	render_info.colorAttachmentCount = color_attachments.size();
+	render_info.pColorAttachments = color_attachments.data();
+	render_info.pDepthAttachment = depth_attachment;
+	return render_info;
+}
 //< render_info
 //> subresource
 VkImageSubresourceRange vkinit::ImageSubresourceRange(VkImageAspectFlags aspect_mask)
@@ -331,5 +346,15 @@ VkPipelineShaderStageCreateInfo vkinit::PipelineShaderStageCreateInfo(VkShaderSt
 	info.module = shader_module;
 	// the entry point of the shader
 	info.pName = entry;
+	return info;
+}
+VkSamplerCreateInfo vkinit::SamplerCreateInfo(VkFilter magFilter, VkFilter minFilter)
+{
+	VkSamplerCreateInfo info = {};
+	info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	info.pNext = nullptr;
+	info.flags = 0;
+	info.magFilter = magFilter;
+	info.minFilter = minFilter;
 	return info;
 }

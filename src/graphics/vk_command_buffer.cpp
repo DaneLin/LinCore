@@ -1,7 +1,7 @@
 ﻿#include "vk_command_buffer.h"
 // lincore
 #include "graphics/vk_engine.h"
-#include "fundation/logging.h"
+#include "foundation/logging.h"
 
 namespace lincore
 {
@@ -22,7 +22,7 @@ namespace lincore
 	{
 		if (!is_recording_)
 		{
-			VkCommandBufferBeginInfo begin_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+			VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 			begin_info.flags = flags;
 
 			VK_CHECK(vkBeginCommandBuffer(vk_command_buffer_, &begin_info));
@@ -30,11 +30,11 @@ namespace lincore
 		}
 	}
 
-	void CommandBuffer::BeginSecondary(const CommandBufferInheritanceInfo& inheritance_info)
+	void CommandBuffer::BeginSecondary(const CommandBufferInheritanceInfo &inheritance_info)
 	{
 		if (!is_recording_ && level_ == CommandBufferLevel::kSecondary)
 		{
-			VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO };
+			VkCommandBufferInheritanceRenderingInfo inheritance_rendering_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO};
 			inheritance_rendering_info.rasterizationSamples = VkSampleCountFlagBits(inheritance_info.samples);
 			inheritance_rendering_info.colorAttachmentCount = inheritance_info.color_attachment_count;
 			inheritance_rendering_info.pColorAttachmentFormats = inheritance_info.color_formats;
@@ -48,17 +48,15 @@ namespace lincore
 				inheritance_rendering_info.stencilAttachmentFormat = inheritance_info.depth_format;
 			}
 
-
-			VkCommandBufferInheritanceInfo inheritance{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO };
+			VkCommandBufferInheritanceInfo inheritance{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO};
 			inheritance.pNext = &inheritance_rendering_info;
 			inheritance.renderPass = VK_NULL_HANDLE;
 			inheritance.subpass = 0;
 			inheritance.framebuffer = VK_NULL_HANDLE;
 			inheritance.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_CLIPPING_INVOCATIONS_BIT;
 
-			VkCommandBufferBeginInfo begin_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT };
+			VkCommandBufferBeginInfo begin_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT};
 			begin_info.pInheritanceInfo = &inheritance;
-
 
 			VK_CHECK(vkBeginCommandBuffer(vk_command_buffer_, &begin_info));
 			is_recording_ = true;
@@ -86,7 +84,7 @@ namespace lincore
 		state_ = {};
 	}
 
-	void CommandBuffer::BeginRendering(const VkRenderingInfo& render_info)
+	void CommandBuffer::BeginRendering(const VkRenderingInfo &render_info)
 	{
 		// 检查是否已处于渲染范围内，避免重复调用
 		if (state_.is_rendering)
@@ -131,7 +129,7 @@ namespace lincore
 
 	void CommandBuffer::BindVertexBuffer(VkBuffer buffer, uint32_t binding, uint32_t offset)
 	{
-		VkDeviceSize offsets[] = { offset };
+		VkDeviceSize offsets[] = {offset};
 		vkCmdBindVertexBuffers(vk_command_buffer_, binding, 1, &buffer, offsets);
 	}
 
@@ -140,7 +138,7 @@ namespace lincore
 		vkCmdBindIndexBuffer(vk_command_buffer_, buffer, offset, index_type);
 	}
 
-	void CommandBuffer::BindDescriptorSets(VkPipelineBindPoint bind_point, VkPipelineLayout layout, uint32_t first_set, uint32_t set_count, const VkDescriptorSet* sets, uint32_t dynamic_offset_count, const uint32_t* dynamic_offsets)
+	void CommandBuffer::BindDescriptorSets(VkPipelineBindPoint bind_point, VkPipelineLayout layout, uint32_t first_set, uint32_t set_count, const VkDescriptorSet *sets, uint32_t dynamic_offset_count, const uint32_t *dynamic_offsets)
 	{
 		vkCmdBindDescriptorSets(vk_command_buffer_, bind_point, layout, first_set, set_count, sets, dynamic_offset_count, dynamic_offsets);
 	}
@@ -165,7 +163,7 @@ namespace lincore
 		vkCmdDrawIndexedIndirect(vk_command_buffer_, buffer, offset, count, stride);
 	}
 
-	void CommandBuffer::ExecuteCommands(const VkCommandBuffer* secondary_cmd_bufs, uint32_t count)
+	void CommandBuffer::ExecuteCommands(const VkCommandBuffer *secondary_cmd_bufs, uint32_t count)
 	{
 		if (level_ == CommandBufferLevel::kPrimary)
 		{
@@ -180,34 +178,34 @@ namespace lincore
 
 	void CommandBuffer::SetViewport(float x, float y, float width, float height, float min_depth, float max_depth)
 	{
-		VkViewport viewport{ .x = x, .y = y, .width = width, .height = height, .minDepth = min_depth, .maxDepth = max_depth };
+		VkViewport viewport{.x = x, .y = y, .width = width, .height = height, .minDepth = min_depth, .maxDepth = max_depth};
 		vkCmdSetViewport(vk_command_buffer_, 0, 1, &viewport);
 		state_.viewport = viewport;
 	}
 
 	void CommandBuffer::SetScissor(int32_t x, int32_t y, uint32_t width, uint32_t height)
 	{
-		VkRect2D scissor{ .offset = {x, y}, .extent = {width, height} };
+		VkRect2D scissor{.offset = {x, y}, .extent = {width, height}};
 		vkCmdSetScissor(vk_command_buffer_, 0, 1, &scissor);
 		state_.scissor = scissor;
 	}
 
 	void CommandBuffer::Clear(float r, float g, float b, float a, uint32_t attachment_index)
 	{
-		clear_values_[attachment_index].color = { r,g,b,a };
+		clear_values_[attachment_index].color = {r, g, b, a};
 	}
 
 	void CommandBuffer::ClearDepthStencil(float depth, uint8_t stencil)
 	{
-		clear_values_[kDepth_Stencil_Clear_Index].depthStencil = { depth, stencil };
+		clear_values_[kDepth_Stencil_Clear_Index].depthStencil = {depth, stencil};
 	}
 
-	void CommandBuffer::PipelineBarrier2(const VkDependencyInfo& dep_info)
+	void CommandBuffer::PipelineBarrier2(const VkDependencyInfo &dep_info)
 	{
 		vkCmdPipelineBarrier2(vk_command_buffer_, &dep_info);
 	}
 
-	void CommandBuffer::UploadTextureData(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+	void CommandBuffer::UploadTextureData(void *data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
 	{
 		// TODO: replace with resource manager
 		/*TextureHandle image = CreateImage(data, size, format, usage, mipmapped);
@@ -216,13 +214,13 @@ namespace lincore
 
 	void CommandBuffer::TransitionImage(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t src_queue_family_index, uint32_t dst_queue_family_index)
 	{
-		VkImageMemoryBarrier2 barrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+		VkImageMemoryBarrier2 barrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
 		barrier.oldLayout = old_layout;
 		barrier.newLayout = new_layout;
 		barrier.image = image;
 		barrier.srcQueueFamilyIndex = src_queue_family_index;
 		barrier.dstQueueFamilyIndex = dst_queue_family_index;
-		barrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+		barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
 		if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL || new_layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
 		{
 			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -261,7 +259,7 @@ namespace lincore
 			break;
 		}
 
-		VkDependencyInfo dependency_info{ .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+		VkDependencyInfo dependency_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
 		dependency_info.imageMemoryBarrierCount = 1;
 		dependency_info.pImageMemoryBarriers = &barrier;
 
@@ -270,7 +268,7 @@ namespace lincore
 
 	void CommandBuffer::CopyImageToImage(VkImage source, VkImage destination, VkExtent2D src_size, VkExtent2D dst_size)
 	{
-		VkImageBlit2 blit_region{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
+		VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
 
 		blit_region.srcOffsets[1].x = src_size.width;
 		blit_region.srcOffsets[1].y = src_size.height;
@@ -290,7 +288,7 @@ namespace lincore
 		blit_region.dstSubresource.layerCount = 1;
 		blit_region.dstSubresource.mipLevel = 0;
 
-		VkBlitImageInfo2 blitInfo{ .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr };
+		VkBlitImageInfo2 blitInfo{.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr};
 		blitInfo.dstImage = destination;
 		blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 		blitInfo.srcImage = source;
@@ -311,7 +309,7 @@ namespace lincore
 			half_size.width /= 2;
 			half_size.height /= 2;
 
-			VkImageMemoryBarrier2 image_barrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, .pNext = nullptr };
+			VkImageMemoryBarrier2 image_barrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, .pNext = nullptr};
 			image_barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 			image_barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
 			image_barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -325,7 +323,7 @@ namespace lincore
 			image_barrier.subresourceRange.baseMipLevel = mip;
 			image_barrier.image = image;
 
-			VkDependencyInfo depInfo{ .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .pNext = nullptr };
+			VkDependencyInfo depInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .pNext = nullptr};
 			depInfo.imageMemoryBarrierCount = 1;
 			depInfo.pImageMemoryBarriers = &image_barrier;
 
@@ -333,7 +331,7 @@ namespace lincore
 
 			if (mip < mip_levels - 1)
 			{
-				VkImageBlit2 blit_region{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
+				VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
 				blit_region.srcOffsets[1].x = image_size.width;
 				blit_region.srcOffsets[1].y = image_size.height;
 				blit_region.srcOffsets[1].z = 1;
@@ -352,7 +350,7 @@ namespace lincore
 				blit_region.dstSubresource.layerCount = 1;
 				blit_region.dstSubresource.mipLevel = mip + 1;
 
-				VkBlitImageInfo2 blitInfo{ .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr };
+				VkBlitImageInfo2 blitInfo{.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr};
 				blitInfo.dstImage = image;
 				blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 				blitInfo.srcImage = image;
@@ -370,12 +368,12 @@ namespace lincore
 		TransitionImage(image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 	}
 
-	void CommandBuffer::PushConstants(VkPipelineLayout layout, VkShaderStageFlags stage_flags, uint32_t offset, uint32_t size, const void* values)
+	void CommandBuffer::PushConstants(VkPipelineLayout layout, VkShaderStageFlags stage_flags, uint32_t offset, uint32_t size, const void *values)
 	{
 		vkCmdPushConstants(vk_command_buffer_, layout, stage_flags, offset, size, values);
 	}
 
-	void CommandBufferManager::Init(GpuDevice* gpu_device, uint32_t num_threads)
+	void CommandBufferManager::Init(GpuDevice *gpu_device, uint32_t num_threads)
 	{
 		gpu_device_ = gpu_device;
 		num_pools_per_frame = num_threads;
@@ -386,7 +384,7 @@ namespace lincore
 		used_buffers_.resize(total_pools, 0);
 		used_secondary_buffers_.resize(total_pools, 0);
 
-		VkCommandPoolCreateInfo pool_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+		VkCommandPoolCreateInfo pool_info{.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
 		pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 		pool_info.queueFamilyIndex = gpu_device_->queue_indices_.graphics_family;
 
@@ -401,15 +399,17 @@ namespace lincore
 
 		for (uint32_t i = 0; i < total_primary_buffers; ++i)
 		{
-			VkCommandBufferAllocateInfo alloc_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+			VkCommandBufferAllocateInfo alloc_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
 
 			alloc_info.commandPool = command_pools_[i / MAX_COMMAND_BUFFERS_PER_THREAD];
 			alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 			alloc_info.commandBufferCount = 1;
 
-			CommandBuffer& cmd = command_buffers_[i];
+			CommandBuffer &cmd = command_buffers_[i];
 			vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &cmd.vk_command_buffer_);
 			cmd.Init(CommandBufferLevel::kPrimary);
+
+			gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd.vk_command_buffer_, "Primary Command Buffer" + i);
 		}
 
 		// Create secondary command buffers
@@ -418,52 +418,56 @@ namespace lincore
 
 		for (uint32_t i = 0; i < total_secondary_buffers; ++i)
 		{
-			VkCommandBufferAllocateInfo alloc_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+			VkCommandBufferAllocateInfo alloc_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
 			alloc_info.commandPool = command_pools_[i / MAX_SECONDARY_COMMAND_BUFFERS];
 			alloc_info.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
 			alloc_info.commandBufferCount = 1;
 
-			CommandBuffer& cmd = secondary_command_buffers_[i];
+			CommandBuffer &cmd = secondary_command_buffers_[i];
 			VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &cmd.vk_command_buffer_));
 			cmd.Init(CommandBufferLevel::kSecondary);
+			gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd.vk_command_buffer_, "Secondary Command Buffer" + i);
 		}
 
 		// Initialize immediate submit resources
 		VK_CHECK(vkCreateCommandPool(gpu_device_->device_, &pool_info, nullptr, &immediate_pool_));
 
-		VkCommandBufferAllocateInfo alloc_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+		VkCommandBufferAllocateInfo alloc_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
 		alloc_info.commandPool = immediate_pool_;
 		alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		alloc_info.commandBufferCount = 1;
 
 		VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &immediate_buffer_.vk_command_buffer_));
 		immediate_buffer_.Init(CommandBufferLevel::kPrimary);
+		gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)immediate_buffer_.vk_command_buffer_, "Immediate Command Buffer");
 
-		VkFenceCreateInfo fence_info{ .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+		VkFenceCreateInfo fence_info{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
 		fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 		VK_CHECK(vkCreateFence(gpu_device_->device_, &fence_info, nullptr, &immediate_fence_));
 
 		// Initialize transfer queue resources
-		VkCommandPoolCreateInfo transfer_pool_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+		VkCommandPoolCreateInfo transfer_pool_info{.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
 		transfer_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 		transfer_pool_info.queueFamilyIndex = gpu_device_->queue_indices_.transfer_family;
 
 		VK_CHECK(vkCreateCommandPool(gpu_device_->device_, &transfer_pool_info, nullptr, &transfer_pool_));
+		gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_POOL, (uint64_t)transfer_pool_, "Transfer Command Pool");
 
-		VkCommandBufferAllocateInfo transfer_alloc_info{ .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
+		VkCommandBufferAllocateInfo transfer_alloc_info{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
 		transfer_alloc_info.commandPool = transfer_pool_;
 		transfer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 		transfer_alloc_info.commandBufferCount = 1;
 
 		VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &transfer_alloc_info, &transfer_buffer_.vk_command_buffer_));
 		transfer_buffer_.Init(CommandBufferLevel::kPrimary);
+		gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)transfer_buffer_.vk_command_buffer_, "Transfer Command Buffer");
 
 		VK_CHECK(vkCreateFence(gpu_device_->device_, &fence_info, nullptr, &transfer_fence_));
 	}
 
 	void CommandBufferManager::Shutdown()
 	{
-		for (VkCommandPool& pool : command_pools_)
+		for (VkCommandPool &pool : command_pools_)
 		{
 			vkDestroyCommandPool(gpu_device_->device_, pool, nullptr);
 		}
@@ -486,14 +490,14 @@ namespace lincore
 		}
 	}
 
-	CommandBuffer* CommandBufferManager::GetCommandBuffer(uint32_t frame, uint32_t thread_index, bool begin)
+	CommandBuffer *CommandBufferManager::GetCommandBuffer(uint32_t frame, uint32_t thread_index, bool begin)
 	{
 		const uint32_t pool_index = GetPoolIndex(frame, thread_index);
 		const uint32_t current_buffer = used_buffers_[pool_index]++;
 
 		assert(current_buffer < MAX_COMMAND_BUFFERS_PER_THREAD);
 
-		CommandBuffer* cmd = &command_buffers_[pool_index * MAX_COMMAND_BUFFERS_PER_THREAD + current_buffer];
+		CommandBuffer *cmd = &command_buffers_[pool_index * MAX_COMMAND_BUFFERS_PER_THREAD + current_buffer];
 
 		if (begin)
 		{
@@ -504,28 +508,46 @@ namespace lincore
 		return cmd;
 	}
 
-	CommandBuffer* CommandBufferManager::GetSecondaryCommandBuffer(uint32_t frame, uint32_t thread_index)
+	CommandBuffer *CommandBufferManager::GetSecondaryCommandBuffer(uint32_t frame, uint32_t thread_index)
 	{
 		const uint32_t pool_index = GetPoolIndex(frame, thread_index);
 		const uint32_t current_buffer = used_secondary_buffers_[pool_index]++;
 
 		assert(current_buffer < MAX_SECONDARY_COMMAND_BUFFERS);
 
-		CommandBuffer* cmd = &secondary_command_buffers_[pool_index * MAX_SECONDARY_COMMAND_BUFFERS + current_buffer];
+		CommandBuffer *cmd = &secondary_command_buffers_[pool_index * MAX_SECONDARY_COMMAND_BUFFERS + current_buffer];
 		cmd->Reset();
 
 		return cmd;
 	}
 
-	void CommandBufferManager::ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue)
+	void CommandBufferManager::UploadBuffer(BufferHandle staging_buffer, BufferHandle dst_buffer, const void *data, size_t size, size_t dst_offset)
+	{
+
+		ImmediateSubmit([&](CommandBuffer *cmd)
+			{
+				Buffer *src = gpu_device_->GetResource<Buffer>(staging_buffer.index);
+				Buffer *dst = gpu_device_->GetResource<Buffer>(dst_buffer.index);
+
+				void *src_data = src->mapped_data;
+				memcpy(src_data, data, size);
+				VkBufferCopy copy_region{ 0 };
+				copy_region.dstOffset = dst_offset;
+				copy_region.srcOffset = 0;
+				copy_region.size = size;
+				vkCmdCopyBuffer(cmd->vk_command_buffer_, src->vk_buffer, dst->vk_buffer, 1, &copy_region);
+			},
+			gpu_device_->graphics_queue_);
+	}
+
+	void CommandBufferManager::ImmediateSubmit(std::function<void(CommandBuffer *cmd)> &&function, VkQueue queue)
 	{
 		// Wait for any pending immediate submits to complete
 		VkFence fence = queue == gpu_device_->transfer_queue_ ? transfer_fence_ : immediate_fence_;
-		CommandBuffer& cmd_buffer = queue == gpu_device_->transfer_queue_ ? transfer_buffer_ : immediate_buffer_;
+		CommandBuffer &cmd_buffer = queue == gpu_device_->transfer_queue_ ? transfer_buffer_ : immediate_buffer_;
 
 		VK_CHECK(vkWaitForFences(gpu_device_->device_, 1, &fence, VK_TRUE, UINT64_MAX));
 		VK_CHECK(vkResetFences(gpu_device_->device_, 1, &fence));
-
 
 		cmd_buffer.Reset();
 		cmd_buffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
@@ -536,11 +558,11 @@ namespace lincore
 		cmd_buffer.End();
 
 		// Set up command buffer submission info
-		VkCommandBufferSubmitInfo cmd_info{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
+		VkCommandBufferSubmitInfo cmd_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
 		cmd_info.commandBuffer = cmd_buffer.GetCommandBuffer();
 
 		// Submit the command buffer
-		VkSubmitInfo2 submit_info{ VK_STRUCTURE_TYPE_SUBMIT_INFO_2 };
+		VkSubmitInfo2 submit_info{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
 		submit_info.commandBufferInfoCount = 1;
 		submit_info.pCommandBufferInfos = &cmd_info;
 

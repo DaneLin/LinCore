@@ -1,7 +1,7 @@
 // console variable system
 #pragma once
 
-#include <fundation/string_utils.h>
+#include <foundation/string_utils.h>
 
 class CVarParameter;
 

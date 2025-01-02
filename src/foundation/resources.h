@@ -18,58 +18,68 @@ namespace lincore
 	static const uint32_t k_pipelines_pool_size = 128;
 	static const uint32_t k_shaders_pool_size = 128;
 	static const uint32_t k_descriptor_sets_pool_size = 4096;
-	static const uint32_t k_samplers_pool_size = 32;
+	static const uint32_t k_samplers_pool_size = 1024;
 
 	typedef uint32_t ResourceHandle;
 
 	struct BufferHandle {
-		ResourceHandle index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const BufferHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct BufferHandle
 
 	struct TextureHandle {
-		ResourceHandle index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const TextureHandle& other) const { return index == other.index; }
+		bool IsValid() const  { return index != k_invalid_index; }
 	}; // struct TextureHandle
 
 	struct ShaderStateHandle {
-		ResourceHandle index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const ShaderStateHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct ShaderStateHandle
 
 	struct SamplerHandle {
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const SamplerHandle& other) const { return index == other.index; }
-		ResourceHandle index;
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct SamplerHandle
 
 	struct DescriptorSetLayoutHandle {
-		ResourceHandle index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const DescriptorSetLayoutHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct DescriptorSetLayoutHandle
 
 	struct DescriptorSetHandle {
-		ResourceHandle index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const DescriptorSetHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct DescriptorSetHandle
 
 	struct PipelineHandle {
-		ResourceHandle index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const PipelineHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct PipelineHandle
 
 	struct RenderPassHandle {
-		ResourceHandle index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const RenderPassHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct RenderPassHandle
 
 	struct FramebufferHandle {
-		ResourceHandle                  index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const FramebufferHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct FramebufferHandle
 
 	struct PagePoolHandle {
-		ResourceHandle                  index;
+		ResourceHandle index{k_invalid_index};
 		bool operator==(const PagePoolHandle& other) const { return index == other.index; }
+		bool IsValid() const { return index != k_invalid_index; }
 	}; // struct FramebufferHandle
 
 	// Invalid handles
@@ -209,12 +219,15 @@ namespace lincore
 
 		const char* name = nullptr;
 
+		bool immediate_creation = false;
+
 		BufferCreation& Reset();
 		BufferCreation& Set(VkBufferUsageFlags flags, ResourceUsageType::Enum usage, uint32_t size);
 		BufferCreation& SetData(void* data);
 		BufferCreation& SetName(const char* name);
-		BufferCreation& SetPersistent(bool value);
-		BufferCreation& SetDeviceOnly(bool value);
+		BufferCreation& SetPersistent();
+		BufferCreation& SetDeviceOnly();
+		BufferCreation& SetImmediate();
 	}; // struct BufferCreation
 
 	struct TextureCreation
@@ -235,11 +248,18 @@ namespace lincore
 
 		const char* name = nullptr;
 
+		bool transfer_queue = false;
+
+		bool immediate_creation  = false;
+
 		TextureCreation& Reset();
+		TextureCreation& SetImmediate();
+		TextureCreation& SetTransferSrc();
 		TextureCreation& SetSize(uint16_t width, uint16_t height, uint16_t depth);
 		TextureCreation& SetFlags(uint8_t flags);
 		TextureCreation& SetMips(uint32_t mip_level_count);
 		TextureCreation& SetLayers(uint32_t layer_count);
+		TextureCreation& SetFormat(VkFormat format);
 		TextureCreation& SetFormatType(VkFormat format, TextureType::Enum type);
 		TextureCreation& SetName(const char* name);
 		TextureCreation& SetData(void* data);
@@ -263,6 +283,8 @@ namespace lincore
 
 		const char* name = nullptr;
 
+		bool immediate_creation  = false;
+
 		TextureViewCreation& Reset();
 		TextureViewCreation& SetParentTexture(TextureHandle parent_texture);
 		TextureViewCreation& SetMips(uint32_t base_mip, uint32_t mip_level_count);
@@ -283,7 +305,11 @@ namespace lincore
 
 		const char* name = nullptr;
 
+		bool immediate_creation  = false;
+
 		SamplerCreation& SetMinMagMip(VkFilter min, VkFilter max, VkSamplerMipmapMode mip);
+		SamplerCreation& SetMinMag(VkFilter min, VkFilter max);
+		SamplerCreation& SetMip(VkSamplerMipmapMode mip);
 		SamplerCreation& SetAddressModeU(VkSamplerAddressMode u);
 		SamplerCreation& SetAddressModeUV(VkSamplerAddressMode u, VkSamplerAddressMode v);
 		SamplerCreation& SetAddressModeUVW(VkSamplerAddressMode u, VkSamplerAddressMode v, VkSamplerAddressMode w);
@@ -570,6 +596,9 @@ namespace lincore
 		VkSamplerAddressMode address_u = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		VkSamplerAddressMode address_v = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 		VkSamplerAddressMode address_w = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+		VkSamplerReductionMode reduction_mode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE;
+
 	}; // struct SamplerDescription
 
 	struct DescriptorSetLayoutDescription
@@ -648,6 +677,8 @@ namespace lincore
 		VkDeviceMemory vk_device_memory;
 		VkDeviceSize vk_device_size;
 
+		ResourceState state = RESOURCE_STATE_UNDEFINED;
+
 		VkBufferUsageFlags type_flags = 0;
 		ResourceUsageType::Enum usage = ResourceUsageType::Immutable;
 		uint32_t size = 0;
@@ -657,8 +688,6 @@ namespace lincore
 		BufferHandle handle;
 		BufferHandle parent_buffer;
 
-		bool ready = true;
-
 		void* mapped_data = nullptr;
 		const char* name = nullptr;
 	}; // struct BufferVulkan
@@ -666,6 +695,9 @@ namespace lincore
 	struct Sampler
 	{
 		VkSampler vk_sampler;
+
+		uint32_t pool_index = 0;
+		SamplerHandle handle;
 
 		VkFilter min_filter = VK_FILTER_NEAREST;
 		VkFilter mag_filter = VK_FILTER_NEAREST;
@@ -693,13 +725,13 @@ namespace lincore
 		uint16_t array_layer_count = 1;
 		uint8_t mip_level_count = 1;
 		uint8_t flags = 0;
-		uint16_t mip_base_level = 0; // Not 0 when texture is a view.
-		uint16_t array_base_layer = 0; // Not 0 when texture is a view.
+		uint16_t mip_base_level = 0;    // Not 0 when texture is a view.
+		uint16_t array_base_layer = 0;   // Not 0 when texture is a view.
 		bool sparse = false;
 
 		uint32_t pool_index = 0;
 		TextureHandle handle;
-		TextureHandle parent_texture; // Used when a texture view.
+		TextureHandle parent_texture;    // Used when a texture view.
 		TextureHandle alias_texture;
 		TextureType::Enum type = TextureType::Texture2D;
 
@@ -816,7 +848,7 @@ namespace lincore
 	}; // struct ComputeLocalSize
 
 
-	// Enum translations. Use tables or switches depending on the case. ///////
+	// Enum translations. Use tables or switches depending on the case. /////////
 	const char* ToCompilerExtension(VkShaderStageFlagBits value);
 	const char* ToStageDefines(VkShaderStageFlagBits value);
 
@@ -835,9 +867,14 @@ namespace lincore
 	VkImageLayout UtilToVkImageLayout(ResourceState usage);
 	VkImageLayout UtilToVkImageLayout2(ResourceState usage);
 
+	VkDescriptorBufferInfo UtilToVkDescriptorBufferInfo(Buffer* buffer);
+	VkDescriptorImageInfo UtilToVkDescriptorImageInfo(Texture* texture);
+
 	// Determines pipeline stages involved for given accesses
 	VkPipelineStageFlags UtilDeterminePipelineStageFlags(VkAccessFlags access_flags, QueueType::Enum queue_type);
 	VkPipelineStageFlags2KHR UtilDeterminePipelineStageFlags2(VkAccessFlags2KHR access_flags, QueueType::Enum queue_type);
+
+	ResourceState UtilDetermineResourceState(VkDescriptorType type, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL_GRAPHICS);
 
 	void UtilAddImageBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, Texture* texture, ResourceState new_state,
 		uint32_t base_mip_level, uint32_t mip_count, bool is_depth);
@@ -854,12 +891,17 @@ namespace lincore
 		uint32_t source_family = VK_QUEUE_FAMILY_IGNORED, uint32_t destination_family = VK_QUEUE_FAMILY_IGNORED,
 		QueueType::Enum source_queue_type = QueueType::Graphics, QueueType::Enum destination_queue_type = QueueType::Graphics);
 
+	void UtilAddBufferBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, Buffer* buffer, ResourceState old_state, ResourceState new_state,
+		uint32_t buffer_size);
+
 	void UtilAddBufferBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, VkBuffer buffer, ResourceState old_state, ResourceState new_state,
 		uint32_t buffer_size);
 
 	void UtilAddBufferBarrierExt(GpuDevice* gpu, VkCommandBuffer command_buffer, VkBuffer buffer, ResourceState old_state, ResourceState new_state,
 		uint32_t buffer_size, uint32_t source_family, uint32_t destination_family,
 		QueueType::Enum source_queue_type, QueueType::Enum destination_queue_type);
+
+	void UtilAddStateBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, PipelineStage::Enum source_stage, PipelineStage::Enum destination_stage);
 
 	VkFormat UtilStringToVkFormat(const char* format);
 }

@@ -1,0 +1,114 @@
+#version 450
+#extension GL_EXT_scalar_block_layout : require
+
+layout (local_size_x = 256) in;
+
+// 对应 DrawCullData 结构体
+layout(push_constant) uniform constants {   
+    mat4 view;
+    float P00, P11;
+    float znear, zfar;
+    float frustum[4];
+    
+    uint drawCount;
+    int cullingEnabled;
+    int distCull;
+    int AABBcheck;
+    float aabbmin[3];
+    float aabbmax[3];
+} cull_data;
+
+// 对应 ObjectData 结构体
+struct ObjectData {
+    mat4 model;
+    vec4 sphere_bounds;    // xyz = center, w = radius
+    vec4 extents;         // AABB范围
+    uint material_index;  // 材质索引
+    uint padding[3];
+}; 
+
+layout(std430, set = 0, binding = 0) readonly buffer ObjectBuffer {   
+    ObjectData objects[];
+} object_buffer;
+
+// 对应 DrawCommand 结构体 
+struct DrawCommand {
+    uint index_count;
+    uint instance_count; 
+    uint first_index;
+    uint vertex_offset;
+    uint first_instance;
+    uint object_id;
+    uint padding[2];
+};
+
+// 使用单个缓冲区存储draw commands
+layout(std430, set = 0, binding = 1) buffer DrawBuffer {   
+    DrawCommand commands[]; 
+} draw_buffer;
+
+bool IsVisible(uint object_index) {
+    uint index = object_index;
+    vec4 sphereBounds = object_buffer.objects[index].sphere_bounds;
+    
+    // 转换到视图空间
+    vec3 center = (cull_data.view * vec4(sphereBounds.xyz, 1.0)).xyz;
+    float radius = sphereBounds.w;
+    
+    // 添加容差值
+    float epsilon = 0.05;
+    radius += epsilon;
+    
+    // 视锥体测试
+    bool visible = true;
+    
+    // 左右平面测试 (添加容差)
+    float lr_tolerance = radius * 0.1;
+    visible = visible && center.z * cull_data.frustum[1] - abs(center.x) * cull_data.frustum[0] > -(radius + lr_tolerance);
+    
+    // 上下平面测试 (添加容差)
+    float ud_tolerance = radius * 0.1;
+    visible = visible && center.z * cull_data.frustum[3] - abs(center.y) * cull_data.frustum[2] > -(radius + ud_tolerance);
+    
+    // 近远平面测试
+    if(cull_data.distCull != 0) {
+        float near_tolerance = cull_data.znear * 0.1;
+        float far_tolerance = cull_data.zfar * 0.1;
+        visible = visible && (-center.z + radius > cull_data.znear * 0.95 - near_tolerance && 
+                            -center.z - radius < cull_data.zfar * 1.05 + far_tolerance);
+    }
+    
+    return visible;
+}
+
+bool IsVisibleAABB(uint object_index) {
+    uint index = object_index;
+    vec4 sphere_bounds = object_buffer.objects[index].sphere_bounds;
+    
+    vec3 center = sphere_bounds.xyz;
+    float radius = sphere_bounds.w;
+    
+    vec3 aabbmin = vec3(cull_data.aabbmin[0], cull_data.aabbmin[1], cull_data.aabbmin[2]) + vec3(radius);
+    vec3 aabbmax = vec3(cull_data.aabbmax[0], cull_data.aabbmax[1], cull_data.aabbmax[2]) - vec3(radius);
+    
+    return center.x > aabbmin.x && center.x < aabbmax.x &&
+           center.y > aabbmin.y && center.y < aabbmax.y &&
+           center.z > aabbmin.z && center.z < aabbmax.z;
+}
+
+void main() {
+    uint gID = gl_GlobalInvocationID.x;
+    if(gID < cull_data.drawCount) {
+        uint objectID = draw_buffer.commands[gID].object_id;
+        bool visible = false;
+        
+        if(cull_data.AABBcheck == 0) {
+            visible = IsVisible(objectID);
+        } else {
+            visible = IsVisibleAABB(objectID);
+        }
+        
+        // 直接修改instance_count来控制是否绘制
+        draw_buffer.commands[gID].instance_count = visible ? 1 : 0;
+    }
+}

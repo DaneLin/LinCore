@@ -6,7 +6,6 @@
 
 namespace StringUtils
 {
-
 	// FNV-1a 32bit hashing algorithm.
 	constexpr uint32_t Fnv1a32(char const* s, std::size_t count)
 	{

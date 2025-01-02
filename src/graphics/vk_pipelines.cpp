@@ -2,37 +2,26 @@
 // std
 #include <fstream>
 // lincore
-#include "fundation/logging.h"
+#include "foundation/logging.h"
 #include "graphics/vk_initializers.h"
+#include "graphics/vk_engine.h"
 
 namespace lincore
 {
 	void PipelineBuilder::Clear()
 	{
-		input_assembly_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-		rasterizer_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
+		input_assembly_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+		rasterizer_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
 		color_blend_attachment_ = {};
-		multisampling_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
+		multisampling_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
 		pipeline_layout_ = {};
-		depth_stencil_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-		render_info_ = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+		depth_stencil_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+		render_info_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
 		shader_stages_.clear();
 	}
 
 	VkPipeline PipelineBuilder::BuildPipeline(VkDevice device, VkPipelineCache cache)
 	{
-		if (shader_stages_[0].stage == VK_SHADER_STAGE_COMPUTE_BIT)
-		{
-			VkComputePipelineCreateInfo pipeline_info{};
-			pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-			pipeline_info.stage = shader_stages_[0];
-			pipeline_info.layout = pipeline_layout_;
-
-			VkPipeline pipeline;
-			VK_CHECK(vkCreateComputePipelines(device, cache, 1, &pipeline_info, nullptr, &pipeline));
-			return pipeline;
-		}
-
 		// make viewport state from our stored viewport and scissor
 		VkPipelineViewportStateCreateInfo viewport_state{};
 		viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -52,10 +41,10 @@ namespace lincore
 		color_blending.pAttachments = &color_blend_attachment_;
 
 		// completely clear vertexinputstatecreateinfo, as we have no need for it
-		VkPipelineVertexInputStateCreateInfo vertex_input_info = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
+		VkPipelineVertexInputStateCreateInfo vertex_input_info = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
 
 		// build the actual pipeline
-		VkGraphicsPipelineCreateInfo pipeline_info = { .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
+		VkGraphicsPipelineCreateInfo pipeline_info = {.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
 		// connect the renderinfo to the pNext extension mechanism
 		pipeline_info.pNext = &render_info_;
 
@@ -69,11 +58,10 @@ namespace lincore
 		pipeline_info.pColorBlendState = &color_blending;
 		pipeline_info.pDepthStencilState = &depth_stencil_;
 		pipeline_info.layout = pipeline_layout_;
-
 		// setting up dynamic state
-		VkDynamicState state[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+		VkDynamicState state[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 
-		VkPipelineDynamicStateCreateInfo dynamic_state = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+		VkPipelineDynamicStateCreateInfo dynamic_state = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
 		dynamic_state.pDynamicStates = &state[0];
 		dynamic_state.dynamicStateCount = 2;
 
@@ -91,6 +79,35 @@ namespace lincore
 		}
 	}
 
+	void PipelineBuilder::ApplyConfig(const PipelineStateConfig &config)
+	{
+		SetInputTopology(config.topology);
+		SetPolygonMode(config.polygon_mode);
+		SetCullMode(config.cull_mode, config.front_face);
+
+		if (config.depth_test)
+		{
+			EnableDepthtest(config.depth_write, config.depth_compare_op);
+		}
+		else
+		{
+			DisableDepthtest();
+		}
+
+		switch (config.blend_mode)
+		{
+		case PipelineStateConfig::BlendMode::None:
+			DisableBlending();
+			break;
+		case PipelineStateConfig::BlendMode::Additive:
+			EnableBlendingAdditive();
+			break;
+		case PipelineStateConfig::BlendMode::AlphaBlend:
+			EnableBlendingAlphablend();
+			break;
+		}
+	}
+
 	void PipelineBuilder::SetShaders(VkShaderModule vertexShader, VkShaderModule fragmentShader)
 	{
 		shader_stages_.clear();
@@ -102,7 +119,7 @@ namespace lincore
 			vkinit::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
 	}
 
-	void PipelineBuilder::SetShaders(ShaderEffect* effect)
+	void PipelineBuilder::SetShaders(ShaderEffect *effect)
 	{
 		shader_stages_.clear();
 		effect->FillStage(shader_stages_);
@@ -300,4 +317,82 @@ namespace lincore
 
 		VK_CHECK(vkCreatePipelineCache(device_, &cache_create_info, nullptr, &cache_));
 	}
+
+	void ComputePipelineBuilder::Clear()
+	{
+		shader_stages_.clear();
+	}
+
+	VkPipeline ComputePipelineBuilder::BuildPipeline(VkDevice device, VkPipelineLayout layout, VkPipelineCache cache)
+	{
+		if (shader_stages_.empty() || shader_stages_[0].stage != VK_SHADER_STAGE_COMPUTE_BIT)
+		{
+			LOGE("Invalid compute shader configuration");
+			return VK_NULL_HANDLE;
+		}
+		VkComputePipelineCreateInfo pipeline_info{};
+		pipeline_info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipeline_info.stage = shader_stages_[0];
+		pipeline_info.layout = layout;
+
+		VkPipeline pipeline;
+		VK_CHECK(vkCreateComputePipelines(device, cache, 1, &pipeline_info, nullptr, &pipeline));
+		return pipeline;
+	}
+
+	void ComputePipelineBuilder::SetShader(VkShaderModule compute_shader)
+	{
+		shader_stages_.clear();
+		shader_stages_.push_back(vkinit::PipelineShaderStageCreateInfo(VK_SHADER_STAGE_COMPUTE_BIT, compute_shader));
+	}
+
+	void ComputePipelineBuilder::SetShader(ShaderEffect *effect)
+	{
+		shader_stages_.clear();
+		effect->FillStage(shader_stages_);
+	}
+
+	PipelineStateConfig PipelineStateConfig::GetDefault(PassType type)
+	{
+		PipelineStateConfig config;
+		switch (type)
+		{
+		case PassType::kCompute:
+			// 计算Pass不需要大多数图形管线状态
+			break;
+		case PassType::kRaster:
+			// 默认的光栅化配置
+			config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			config.polygon_mode = VK_POLYGON_MODE_FILL;
+			config.cull_mode = VK_CULL_MODE_BACK_BIT;
+			config.front_face = VK_FRONT_FACE_CLOCKWISE;
+			config.depth_test = true;
+			config.depth_write = true;
+			config.depth_compare_op = VK_COMPARE_OP_LESS;
+			config.blend_mode = BlendMode::None;
+			break;
+		case PassType::kMesh:
+			// 网格着色器Pass的默认配置
+			config.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			config.depth_test = true;
+			break;
+		}
+		return config;
+	}
+
+	inline bool HasAlphaChannel(VkFormat format) {
+        switch (format) {
+            case VK_FORMAT_R8G8B8A8_UNORM:
+            case VK_FORMAT_R8G8B8A8_SRGB:
+            case VK_FORMAT_B8G8R8A8_UNORM:
+            case VK_FORMAT_B8G8R8A8_SRGB:
+            case VK_FORMAT_A8B8G8R8_UNORM_PACK32:
+            case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+            case VK_FORMAT_R16G16B16A16_SFLOAT:
+            case VK_FORMAT_R32G32B32A32_SFLOAT:
+                return true;
+            default:
+                return false;
+        }
+    }
 }

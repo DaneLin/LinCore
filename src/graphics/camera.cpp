@@ -7,6 +7,39 @@
 constexpr float MAX_MOVING_SPEED = 10.f;
 constexpr float MIN_MOVING_SPEED = 0.01f;
 
+void Camera::Init(glm::vec3 position, float fov, float aspect_ratio, float near_clip, float far_clip)
+{
+	position_ = position;
+	fov_ = fov;
+	aspect_ratio_ = aspect_ratio;
+	near_clip_ = near_clip;
+	far_clip_ = far_clip;
+}
+
+Camera &Camera::SetAspectRatio(float aspect_ratio)
+{
+	aspect_ratio_ = aspect_ratio;
+	return *this;
+}
+
+Camera &Camera::SetFov(float fov)
+{
+	fov_ = fov;
+	return *this;
+}
+
+Camera &Camera::SetNearClip(float near_clip)
+{
+	near_clip_ = near_clip;
+	return *this;
+}
+
+Camera &Camera::SetFarClip(float far_clip)
+{
+	far_clip_ = far_clip;
+	return *this;
+}
+
 glm::mat4 Camera::GetViewMatrix()
 {
 	glm::mat4 camera_translation = glm::translate(glm::mat4(1.f), position_);
@@ -16,16 +49,21 @@ glm::mat4 Camera::GetViewMatrix()
 
 glm::mat4 Camera::GetRotationMatrix()
 {
-	glm::quat pitch_rotation = glm::angleAxis(pitch_, glm::vec3{ 1.f, 0.f, 0.f });
-	glm::quat yaw_rotation = glm::angleAxis(yaw_, glm::vec3{ 0.f, -1.f, 0.f });
+	glm::quat pitch_rotation = glm::angleAxis(pitch_, glm::vec3{1.f, 0.f, 0.f});
+	glm::quat yaw_rotation = glm::angleAxis(yaw_, glm::vec3{0.f, -1.f, 0.f});
 
 	return glm::toMat4(yaw_rotation) * glm::toMat4(pitch_rotation);
 }
 
-void Camera::ProcessSdlEvent(SDL_Event& e)
+glm::mat4 Camera::GetProjectionMatrix()
+{
+	return glm::perspective(glm::radians(fov_), aspect_ratio_, near_clip_, far_clip_);
+}
+
+void Camera::ProcessSdlEvent(SDL_Event &e)
 {
 	// 获取 ImGui IO 状态
-	ImGuiIO& io = ImGui::GetIO();
+	ImGuiIO &io = ImGui::GetIO();
 
 	// 如果 ImGui 需要捕获键盘输入或鼠标输入，则不进行相机的事件处理
 	if (io.WantCaptureMouse || io.WantCaptureKeyboard)
@@ -92,11 +130,11 @@ void Camera::ProcessSdlEvent(SDL_Event& e)
 	if (e.type == SDL_MOUSEWHEEL)
 	{
 		if (e.wheel.y > 0)
-		{																	  // 滚轮向上滚动，增加速度
+		{																	   // 滚轮向上滚动，增加速度
 			speed_factor_ = std::min(MAX_MOVING_SPEED, speed_factor_ + 0.01f); // 确保速度不会超过 MAX_MOVING_SPEED
 		}
 		else if (e.wheel.y < 0)
-		{																	  // 滚轮向下滚动，减少速度
+		{																	   // 滚轮向下滚动，减少速度
 			speed_factor_ = std::max(MIN_MOVING_SPEED, speed_factor_ - 0.01f); // 确保速度不会低于 MIN_MOVING_SPEED
 		}
 	}

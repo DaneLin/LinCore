@@ -1,7 +1,7 @@
 #pragma once
 // lincore
 #include "graphics/vk_types.h"
-#include "fundation/config.h"
+#include "foundation/config.h"
 
 namespace lincore
 {
@@ -50,6 +50,8 @@ namespace lincore
 			const VkDescriptorSet* sets,
 			uint32_t dynamic_offset_count = 0,
 			const uint32_t* dynamic_offsets = nullptr);
+		// Push constants
+		void PushConstants(VkPipelineLayout layout, VkShaderStageFlags stage_flags, uint32_t offset, uint32_t size, const void* values);
 
 		// Drawing commands
 		void Draw(uint32_t vertex_count, uint32_t instance_count, uint32_t first_vertex, uint32_t first_instance);
@@ -77,8 +79,7 @@ namespace lincore
 		void CopyImageToImage(VkImage source, VkImage destination, VkExtent2D src_size, VkExtent2D dst_size);
 		void GenerateMipmaps(VkImage image, VkExtent2D image_size);
 
-		// Push constants
-		void PushConstants(VkPipelineLayout layout, VkShaderStageFlags stage_flags, uint32_t offset, uint32_t size, const void* values);
+		
 
 		VkCommandBuffer GetCommandBuffer() { return vk_command_buffer_; }
 		bool IsRecording() const { return is_recording_; }
@@ -116,6 +117,8 @@ namespace lincore
 		void ResetPools(uint32_t frame_index);
 		CommandBuffer* GetCommandBuffer(uint32_t frame, uint32_t thread_index, bool begin = true);
 		CommandBuffer* GetSecondaryCommandBuffer(uint32_t frame, uint32_t thread_index);
+
+		void UploadBuffer(BufferHandle staging_buffer, BufferHandle dst_buffer, const void* data, size_t size, size_t dst_offset = 0);
 
 		void ImmediateSubmit(std::function<void(CommandBuffer* cmd)>&& function, VkQueue queue);
 

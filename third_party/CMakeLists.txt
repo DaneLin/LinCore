@@ -12,6 +12,8 @@ add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
+
+
 set(SPDLOG_FMT_EXTERNAL ON)
 add_subdirectory(spdlog)
 set_property(TARGET spdlog PROPERTY FOLDER "third_party")
@@ -21,10 +23,10 @@ target_sources(volk PRIVATE
 	volk/volk.h
 )
 
-# Ìí¼Ó±ØÒªµÄ°üº¬Â·¾¶
+# æ·»åŠ å¿…è¦çš„åŒ…å«è·¯å¾„
 target_include_directories(volk INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/volk)
 target_link_libraries(volk PUBLIC Vulkan::Vulkan)
-# È·±£Ê¹ÓÃ Volk Ê±¶¨Òå VK_NO_PROTOTYPES
+# ç¡®ä¿ä½¿ç”¨ Volk æ—¶å®šä¹‰ VK_NO_PROTOTYPES
 target_compile_definitions(volk INTERFACE VK_NO_PROTOTYPES)
 
 target_sources(enkiTS PRIVATE

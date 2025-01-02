@@ -3,20 +3,23 @@
 
 namespace lincore
 {
-	static void VulkanCreateTextureView(GpuDevice& gpu, const TextureViewCreation& creation, Texture* texture) {
+	static void VulkanCreateTextureView(GpuDevice &gpu, const TextureViewCreation &creation, Texture *texture)
+	{
 
 		//// Create the image view
-		VkImageViewCreateInfo info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+		VkImageViewCreateInfo info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
 		info.image = texture->vk_image;
 		info.format = texture->vk_format;
 
-		if (TextureFormat::HasDepthOrStencil(texture->vk_format)) {
+		if (TextureFormat::HasDepthOrStencil(texture->vk_format))
+		{
 
 			info.subresourceRange.aspectMask = TextureFormat::HasDepth(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0;
 			// TODO:gs
-			//info.subresourceRange.aspectMask |= TextureFormat::has_stencil( creation.format ) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0;
+			// info.subresourceRange.aspectMask |= TextureFormat::has_stencil( creation.format ) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0;
 		}
-		else {
+		else
+		{
 			info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 
@@ -30,7 +33,8 @@ namespace lincore
 		gpu.SetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)texture->vk_image_view, creation.name);
 	}
 
-	static VkImageUsageFlags VulkanGetImageUsage(const TextureCreation& creation) {
+	static VkImageUsageFlags VulkanGetImageUsage(const TextureCreation &creation)
+	{
 		const bool is_render_target = (creation.flags & TextureFlags::RenderTarget_mask) == TextureFlags::RenderTarget_mask;
 		const bool is_compute_used = (creation.flags & TextureFlags::Compute_mask) == TextureFlags::Compute_mask;
 		const bool is_shading_rate_texture = (creation.flags & TextureFlags::ShadingRate_mask) == TextureFlags::ShadingRate_mask;
@@ -38,12 +42,14 @@ namespace lincore
 		// Default to always readable from shader.
 		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT;
 
-		if (TextureFormat::HasDepthOrStencil(creation.format)) {
+		if (TextureFormat::HasDepthOrStencil(creation.format))
+		{
 			// Depth/Stencil textures are normally textures you render into.
 			usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 			usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 		}
-		else {
+		else
+		{
 			usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 			usage |= is_render_target ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : 0;
 			// 只有非深度/模板纹理才能用作存储图像
@@ -55,19 +61,21 @@ namespace lincore
 		return usage;
 	}
 
-	static void VulkanCreateTexture(GpuDevice& gpu, const TextureCreation& creation, TextureHandle handle, Texture* texture) {
+	static void VulkanCreateTexture(GpuDevice &gpu, const TextureCreation &creation, TextureHandle handle, Texture *texture)
+	{
 
 		bool is_cubemap = false;
 		uint32_t layer_count = creation.array_layer_count;
-		if (creation.type == TextureType::TextureCube || creation.type == TextureType::Texture_Cube_Array) {
+		if (creation.type == TextureType::TextureCube || creation.type == TextureType::Texture_Cube_Array)
+		{
 			is_cubemap = true;
 		}
 
 		const bool is_sparse_texture = (creation.flags & TextureFlags::Sparse_mask) == TextureFlags::Sparse_mask;
 
-		texture->vk_extent = { creation.width, creation.height, creation.depth };
-		texture->mip_base_level = 0;        // For new textures, we have a view that is for all mips and layers.
-		texture->array_base_layer = 0;      // For new textures, we have a view that is for all mips and layers.
+		texture->vk_extent = {creation.width, creation.height, creation.depth};
+		texture->mip_base_level = 0;   // For new textures, we have a view that is for all mips and layers.
+		texture->array_base_layer = 0; // For new textures, we have a view that is for all mips and layers.
 		texture->array_layer_count = layer_count;
 		texture->mip_level_count = creation.mip_level_count;
 		texture->type = creation.type;
@@ -80,7 +88,7 @@ namespace lincore
 		texture->alias_texture = k_invalid_texture;
 
 		//// Create the image
-		VkImageCreateInfo image_info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+		VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
 		image_info.format = texture->vk_format;
 		image_info.flags = (is_cubemap ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0) | (is_sparse_texture ? (VK_IMAGE_CREATE_SPARSE_RESIDENCY_BIT | VK_IMAGE_CREATE_SPARSE_BINDING_BIT) : 0);
 		image_info.imageType = ToVkImageType(texture->type);
@@ -100,21 +108,25 @@ namespace lincore
 
 		LOGI("Creating tex %s", creation.name);
 
-		if (creation.alias.index == k_invalid_texture.index) {
-			if (is_sparse_texture) {
+		if (creation.alias.index == k_invalid_texture.index)
+		{
+			if (is_sparse_texture)
+			{
 				VK_CHECK(vkCreateImage(gpu.device_, &image_info, nullptr, &texture->vk_image));
 			}
-			else {
+			else
+			{
 				VK_CHECK(vmaCreateImage(gpu.vma_allocator_, &image_info, &memory_info,
-					&texture->vk_image, &texture->vma_allocation, nullptr));
+										&texture->vk_image, &texture->vma_allocation, nullptr));
 
-#if defined (_DEBUG)
+#if defined(_DEBUG)
 				vmaSetAllocationName(gpu.vma_allocator_, texture->vma_allocation, creation.name);
 #endif // _DEBUG
 			}
 		}
-		else {
-			Texture* alias_texture = gpu.GetResource<Texture>(creation.alias.index);
+		else
+		{
+			Texture *alias_texture = gpu.GetResource<Texture>(creation.alias.index);
 			assert(alias_texture != nullptr);
 			assert(!is_sparse_texture);
 
@@ -131,27 +143,24 @@ namespace lincore
 
 		VulkanCreateTextureView(gpu, tvc, texture);
 		texture->state = RESOURCE_STATE_UNDEFINED;
-
-		// Add deferred bindless update.
-		if (gpu.bindless_supported_) {
-			ResourceUpdate resource_update{ ResourceUpdateType::Texture, texture->handle.index, gpu.current_frame_, 0 };
-			gpu.bindless_texture_updates_.emplace_back(resource_update);
-		}
 	}
 
-	void ResourceManager::ProcessPendingDeletions() {
+	void ResourceManager::ProcessPendingDeletions()
+	{
 		std::lock_guard<std::mutex> lock(deletion_queue_mutex_);
 
 		const uint32_t current_frame = gpu_device_->current_frame_;
-		const uint32_t previous_frame = (current_frame == 0) ? kFRAME_OVERLAP - 1 : current_frame - 1;
+		const uint32_t previous_frame = gpu_device_->previous_frame_;
 
 		// 找到第一个不是上一帧的资源的位置
 		auto delete_end = resource_deletion_queue_.begin();
-		while (delete_end != resource_deletion_queue_.end()) {
-			const ResourceUpdate& update = *delete_end;
+		while (delete_end != resource_deletion_queue_.end())
+		{
+			const ResourceUpdate &update = *delete_end;
 
 			// 只删除上一帧的资源
-			if (update.current_frame != previous_frame) {
+			if (update.current_frame != previous_frame)
+			{
 				break;
 			}
 
@@ -159,53 +168,78 @@ namespace lincore
 		}
 
 		// 处理所有可以删除的资源
-		for (auto it = resource_deletion_queue_.begin(); it != delete_end; ++it) {
-			const ResourceUpdate& update = *it;
-			switch (update.type) {
-			case ResourceUpdateType::Texture: {
-				Texture* texture = texture_pool_.Get(update.handle);
-				if (texture) {
-					if (texture->parent_texture.index == k_invalid_texture.index) {
-						if (texture->vk_image && texture->vma_allocation) {
+		for (auto it = resource_deletion_queue_.begin(); it != delete_end; ++it)
+		{
+			const ResourceUpdate &update = *it;
+			switch (update.type)
+			{
+			case ResourceUpdateType::Texture:
+			{
+				Texture *texture = texture_pool_.Get(update.handle);
+				if (texture)
+				{
+					if (texture->parent_texture.index == k_invalid_texture.index)
+					{
+						if (texture->vk_image && texture->vma_allocation)
+						{
 							vmaDestroyImage(gpu_device_->vma_allocator_,
-								texture->vk_image, texture->vma_allocation);
+											texture->vk_image, texture->vma_allocation);
 							texture->vk_image = VK_NULL_HANDLE;
 							texture->vma_allocation = nullptr;
 						}
 					}
-					if (texture->vk_image_view) {
+					if (texture->vk_image_view)
+					{
 						vkDestroyImageView(gpu_device_->device_,
-							texture->vk_image_view, nullptr);
+										   texture->vk_image_view, nullptr);
 						texture->vk_image_view = VK_NULL_HANDLE;
 					}
 					texture_pool_.Release(texture);
 				}
 				break;
 			}
-			case ResourceUpdateType::Buffer: {
-				Buffer* buffer = buffer_pool_.Get(update.handle);
-				if (buffer && buffer->vk_buffer) {
+			case ResourceUpdateType::Buffer:
+			{
+				Buffer *buffer = buffer_pool_.Get(update.handle);
+				if (buffer && buffer->vk_buffer)
+				{
 					vmaDestroyBuffer(gpu_device_->vma_allocator_,
-						buffer->vk_buffer, buffer->vma_allocation);
+									 buffer->vk_buffer, buffer->vma_allocation);
 					buffer->vk_buffer = VK_NULL_HANDLE;
 					buffer->vma_allocation = nullptr;
 					buffer_pool_.Release(buffer);
 				}
 				break;
 			}
-										   // TODO : 添加其他资源类型的处理...
+			case ResourceUpdateType::Sampler:
+			{
+				Sampler *sampler = sampler_pool_.Get(update.handle);
+				if (sampler)
+				{
+					if (sampler->vk_sampler)
+					{
+						vkDestroySampler(gpu_device_->device_, sampler->vk_sampler, nullptr);
+						sampler->vk_sampler = VK_NULL_HANDLE;
+					}
+					sampler_pool_.Release(sampler);
+				}
+				break;
+			}
 			}
 		}
 
 		// 一次性删除所有已处理的资源
-		if (delete_end != resource_deletion_queue_.begin()) {
+		if (delete_end != resource_deletion_queue_.begin())
+		{
 			resource_deletion_queue_.erase(resource_deletion_queue_.begin(), delete_end);
 		}
 	}
 
-	BufferHandle ResourceManager::CreateBuffer(const BufferCreation& creation) {
-		Buffer* buffer = buffer_pool_.Obtain();
-		if (!buffer) {
+	BufferHandle ResourceManager::CreateBuffer(const BufferCreation &creation)
+	{
+		Buffer *buffer = buffer_pool_.Obtain();
+		if (!buffer)
+		{
 			return k_invalid_buffer;
 		}
 
@@ -227,14 +261,16 @@ namespace lincore
 		return buffer->handle;
 	}
 
-	void ResourceManager::CreateBufferResource(BufferHandle handle) {
-		Buffer* buffer = GetBuffer(handle);
-		if (!buffer) return;
+	void ResourceManager::CreateBufferResource(BufferHandle handle)
+	{
+		Buffer *buffer = GetBuffer(handle);
+		if (!buffer)
+			return;
 
-		const BufferCreation& creation = buffer_creation_infos_[handle];
+		const BufferCreation &creation = buffer_creation_infos_[handle];
 
 		// Create the buffer
-		VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+		VkBufferCreateInfo buffer_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
 		buffer_info.size = creation.size;
 		buffer_info.usage = creation.type_flags;
 		buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -243,45 +279,51 @@ namespace lincore
 		alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 		alloc_info.flags = creation.persistent ? VMA_ALLOCATION_CREATE_MAPPED_BIT : 0;
 		alloc_info.requiredFlags = creation.device_only
-			? 0
-			: VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+									   ? 0
+									   : VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		alloc_info.preferredFlags = creation.device_only
-			? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
-			: 0;
+										? VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+										: 0;
 
 		// Add host access flags based on usage
-		if (creation.initial_data || !creation.device_only) {
+		if (creation.initial_data || !creation.device_only)
+		{
 			alloc_info.flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT; // Allow write access
 		}
 
 		VmaAllocationInfo allocation_info;
 		VK_CHECK(vmaCreateBuffer(gpu_device_->vma_allocator_, &buffer_info, &alloc_info,
-			&buffer->vk_buffer, &buffer->vma_allocation, &allocation_info));
+								 &buffer->vk_buffer, &buffer->vma_allocation, &allocation_info));
 
 		buffer->vk_device_memory = allocation_info.deviceMemory;
 		buffer->vk_device_size = creation.size;
-		buffer->mapped_data = (void*)allocation_info.pMappedData;
+		buffer->mapped_data = (void *)allocation_info.pMappedData;
 
-		if (creation.name) {
+		if (creation.name)
+		{
 			gpu_device_->SetDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)buffer->vk_buffer, creation.name);
 		}
 
 		// Upload initial data if present
-		if (creation.initial_data) {
-			void* data;
+		if (creation.initial_data)
+		{
+			void *data;
 			vmaMapMemory(gpu_device_->vma_allocator_, buffer->vma_allocation, &data);
 			memcpy(data, creation.initial_data, creation.size);
 			vmaUnmapMemory(gpu_device_->vma_allocator_, buffer->vma_allocation);
 		}
 	}
 
-	Buffer* ResourceManager::GetBuffer(BufferHandle handle) {
+	Buffer *ResourceManager::GetBuffer(BufferHandle handle)
+	{
 		return buffer_pool_.Get(handle.index);
 	}
 
-	void ResourceManager::DestroyBuffer(BufferHandle handle) {
-		Buffer* buffer = GetBuffer(handle);
-		if (!buffer) return;
+	void ResourceManager::DestroyBuffer(BufferHandle handle)
+	{
+		Buffer *buffer = GetBuffer(handle);
+		if (!buffer)
+			return;
 
 		// 将资源添加到删除队列
 		{
@@ -300,7 +342,8 @@ namespace lincore
 		}
 	}
 
-	void ResourceManager::Init(GpuDevice* gpu_device) {
+	void ResourceManager::Init(GpuDevice *gpu_device)
+	{
 		gpu_device_ = gpu_device;
 
 		buffer_pool_.Init(k_buffers_pool_size);
@@ -314,41 +357,61 @@ namespace lincore
 		shader_state_pool_.Init(k_shaders_pool_size);
 	}
 
-	void ResourceManager::Shutdown() {
+	void ResourceManager::Shutdown()
+	{
 		// 将所有活跃的资源加入删除队列
 		{
 			std::lock_guard<std::mutex> lock(deletion_queue_mutex_);
-			const uint32_t current_frame = gpu_device_->current_frame_;
 
 			// 添加所有 Buffer
-			for (uint32_t i = 0; i < k_buffers_pool_size; ++i) {
-				Buffer* buffer = buffer_pool_.Get(i);
-				if (buffer && buffer->vk_buffer) {
+			for (uint32_t i = 0; i < k_buffers_pool_size; ++i)
+			{
+				Buffer *buffer = buffer_pool_.Get(i);
+				if (buffer && buffer->vk_buffer)
+				{
 					ResourceUpdate update;
 					update.type = ResourceUpdateType::Buffer;
 					update.handle = i;
-					update.current_frame = current_frame - 1;  // 确保会在下次处理时被删除
+					update.current_frame = gpu_device_->previous_frame_; // 确保会在下次处理时被删除
 					update.deleting = 1;
 					resource_deletion_queue_.push_back(update);
 				}
 			}
 
 			// 添加所有 Texture
-			for (uint32_t i = 0; i < k_textures_pool_size; ++i) {
-				Texture* texture = texture_pool_.Get(i);
-				if (texture && (texture->vk_image || texture->vk_image_view)) {
+			for (uint32_t i = 0; i < k_textures_pool_size; ++i)
+			{
+				Texture *texture = texture_pool_.Get(i);
+				if (texture && (texture->vk_image || texture->vk_image_view))
+				{
 					ResourceUpdate update;
 					update.type = ResourceUpdateType::Texture;
 					update.handle = i;
-					update.current_frame = current_frame - 1;  // 确保会在下次处理时被删除
+					update.current_frame = gpu_device_->previous_frame_; // 确保会在下次处理时被删除
+					update.deleting = 1;
+					resource_deletion_queue_.push_back(update);
+				}
+			}
+
+			// sampler
+			for (uint32_t i = 0; i < k_samplers_pool_size; ++i)
+			{
+				Sampler *sampler = sampler_pool_.Get(i);
+				if (sampler && sampler->vk_sampler)
+				{
+					ResourceUpdate update;
+					update.type = ResourceUpdateType::Sampler;
+					update.handle = i;
+					update.current_frame = gpu_device_->previous_frame_; // 确保会在下次处理时被删除
 					update.deleting = 1;
 					resource_deletion_queue_.push_back(update);
 				}
 			}
 
 			// 将已在队列中的资源也标记为上一帧
-			for (auto& update : resource_deletion_queue_) {
-				update.current_frame = current_frame - 1;
+			for (auto &update : resource_deletion_queue_)
+			{
+				update.current_frame = gpu_device_->previous_frame_;
 			}
 		}
 
@@ -383,15 +446,17 @@ namespace lincore
 		gpu_device_ = nullptr;
 	}
 
-	TextureHandle ResourceManager::CreateTexture(const TextureCreation& creation) {
-		Texture* texture = texture_pool_.Obtain();
-		if (!texture) {
+	TextureHandle ResourceManager::CreateTexture(const TextureCreation &creation)
+	{
+		Texture *texture = texture_pool_.Obtain();
+		if (!texture)
+		{
 			return k_invalid_texture;
 		}
 
 		texture->handle.index = texture->pool_index;
 		texture->name = creation.name;
-		texture->vk_extent = { creation.width, creation.height, creation.depth };
+		texture->vk_extent = {creation.width, creation.height, creation.depth};
 		texture->array_layer_count = creation.array_layer_count;
 		texture->mip_level_count = creation.mip_level_count;
 		texture->type = creation.type;
@@ -410,14 +475,16 @@ namespace lincore
 		return texture->handle;
 	}
 
-	void ResourceManager::CreateTextureResource(TextureHandle handle) {
-		Texture* texture = GetTexture(handle);
-		if (!texture) return;
+	void ResourceManager::CreateTextureResource(TextureHandle handle)
+	{
+		Texture *texture = GetTexture(handle);
+		if (!texture)
+			return;
 
-		const TextureCreation& creation = texture_creation_infos_[handle];
+		const TextureCreation &creation = texture_creation_infos_[handle];
 
 		// Create the image
-		VkImageCreateInfo image_info = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+		VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
 		image_info.imageType = ToVkImageType(texture->type);
 		image_info.format = texture->vk_format;
 		image_info.extent = texture->vk_extent;
@@ -429,24 +496,29 @@ namespace lincore
 		image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 		image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-		if (texture->type == TextureType::TextureCube || texture->type == TextureType::Texture_Cube_Array) {
+		if (texture->type == TextureType::TextureCube || texture->type == TextureType::Texture_Cube_Array)
+		{
 			image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 		}
 
-		if (texture->sparse) {
+		if (texture->sparse)
+		{
 			image_info.flags |= VK_IMAGE_CREATE_SPARSE_RESIDENCY_BIT | VK_IMAGE_CREATE_SPARSE_BINDING_BIT;
 		}
 
 		// 处理别名纹理
-		if (texture->alias_texture.index != k_invalid_texture.index) {
-			Texture* alias_texture = GetTexture(texture->alias_texture);
-			if (!alias_texture) return;
+		if (texture->alias_texture.index != k_invalid_texture.index)
+		{
+			Texture *alias_texture = GetTexture(texture->alias_texture);
+			if (!alias_texture)
+				return;
 
 			texture->vma_allocation = 0;
 			VK_CHECK(vmaCreateAliasingImage(gpu_device_->vma_allocator_,
-				alias_texture->vma_allocation, &image_info, &texture->vk_image));
+											alias_texture->vma_allocation, &image_info, &texture->vk_image));
 		}
-		else {
+		else
+		{
 			VmaAllocationCreateInfo alloc_info = {};
 			alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
 			alloc_info.flags = 0;
@@ -454,24 +526,27 @@ namespace lincore
 
 			VmaAllocationInfo allocation_info;
 			VK_CHECK(vmaCreateImage(gpu_device_->vma_allocator_, &image_info, &alloc_info,
-				&texture->vk_image, &texture->vma_allocation, &allocation_info));
+									&texture->vk_image, &texture->vma_allocation, &allocation_info));
 		}
 
-		if (creation.name) {
+		if (creation.name)
+		{
 			gpu_device_->SetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)texture->vk_image, creation.name);
 		}
 
 		// Create the image view
-		VkImageViewCreateInfo view_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+		VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
 		view_info.image = texture->vk_image;
 		view_info.viewType = ToVkImageViewType(texture->type);
 		view_info.format = texture->vk_format;
 
-		if (TextureFormat::HasDepthOrStencil(texture->vk_format)) {
+		if (TextureFormat::HasDepthOrStencil(texture->vk_format))
+		{
 			view_info.subresourceRange.aspectMask = TextureFormat::HasDepth(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0;
 			view_info.subresourceRange.aspectMask |= TextureFormat::HasStencil(texture->vk_format) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0;
 		}
-		else {
+		else
+		{
 			view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 
@@ -482,7 +557,8 @@ namespace lincore
 
 		VK_CHECK(vkCreateImageView(gpu_device_->device_, &view_info, nullptr, &texture->vk_image_view));
 
-		if (creation.name) {
+		if (creation.name)
+		{
 			gpu_device_->SetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)texture->vk_image_view, creation.name);
 		}
 
@@ -490,21 +566,25 @@ namespace lincore
 		texture->state = RESOURCE_STATE_UNDEFINED;
 
 		// Upload initial data if present
-		if (creation.initial_data) {
+		if (creation.initial_data)
+		{
 			// Create staging buffer
 			BufferCreation staging_buffer_creation{};
 			staging_buffer_creation.Reset()
 				.SetName("Texture upload staging buffer")
 				.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, ResourceUsageType::Immutable, texture->vk_extent.width * texture->vk_extent.height * texture->vk_extent.depth * 4)
 				.SetData(creation.initial_data)
-				.SetPersistent(true);
+				.SetPersistent();
 
 			BufferHandle staging_buffer = CreateBuffer(staging_buffer_creation);
 
+			VkQueue &submit_queue = creation.transfer_queue ? gpu_device_->transfer_queue_ : gpu_device_->graphics_queue_;
+
 			// Transition image layout for transfer
-			gpu_device_->command_buffer_manager_.ImmediateSubmit([&](CommandBuffer* cmd)
-				{
-					UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_COPY_DEST, 0, texture->mip_level_count, false);
+			gpu_device_->command_buffer_manager_.ImmediateSubmit([&](CommandBuffer *cmd)
+																 {
+					// UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_COPY_DEST, 0, texture->mip_level_count, false);
+					cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 					VkBufferImageCopy region = {};
 					region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -515,56 +595,40 @@ namespace lincore
 
 					vkCmdCopyBufferToImage(cmd->GetCommandBuffer(), GetBuffer(staging_buffer)->vk_buffer, texture->vk_image,
 						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-
-					UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_SHADER_RESOURCE, 0, texture->mip_level_count, false);
-
-				}, gpu_device_->graphics_queue_);
-
-			//CommandBuffer* cmd = gpu_device_->GetCommandBuffer(true);
-			//UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_COPY_DEST, 0, texture->mip_level_count, false);
-			//gpu_device_->command_buffer_manager_.ImmediateSubmit([cmd](CommandBuffer* /*unused*/) {}, gpu_device_->graphics_queue_);
-
-			//// Copy buffer to image
-			//cmd = gpu_device_->GetCommandBuffer(true);
-			//VkBufferImageCopy region = {};
-			//region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			//region.imageSubresource.mipLevel = 0;
-			//region.imageSubresource.baseArrayLayer = 0;
-			//region.imageSubresource.layerCount = texture->array_layer_count;
-			//region.imageExtent = texture->vk_extent;
-
-			//vkCmdCopyBufferToImage(cmd->GetCommandBuffer(), GetBuffer(staging_buffer)->vk_buffer, texture->vk_image,
-			//    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-			//gpu_device_->command_buffer_manager_.ImmediateSubmit([cmd](CommandBuffer* /*unused*/) {}, gpu_device_->graphics_queue_);
-
-			//// Transition image layout for shader access
-			//cmd = gpu_device_->GetCommandBuffer(true);
-			//UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_SHADER_RESOURCE, 0, texture->mip_level_count, false);
-			//gpu_device_->command_buffer_manager_.ImmediateSubmit([cmd](CommandBuffer* /*unused*/) {}, gpu_device_->graphics_queue_);
+					// TODO : deal with mip levels
+					// UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_SHADER_RESOURCE, 0, texture->mip_level_count, false);
+					if (creation.transfer_queue) {
+						cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+							gpu_device_->queue_indices_.transfer_family, gpu_device_->queue_indices_.graphics_family);
+					}
+					else {
+						cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+					} }, submit_queue);
 
 			// Update texture state
 			texture->state = RESOURCE_STATE_SHADER_RESOURCE;
-
 			// Destroy staging buffer
 			DestroyBuffer(staging_buffer);
 		}
 	}
 
-	TextureHandle ResourceManager::CreateTextureView(const TextureViewCreation& creation) {
-		Texture* parent_texture = GetTexture(creation.parent_texture);
-		if (!parent_texture) {
+	TextureHandle ResourceManager::CreateTextureView(const TextureViewCreation &creation)
+	{
+		Texture *parent_texture = GetTexture(creation.parent_texture);
+		if (!parent_texture)
+		{
 			return k_invalid_texture;
 		}
 
 		// 验证视图类型与纹理类型的兼容性
-		if (!IsViewTypeCompatible(parent_texture->type, creation.view_type)) {
+		if (!IsViewTypeCompatible(parent_texture->type, creation.view_type))
+		{
 			return k_invalid_texture;
 		}
 
-		Texture* texture = texture_pool_.Obtain();
-		if (!texture) {
+		Texture *texture = texture_pool_.Obtain();
+		if (!texture)
+		{
 			return k_invalid_texture;
 		}
 
@@ -589,16 +653,18 @@ namespace lincore
 		texture->array_layer_count = creation.sub_resource.array_layer_count;
 
 		// Create image view for the texture view
-		VkImageViewCreateInfo view_info = { VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
+		VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
 		view_info.image = texture->vk_image;
 		view_info.viewType = creation.view_type;
 		view_info.format = texture->vk_format;
 
-		if (TextureFormat::HasDepthOrStencil(texture->vk_format)) {
+		if (TextureFormat::HasDepthOrStencil(texture->vk_format))
+		{
 			view_info.subresourceRange.aspectMask = TextureFormat::HasDepth(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : 0;
 			view_info.subresourceRange.aspectMask |= TextureFormat::HasStencil(texture->vk_format) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0;
 		}
-		else {
+		else
+		{
 			view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		}
 
@@ -609,18 +675,19 @@ namespace lincore
 
 		VK_CHECK(vkCreateImageView(gpu_device_->device_, &view_info, nullptr, &texture->vk_image_view));
 
-		if (creation.name) {
+		if (creation.name)
+		{
 			gpu_device_->SetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)texture->vk_image_view, creation.name);
 		}
 
 		return texture->handle;
 	}
 
-	void ResourceManager::UploadBuffer(BufferHandle& buffer_handle, void* buffer_data, size_t size, VkBufferUsageFlags usage, bool transfer)
+	void ResourceManager::UploadBuffer(BufferHandle &buffer_handle, void *buffer_data, size_t size, VkBufferUsageFlags usage, bool transfer)
 	{
 	}
 
-	PipelineHandle ResourceManager::CreatePipeline(const PipelineCreation& info, const char* cache_path)
+	PipelineHandle ResourceManager::CreatePipeline(const PipelineCreation &info, const char *cache_path)
 	{
 		return PipelineHandle();
 	}
@@ -629,16 +696,88 @@ namespace lincore
 	{
 	}
 
-	SamplerHandle ResourceManager::CreateSampler(const SamplerCreation& info)
+	SamplerHandle ResourceManager::CreateSampler(const SamplerCreation &creation)
 	{
-		return SamplerHandle();
+		Sampler *sampler = sampler_pool_.Obtain();
+		if (!sampler)
+		{
+			return k_invalid_sampler;
+		}
+		sampler->handle.index = sampler->pool_index;
+		sampler->name = creation.name;
+		// Create the Vulkan sampler
+		VkSamplerCreateInfo create_info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+
+		// Basic sampling parameters
+		create_info.magFilter = creation.mag_filter;
+		create_info.minFilter = creation.min_filter;
+		create_info.mipmapMode = creation.mip_filter;
+
+		// Addressing modes
+		create_info.addressModeU = creation.address_mode_u;
+		create_info.addressModeV = creation.address_mode_v;
+		create_info.addressModeW = creation.address_mode_w;
+
+		// LOD parameters
+		// TODO: 添加LOD参数
+		// create_info.mipLodBias = creation.mip_lod_bias;
+		// create_info.minLod = creation.min_lod;
+		// create_info.maxLod = creation.max_lod;
+
+		// Anisotropy
+		// TODO: 添加各向异性参数
+		// create_info.anisotropyEnable = creation.enable_anisotropy;
+		// create_info.maxAnisotropy = creation.max_anisotropy;
+
+		// Compare operation
+		// TODO: 添加比较操作参数
+		// create_info.compareEnable = creation.enable_compare;
+		// create_info.compareOp = creation.compare_op;
+
+		// Border color
+		// TODO: 添加边框颜色参数
+		// create_info.borderColor = creation.border_color;
+
+		// Unnormalized coordinates
+		// TODO: 添加未归一化坐标参数
+		// create_info.unnormalizedCoordinates = creation.unnormalized_coordinates;
+
+		VK_CHECK(vkCreateSampler(gpu_device_->device_, &create_info, nullptr, &sampler->vk_sampler));
+		if (creation.name)
+		{
+			gpu_device_->SetDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)sampler->vk_sampler, creation.name);
+		}
+		// Cache creation info
+		{
+			std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
+			sampler_creation_infos_[sampler->handle] = creation;
+		}
+		return sampler->handle;
+	}
+
+	Sampler *ResourceManager::GetSampler(SamplerHandle handle)
+	{
+		return sampler_pool_.Get(handle.index);
 	}
 
 	void ResourceManager::DestroySampler(SamplerHandle handle)
 	{
+		Sampler *sampler = sampler_pool_.Get(handle.index);
+		if (!sampler)
+			return;
+		if (sampler->vk_sampler)
+		{
+			vkDestroySampler(gpu_device_->device_, sampler->vk_sampler, nullptr);
+			sampler->vk_sampler = VK_NULL_HANDLE;
+		}
+		{
+			std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
+			sampler_creation_infos_.erase(handle);
+		}
+		sampler_pool_.Release(sampler);
 	}
 
-	DescriptorSetLayoutHandle ResourceManager::CreateDescriptorSetLayout(const DescriptorSetLayoutCreation& info)
+	DescriptorSetLayoutHandle ResourceManager::CreateDescriptorSetLayout(const DescriptorSetLayoutCreation &info)
 	{
 		return DescriptorSetLayoutHandle();
 	}
@@ -647,7 +786,7 @@ namespace lincore
 	{
 	}
 
-	DescriptorSetHandle ResourceManager::CreateDescriptorSet(const DescriptorSetCreation& info)
+	DescriptorSetHandle ResourceManager::CreateDescriptorSet(const DescriptorSetCreation &info)
 	{
 		return DescriptorSetHandle();
 	}
@@ -656,7 +795,7 @@ namespace lincore
 	{
 	}
 
-	RenderPassHandle ResourceManager::CreateRenderPass(const RenderPassCreation& info)
+	RenderPassHandle ResourceManager::CreateRenderPass(const RenderPassCreation &info)
 	{
 		return RenderPassHandle();
 	}
@@ -665,7 +804,7 @@ namespace lincore
 	{
 	}
 
-	FramebufferHandle ResourceManager::CreateFramebuffer(const FramebufferCreation& info)
+	FramebufferHandle ResourceManager::CreateFramebuffer(const FramebufferCreation &info)
 	{
 		return FramebufferHandle();
 	}
@@ -674,7 +813,7 @@ namespace lincore
 	{
 	}
 
-	ShaderStateHandle ResourceManager::CreateShaderState(const ShaderStateCreation& info)
+	ShaderStateHandle ResourceManager::CreateShaderState(const ShaderStateCreation &info)
 	{
 		return ShaderStateHandle();
 	}
@@ -683,17 +822,21 @@ namespace lincore
 	{
 	}
 
-	Texture* ResourceManager::GetTexture(TextureHandle handle) {
+	Texture *ResourceManager::GetTexture(TextureHandle handle)
+	{
 		return texture_pool_.Get(handle.index);
 	}
 
-	const Texture* ResourceManager::GetTexture(TextureHandle handle) const {
+	const Texture *ResourceManager::GetTexture(TextureHandle handle) const
+	{
 		return texture_pool_.Get(handle.index);
 	}
 
-	void ResourceManager::DestroyTexture(TextureHandle handle) {
-		Texture* texture = GetTexture(handle);
-		if (!texture) return;
+	void ResourceManager::DestroyTexture(TextureHandle handle)
+	{
+		Texture *texture = GetTexture(handle);
+		if (!texture)
+			return;
 
 		// 将资源添加到删除队列
 		{
