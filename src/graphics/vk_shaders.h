@@ -69,6 +69,7 @@ namespace lincore
 		std::unordered_map<std::string, ReflectedBinding> bindings_;
 		std::array<VkDescriptorSetLayout, 4> set_layouts_;
 		std::array<uint32_t, 4> set_hashes_;
+		bool bindless_texture_enabled_ = false;
 
 	private:
 		GpuDevice* gpu_device_;

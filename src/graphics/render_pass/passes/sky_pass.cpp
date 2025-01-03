@@ -1,4 +1,4 @@
-#include "graphics/renderer/passes/sky_pass.h"
+#include "graphics/render_pass/passes/sky_pass.h"
 // lincore
 #include "graphics/vk_pipelines.h"
 #include "graphics/vk_device.h"

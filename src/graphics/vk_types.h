@@ -67,14 +67,15 @@ namespace lincore
 	};
 
 
-	struct GPUSceneData
+	struct alignas(16) GPUSceneData
 	{
 		glm::mat4 view;
 		glm::mat4 proj;
 		glm::mat4 viewproj;
-		glm::vec4 ambient_color;
 		glm::vec4 sunlight_direction; // w for sun power
 		glm::vec4 sunlight_color;
+		glm::vec3 camera_position;
+		float pad0;
 	};
 
 	// holds the resources needed for a mesh

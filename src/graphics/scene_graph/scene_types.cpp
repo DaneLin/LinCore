@@ -1,5 +1,4 @@
-#include "graphics/scene/scene_types.h"
-#include "scene_types.h"
+#include "graphics/scene_graph/scene_types.h"
 #include <memory>
 #include <glm/gtx/matrix_decompose.hpp>
 #include "graphics/vk_device.h"

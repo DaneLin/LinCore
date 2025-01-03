@@ -1,5 +1,6 @@
 #pragma once
-#include "graphics/scene/scene_types.h"
+#include "graphics/scene_graph/scene_types.h"
+// std
 #include <memory>
 #include <string>
 #include <vector>

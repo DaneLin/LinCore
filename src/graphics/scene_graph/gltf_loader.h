@@ -8,7 +8,7 @@
 // external
 #include <fastgltf/types.hpp>
 // lincore
-#include "graphics/scene/scene_types.h"
+#include "graphics/scene_graph/scene_types.h"
 #include "graphics/vk_resources.h"
 
 namespace lincore

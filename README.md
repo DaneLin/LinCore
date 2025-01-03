@@ -10,6 +10,8 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 - [x] 无绑定资源管理 Bindless Resource Management
 - [x] 管线缓存 Pipeline Cache
 - [x] 多线程记录命令 (Secondary command buffer) / Multi-threaded command recording (Secondary command buffer)
+- [x] 简易SceneGraph Simple SceneGraph
+- [x] Microfacet BRDF (Cook-Torrance)
 
 # 待实现特性 (To-Do Features)
 - [ ] 帧图 Frame Graph

@@ -3,9 +3,10 @@ layout(std140, set = 0, binding = 0) uniform SceneData {
     mat4 view;
     mat4 proj;  
     mat4 viewproj;
-    vec4 ambient_color;
     vec4 sunlight_direction;
     vec4 sunlight_color;
+    vec3 camera_position;
+    float sunlight_intensity;
 } scene_data;
 
 struct Vertex {
@@ -17,7 +18,7 @@ struct Vertex {
 };
 
 // 全局顶点缓冲区
-layout(std430, set = 1, binding = 0) readonly buffer GlobalVertexBuffer {
+layout(std430, set = 0, binding = 1) readonly buffer GlobalVertexBuffer {
     Vertex vertices[];
 } vertex_buffer;
 
@@ -30,7 +31,7 @@ struct ObjectData {
     uint padding[3];
 }; 
 
-layout(std430, set = 1, binding = 1) readonly buffer ObjectBuffer {   
+layout(std430, set = 0, binding = 2) readonly buffer ObjectBuffer {   
     ObjectData objects[];
 } object_buffer;
 
@@ -45,21 +46,28 @@ struct DrawCommand {
 };
 
 // 可见绘制命令缓冲区
-layout(std430,set = 1, binding = 2) readonly buffer VisibleDrawBuffer {   
+layout(std430,set = 0, binding =3 ) readonly buffer VisibleDrawBuffer {   
     DrawCommand visible_commands[];
 } visible_draw_buffer;
 
-// layout(std140, set = 1, binding = 3) uniform MaterialData {
-//    vec4 base_color_factor;
-//    float metallic_factor;
-//    float roughness_factor;
-//    float normal_scale;
-//    vec3 emissive_factor;
-//    float alpha_cutoff;
-//    uint material_flags;
-//    uint base_color_tex_id;
-//    uint metallic_roughness_tex_id;
-//    uint normal_tex_id;
-//    uint emissive_tex_id;
-//    uint padding2[3];   
-// } material_data;
+
+struct MaterialData
+{
+   vec4 base_color_factor;
+   vec3 emissive_factor;
+   float metallic_factor;
+   float roughness_factor;
+   float normal_scale;
+   float padding[2];
+   uint base_color_tex_id;
+   uint metallic_roughness_tex_id;
+   uint normal_tex_id;
+   uint emissive_tex_id; 
+};
+
+layout(set = 0, binding = 4) readonly buffer MaterialDataBuffer {
+   MaterialData materials[];
+} material_data_buffer;
+
+// bindless texture
+layout(set = 1, binding = 0) uniform sampler2D textures[];

@@ -1,7 +1,7 @@
-#include "graphics/scene/scene_graph.h"
+#include "graphics/scene_graph/scene_graph.h"
 #include "foundation/logging.h"
 #include "graphics/vk_device.h"
-#include "graphics/scene/gltf_loader.h"
+#include "graphics/scene_graph/gltf_loader.h"
 
 namespace lincore
 {
@@ -55,7 +55,7 @@ namespace lincore
 
             // 创建材质缓冲区
             buffer_creation.Reset()
-                .Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                .Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                      ResourceUsageType::Immutable,
                      config.max_materials * sizeof(MaterialInstance))
                 .SetName("Scene_MaterialBuffer")
@@ -138,9 +138,6 @@ namespace lincore
 
             // 2. 递归清理节点树
             root_node_ = nullptr;
-
-            // 3. 清理其他资源
-            materials_.clear();
 
             // 清理GPU资源
             gpu_resources_.Shutdown(device_);
@@ -247,28 +244,6 @@ namespace lincore
             needs_update_ = true;
         }
 
-        void SceneGraph::AddMaterial(std::shared_ptr<MaterialInstance> material, const std::string &name)
-        {
-            if (!material)
-                return;
-
-            // 使用提供的名称或生成默认名称
-            std::string material_name = name;
-            if (material_name.empty())
-            {
-                material_name = "material_" + std::to_string(materials_.size());
-            }
-
-            // 添加到材质库中
-            if (materials_.find(material_name) == materials_.end())
-            {
-                materials_[material_name] = material;
-                material_indices_[material.get()] = next_material_index_++;
-            }
-
-            needs_update_ = true;
-        }
-
         void SceneGraph::RemoveMesh(const std::string &name)
         {
             /*auto it = meshes_.find(name);
@@ -281,13 +256,13 @@ namespace lincore
 
         void SceneGraph::RemoveMaterial(const std::string &name)
         {
-            auto it = materials_.find(name);
+            /*auto it = materials_.find(name);
             if (it != materials_.end())
             {
                 material_indices_.erase(it->second.get());
                 materials_.erase(it);
                 needs_update_ = true;
-            }
+            }*/
         }
 
         uint32_t SceneGraph::GetMaterialIndex(const MaterialInstance *material) const
@@ -295,7 +270,7 @@ namespace lincore
             if (!material)
                 return 0;
             auto it = material_indices_.find(material);
-            return it != material_indices_.end() ? it->second : 0;
+            return it != material_indices_.end() ? it->second : gpu_resources_.current_material_count_;
         }
 
         void SceneGraph::AddGLTFScene(std::shared_ptr<LoadedGLTF> gltf)
@@ -321,13 +296,7 @@ namespace lincore
                 AddMesh(mesh);
             }
 
-            // 2. 添加材质
-            for (const auto &[name, material] : gltf.materials_)
-            {
-                AddMaterial(material, name);
-            }
-
-            // 3. 处理节点层级
+            // 2. 处理节点层级
             // 只需要将根节点添加到场景图的根节点下即可
             for (auto &root_node : gltf.root_nodes_)
             {
@@ -351,23 +320,25 @@ namespace lincore
                 // 为每个surface创建一个实例
                 for (size_t i = 0; i < node->GetMesh()->surfaces.size(); i++)
                 {
+					GeoSurface& surface = node->GetMesh()->surfaces[i];
                     // 创建实例数据
                     ObjectData instance_data;
                     instance_data.model = world_transform;
                     // 创建一个临时bounds并应用世界变换
-                    Bounds world_bounds = node->GetMesh()->surfaces[i].bounds;
+                    Bounds world_bounds = surface.bounds;
                     world_bounds.Transform(world_transform);
 
                     // 使用变换后的bounds
                     instance_data.sphere_bounds = world_bounds.GetSphere();
                     instance_data.extents = world_bounds.GetExtents();
-                    if (node->GetMesh()->surfaces[i].material)
+                    if (surface.material)
                     {
-                        instance_data.material_index = GetMaterialIndex(node->GetMesh()->surfaces[i].material.get());
+                        instance_data.material_index = GetMaterialIndex(surface.material.get());
                         // 如果材质索引超出范围，则添加到待上传队列
                         if (instance_data.material_index >= gpu_resources_.current_material_count_)
                         {
-                            pending_.materials.push_back(*node->GetMesh()->surfaces[i].material); // 将材质添加到待上传队列
+                            pending_.materials.push_back(*surface.material); // 将材质添加到待上传队列
+							material_indices_[surface.material.get()] = gpu_resources_.current_material_count_++;
                         }
                     }
                     instance_data.padding[0] = instance_data.padding[1] = instance_data.padding[2] = 0;
@@ -376,10 +347,10 @@ namespace lincore
                     pending_.instance_data.push_back(std::move(instance_data));
 
                     DrawCommand cmd{};
-                    cmd.index_count = node->GetMesh()->surfaces[i].index_count;
+                    cmd.index_count = surface.index_count;
                     cmd.instance_count = 1;
                     // 使用正确的索引和顶点偏移
-                    cmd.first_index = static_cast<uint32_t>(node->GetMesh()->surfaces[i].first_index + node->GetMesh()->index_offset);
+                    cmd.first_index = static_cast<uint32_t>(surface.first_index + node->GetMesh()->index_offset);
                     cmd.vertex_offset = static_cast<uint32_t>(node->GetMesh()->vertex_offset);  // 使用mesh的顶点偏移
                     cmd.first_instance = 0;
                     cmd.object_id = static_cast<uint32_t>(gpu_resources_.draw_count);
@@ -435,11 +406,11 @@ namespace lincore
             }
 
             // 更新材质数据
-            // if (!pending_.materials.empty())
-            // {
-            //     device_->command_buffer_manager_.UploadBuffer(gpu_resources_.staging_buffer, gpu_resources_.material_buffer, pending_.materials.data(), pending_.materials.size() * sizeof(MaterialInstance));
-            //     gpu_resources_.current_material_count_ += pending_.materials.size();
-            // }
+            if (!pending_.materials.empty())
+            {
+                device_->command_buffer_manager_.UploadBuffer(gpu_resources_.staging_buffer, gpu_resources_.material_buffer, pending_.materials.data(), pending_.materials.size() * sizeof(MaterialInstance));
+
+            }
         }
 
         void SceneGraph::Update()

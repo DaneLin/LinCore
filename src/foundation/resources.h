@@ -904,6 +904,9 @@ namespace lincore
 	void UtilAddStateBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, PipelineStage::Enum source_stage, PipelineStage::Enum destination_stage);
 
 	VkFormat UtilStringToVkFormat(const char* format);
+
+	const std::string GetAssetPath(const std::string& path);
+
 }
 
 // Hash functions for handles

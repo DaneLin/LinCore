@@ -146,9 +146,9 @@ namespace lincore
 		 */
 		struct SwapchainInfo
 		{
-			VkFormat image_format{VK_FORMAT_B8G8R8A8_UNORM};
-			VkExtent2D extent{1700, 900};
-			VkPresentModeKHR present_mode{VK_PRESENT_MODE_FIFO_KHR};
+			VkExtent2D extent{1280, 720};
+			VkFormat image_format{VK_FORMAT_B8G8R8A8_SRGB};
+			VkPresentModeKHR present_mode{VK_PRESENT_MODE_IMMEDIATE_KHR};
 			VkImageUsageFlags usage{VK_IMAGE_USAGE_TRANSFER_DST_BIT};
 		} default_swapchain_info_;
 
@@ -240,8 +240,8 @@ namespace lincore
    		BindlessUpdateArray bindless_updates;
 
 		VkDescriptorSetLayout gpu_scene_data_descriptor_layout_;
-
 		GPUSceneData scene_data_;
+		BufferHandle global_scene_data_buffer_;
 
 		ResourceManager resource_manager_;
 		CommandBufferManager command_buffer_manager_;
@@ -291,7 +291,6 @@ namespace lincore
 		Texture *GetDepthImage() { return resource_manager_.GetTexture(depth_image_handle_); }
 
 		// resource management
-		void UploadBuffer(BufferHandle &buffer_handle, void *buffer_data, size_t size, VkBufferUsageFlags usage, bool transfer = false);
 		void CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle);
 
 		ShaderEffect* CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string& name = "");
@@ -409,6 +408,17 @@ namespace lincore
 			const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
 			void *pUserData);
 
+		// 切换垂直同步
+		void ToggleVSync(bool vsync_enabled) {
+			default_swapchain_info_.present_mode = vsync_enabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
+			ResizeSwapchain(swapchain_extent_.width, swapchain_extent_.height);
+		}
+		
+		// 获取当前垂直同步状态
+		bool IsVSyncEnabled() const {
+			return default_swapchain_info_.present_mode == VK_PRESENT_MODE_FIFO_KHR;
+		}
+
 	private:
 		/**
 		 * @brief 设备特性
@@ -434,15 +444,8 @@ namespace lincore
 
 		void SetupDebugMessenger();
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
-
-		/**
-		 * @brief 每帧调用的更新方法
-		 * 包含更新绑定纹理描述符
-		 */
    		void UpdateBindlessDescriptors();
-
 		void LogAvailableDevices();
-
 		/**
 		 * @brief 用于编译期断言的辅助模板
 		 * 包含类型T

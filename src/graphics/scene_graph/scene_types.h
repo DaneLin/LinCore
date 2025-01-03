@@ -76,27 +76,18 @@ namespace lincore
          * @brief 材质实例
          * 包含材质参数和资源引用
          */
-        struct MaterialInstance
+        struct alignas(16) MaterialInstance
         {
-            // 材质参数
-            struct Parameters
-            {
-                glm::vec4 base_color_factor{1.0f};
-                float metallic_factor{1.0f};
-                float roughness_factor{1.0f};
-                float normal_scale{1.0f};
-                glm::vec3 emissive_factor{0.0f};
-                float alpha_cutoff{0.5f};
-                uint32_t material_flags{0};
-            } parameters;
-            // Bindless纹理引用
-            struct TextureIndices
-            {
-                uint32_t base_color{UINT32_MAX};
-                uint32_t metallic_roughness{UINT32_MAX};
-                uint32_t normal{UINT32_MAX};
-                uint32_t emissive{UINT32_MAX};
-            } texture_indices;
+            glm::vec4 base_color_factor{1.0f};
+            glm::vec3 emissive_factor{0.0f};
+            float metallic_factor{1.0f};
+            float roughness_factor{1.0f};
+            float normal_scale{1.0f};
+            float padding[2];
+            uint32_t base_color_index{UINT32_MAX};
+            uint32_t metallic_roughness_index{UINT32_MAX};
+            uint32_t normal_index{UINT32_MAX};
+            uint32_t emissive_index{UINT32_MAX};
         };
 
         /**
@@ -107,9 +98,9 @@ namespace lincore
         {
             glm::vec3 position; // offset 0  (12 bytes, padded to 16)
             float uv_x;
-            glm::vec3 normal;   // offset 16 (12 bytes, padded to 16)
+            glm::vec3 normal; // offset 16 (12 bytes, padded to 16)
             float uv_y;
-            glm::vec4 color;    // offset 32 (16 bytes)
+            glm::vec4 color; // offset 32 (16 bytes)
         };
 
         /**
@@ -156,7 +147,7 @@ namespace lincore
             // 释放CPU端数据
             void ReleaseCPUData();
         };
-        
+
         struct DrawContext;
         /**
          * @brief 可绘制接口
@@ -290,7 +281,6 @@ namespace lincore
             int32_t aabb_check;
             float aabb_min[3];
             float aabb_max[3];
-            
         };
 
         /**
@@ -305,10 +295,10 @@ namespace lincore
             float near_plane{0.1f};
             float far_plane{1000.0f};
             uint32_t max_objects{100000};
-            uint32_t max_materials{ 100000 };
-            uint32_t max_vertices{ 1000000 };
-            uint32_t max_indices{ 3000000};
-            uint32_t max_draw_commands{ 100000 };
+            uint32_t max_materials{100000};
+            uint32_t max_vertices{1000000};
+            uint32_t max_indices{3000000};
+            uint32_t max_draw_commands{100000};
         };
 
         /**

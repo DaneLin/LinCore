@@ -1,6 +1,6 @@
 #pragma once
 
-#include "render_pass.h"
+#include "graphics/render_pass/render_pass.h"
 
 namespace lincore
 {
@@ -16,8 +16,6 @@ namespace lincore
     public:
         ~MeshPass() override;
         virtual void Shutdown() override;
-
-        MeshPass& SetSceneGraph(scene::SceneGraph* graph);
 
     protected:
         virtual void PrepareShader() override;

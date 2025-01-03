@@ -21,11 +21,9 @@
 #include "graphics/vk_pipelines.h"
 #include "graphics/vk_profiler.h"
 #include "graphics/vk_device.h"
-
-#include "graphics/scene/gltf_loader.h"
-#include "graphics/scene/scene_view.h"
-
-#include "graphics/renderer/passes/mesh_pass.h"
+#include "graphics/scene_graph/gltf_loader.h"
+#include "graphics/scene_graph/scene_view.h"
+#include "graphics/render_pass/passes/mesh_pass.h"
 
 namespace lincore
 {
@@ -68,8 +66,6 @@ namespace lincore
 
 		imgui_layer_.Init(&gpu_device_);
 
-		InitDefaultData();
-
 		main_camera_.Init(glm::vec3(-10, 1, 0), 70.f, (float)window_extent_.width / (float)window_extent_.height, 10000.f, 0.1f);
 
 		scene::LoadConfig load_config;
@@ -79,7 +75,8 @@ namespace lincore
             .BindInputs({{"image", gpu_device_.draw_image_handle_.index}})
             .Finalize();
 
-		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
+		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
 		scene_graph_ = std::make_unique<scene::SceneGraph>(&gpu_device_);
 		scene_graph_->Init();
 		scene_graph_->BeginSceneUpdate();
@@ -99,14 +96,13 @@ namespace lincore
 				{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
 				{"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
 				{"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
-				{"scene_data", global_scene_data_buffer_.index},
+				{"scene_data", gpu_device_.global_scene_data_buffer_.index},
+				{"material_data_buffer", gpu_resource_pool.material_buffer.index}
 			})
-			//{"material_data", gpu_resource_pool.material_buffer.index}})
 			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}},
 							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
 			.SetSceneGraph(scene_graph_.get())
 			.Finalize();
-
 		// everything went fine
 		is_initialized_ = true;
 	}
@@ -192,8 +188,8 @@ namespace lincore
 		// main loop
 		while (!bQuit)
 		{
-			// begin clock
-			auto start = std::chrono::system_clock::now();
+			auto frame_start = std::chrono::steady_clock::now();
+
 			// Handle events on queue
 			while (SDL_PollEvent(&e) != 0)
 			{
@@ -240,8 +236,12 @@ namespace lincore
 
 			if (ImGui::Begin("background"))
 			{
-
 				ImGui::SliderFloat("Render Scale", &gpu_device_.render_scale_, 0.3f, 1.0f);
+				
+				bool vsync = gpu_device_.IsVSyncEnabled();
+				if (ImGui::Checkbox("VSync", &vsync)) {
+					gpu_device_.ToggleVSync(vsync);
+				}
 			}
 			ImGui::End();
 
@@ -290,64 +290,37 @@ namespace lincore
 			// our draw function
 			Draw();
 
-			auto end = std::chrono::system_clock::now();
-
-			// convert to ms
-			auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-			engine_stats_.frame_time = elapsed.count() / 1000.f;
+			auto frame_end = std::chrono::steady_clock::now();
+			auto frame_duration = std::chrono::duration_cast<std::chrono::microseconds>(frame_end - frame_start);
+			engine_stats_.frame_time = frame_duration.count() / 1000.f;  // Convert to milliseconds
 		}
-	}
-
-	void VulkanEngine::InitDefaultData()
-	{
-		BufferCreation buffer_info{};
-		buffer_info.Reset()
-			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(GPUSceneData))
-			.SetPersistent();
-		global_scene_data_buffer_ = gpu_device_.CreateResource(buffer_info);
-	}
-
-	const std::string VulkanEngine::GetAssetPath(const std::string &path) const
-	{
-		return std::string("../../" + path);
 	}
 
 	void VulkanEngine::UpdateScene()
 	{
 		engine_stats_.scene_update_time = 0;
-
 		auto start = std::chrono::system_clock::now();
-
-		main_draw_context_.opaque_surfaces.clear();
-		main_draw_context_.transparent_surfaces.clear();
 
 		main_camera_.Update();
 
 		gpu_device_.scene_data_.view = main_camera_.GetViewMatrix();
-		// camera projection
 		gpu_device_.scene_data_.proj = main_camera_.GetProjectionMatrix();
-
-		// invert the Y direction on projection matrix so that we are more similar
-		// to opengl and gltf axis
 		gpu_device_.scene_data_.proj[1][1] *= -1;
 		gpu_device_.scene_data_.viewproj = gpu_device_.scene_data_.proj * gpu_device_.scene_data_.view;
 
 		// some default lighting parameters
-		gpu_device_.scene_data_.ambient_color = glm::vec4(.1f);
 		gpu_device_.scene_data_.sunlight_color = glm::vec4(1.f);
-		gpu_device_.scene_data_.sunlight_direction = glm::vec4(0, 1, 0.5, 1.f);
+		gpu_device_.scene_data_.sunlight_direction = glm::vec4(0, -10, 10, 1.f);
 
-		auto end = std::chrono::system_clock::now();
-
-		// convert to microseconds (integer), and then come back to miliseconds
-		auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-		engine_stats_.scene_update_time = elapsed.count() / 1000.f;
-
-		Buffer *gpu_scene_data_buffer = gpu_device_.GetResource<Buffer>(global_scene_data_buffer_.index);
-
-		// write the buffer
+		Buffer *gpu_scene_data_buffer = gpu_device_.GetResource<Buffer>(gpu_device_.global_scene_data_buffer_.index);
 		GPUSceneData *scene_uniform_data = (GPUSceneData *)gpu_scene_data_buffer->vma_allocation->GetMappedData();
 		*scene_uniform_data = gpu_device_.scene_data_;
+
+		
+
+		auto end = std::chrono::system_clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+		engine_stats_.scene_update_time = elapsed.count() / 1000.f;
 	}
 
 }

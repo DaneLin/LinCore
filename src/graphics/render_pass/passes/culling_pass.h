@@ -1,26 +1,22 @@
 #pragma once
 
-#include "graphics/renderer/passes/render_pass.h"
+#include "graphics/render_pass/render_pass.h"
+#include "graphics/scene_graph/scene_types.h"
 
 namespace lincore
 {
-	class GpuDevice;
+    class GpuDevice;
 	class CommandBuffer;
 	class ShaderEffect;
 	struct FrameData;
 
-	struct ComputePushConstants {
-		glm::vec4 data1;
-		glm::vec4 data2;
-		glm::vec4 data3;
-		glm::vec4 data4;
-	};
-
-	class SkyBackgroundPass : public RenderPassBase
+	class CullingPass : public RenderPassBase
 	{
 	public:
-		~SkyBackgroundPass() override;
+		~CullingPass() override;
 		virtual void Shutdown() override;
+
+		void SetCullData(const scene::DrawCullData& cull_data);
 
 	protected:
 		virtual void PrepareShader() override;
@@ -28,7 +24,7 @@ namespace lincore
 		virtual void ExecutePass(CommandBuffer* cmd, FrameData* frame) override;
 
 	private:
-		ComputePushConstants data_{};
 		VkPipeline pipeline_{ VK_NULL_HANDLE };
+		scene::DrawCullData cull_data_{};
 	};
-} // namespace lincore
+}

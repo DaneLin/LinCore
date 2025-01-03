@@ -13,10 +13,10 @@
 #include "graphics/imgui_layer.h"
 
 
-#include "graphics/scene/scene_graph.h"
-#include "graphics/renderer/passes/sky_pass.h"
-#include "graphics/renderer/passes/culling_pass.h"
-#include "graphics/renderer/passes/mesh_pass.h"
+#include "graphics/scene_graph/scene_graph.h"
+#include "graphics/render_pass/passes/sky_pass.h"
+#include "graphics/render_pass/passes/culling_pass.h"
+#include "graphics/render_pass/passes/mesh_pass.h"
 
 namespace lincore
 {
@@ -32,13 +32,9 @@ namespace lincore
 	 */
 	struct EngineStats {
 		float frame_time;
-
 		int triangle_count;
-
 		int drawcall_count;
-
 		float scene_update_time;
-
 		float mesh_draw_time;
 	};
 
@@ -61,7 +57,6 @@ namespace lincore
 		int current_background_effect_{ 0 };
 		int current_scene_{ 0 };
 
-		DrawContext main_draw_context_;
 
 		Camera main_camera_;
 
@@ -74,9 +69,6 @@ namespace lincore
 		MeshPass mesh_pass_;
 
 		ImGuiLayer imgui_layer_;
-
-		BufferHandle global_scene_data_buffer_;
-
 		GpuDevice gpu_device_;
 
 	public:
@@ -91,10 +83,6 @@ namespace lincore
 		void Run();
 
 		void UpdateScene();
-
-	private:
-		void InitDefaultData();
-		const std::string GetAssetPath(const std::string& path) const;
 	};
 
 }

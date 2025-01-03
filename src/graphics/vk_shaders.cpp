@@ -151,7 +151,7 @@ namespace lincore
 					layoutBinding.binding = reflectBinding.binding;
 					layoutBinding.descriptorType = static_cast<VkDescriptorType>(reflectBinding.descriptor_type);
 
-					is_bindless = reflectBinding.binding == kBINDLESS_TEXTURE_BINDING;
+					is_bindless = reflectSet.set == kBINDLESS_TEXTURE_SET_ID && reflectBinding.binding == kBINDLESS_TEXTURE_BINDING;
 					layoutBinding.descriptorCount = is_bindless ? kMAX_BINDLESS_RESOURCES : 1;
 					for (uint32_t i_dim = 0; i_dim < reflectBinding.array.dims_count; ++i_dim)
 					{
@@ -166,6 +166,12 @@ namespace lincore
 
 					bindings_[reflectBinding.name] = reflected;
 				}
+				if (is_bindless)
+				{
+					bindless_texture_enabled_ = is_bindless;
+
+				}
+				
 				layout.set_number = reflectSet.set;
 				layout.create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
 				layout.create_info.bindingCount = reflectSet.binding_count;
@@ -238,18 +244,7 @@ namespace lincore
 			layout.create_info.flags = 0;
 			layout.create_info.pNext = 0;
 
-			// Add bindless support if needed
-			bool has_bindless = false;
-			for (const auto &binding : layout.bindings)
-			{
-				if (binding.binding == kBINDLESS_TEXTURE_BINDING)
-				{
-					has_bindless = true;
-					break;
-				}
-			}
-
-			if (has_bindless)
+			if (bindless_texture_enabled_ && i == kBINDLESS_TEXTURE_SET_ID)
 			{
 				layout.create_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 
@@ -411,7 +406,7 @@ namespace lincore
 		for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i)
 		{
 			// 不绑定bindless和空描述符集
-			if (cached_descriptor_sets_[i] != VK_NULL_HANDLE && i != kBINDLESS_TEXTURE_SET_ID)
+			if (cached_descriptor_sets_[i] != VK_NULL_HANDLE)
 			{
 				vkCmdBindDescriptorSets(cmd, GetBindPoint(), built_layout_, static_cast<uint32_t>(i), 1, &cached_descriptor_sets_[i], set_offsets_[i].count, set_offsets_[i].offset.data());
 			}
@@ -470,29 +465,37 @@ namespace lincore
 
 		for (size_t i = 0; i < cached_descriptor_sets_.size(); ++i)
 		{
-			if (writes[i].size() > 0)
+			if (writes[i].size() > 0 || (bindless_texture_enabled_ && i == kBINDLESS_TEXTURE_SET_ID))
 			{
 				if (cached_descriptor_sets_[i] == VK_NULL_HANDLE)
 				{
 					// alloc
 					auto layout = set_layouts_[i];
 					VkDescriptorSet new_descriptor;
-					if (allocator)
+					if (bindless_texture_enabled_ && i == kBINDLESS_TEXTURE_SET_ID)
 					{
-						new_descriptor = allocator->Allocate(gpu_device_->device_, layout);
+						new_descriptor = gpu_device_->bindless_texture_set_;
 					}
 					else
 					{
-						new_descriptor = gpu_device_->descriptor_allocator_.Allocate(gpu_device_->device_, layout);
+						if (allocator)
+						{
+							new_descriptor = allocator->Allocate(gpu_device_->device_, layout);
+						}
+						else
+						{
+							new_descriptor = gpu_device_->descriptor_allocator_.Allocate(gpu_device_->device_, layout);
+						}
+
+						for (auto &w : writes[i])
+						{
+							w.dstSet = new_descriptor;
+						}
+
+						vkUpdateDescriptorSets(gpu_device_->device_, static_cast<uint32_t>(writes[i].size()), writes[i].data(), 0, nullptr);
+						gpu_device_->SetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)new_descriptor, "ShaderEffect");
 					}
 
-					for (auto &w : writes[i])
-					{
-						w.dstSet = new_descriptor;
-					}
-
-					vkUpdateDescriptorSets(gpu_device_->device_, static_cast<uint32_t>(writes[i].size()), writes[i].data(), 0, nullptr);
-					gpu_device_->SetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)new_descriptor, "ShaderEffect");
 					cached_descriptor_sets_[i] = new_descriptor;
 				}
 			}

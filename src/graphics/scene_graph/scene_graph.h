@@ -80,7 +80,6 @@ namespace lincore
 
             // 资源管理
             void AddMesh(std::shared_ptr<MeshAsset> mesh);
-            void AddMaterial(std::shared_ptr<MaterialInstance> material, const std::string &name = "");
             void RemoveMesh(const std::string &name);
             void RemoveMaterial(const std::string &name);
             uint32_t GetMaterialIndex(const MaterialInstance *material) const;
@@ -121,8 +120,6 @@ namespace lincore
             // 场景数据
             std::shared_ptr<SceneNode> root_node_;
             std::unordered_map<std::string, std::shared_ptr<SceneNode>> node_lookup_;
-            /*std::unordered_map<std::string, std::shared_ptr<MeshAsset>> meshes_;*/
-            std::unordered_map<std::string, std::shared_ptr<MaterialInstance>> materials_;
             std::unordered_map<const MaterialInstance *, uint32_t> material_indices_;
             uint32_t next_material_index_{0};
             

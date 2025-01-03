@@ -26,9 +26,8 @@ const std::vector<const char*> required_extensions = {
 constexpr unsigned int kFRAME_OVERLAP = 2;
 constexpr uint32_t kINITIAL_DESCRIPTOR_POOL_SIZE = 1024;
 
-constexpr uint32_t kBINDLESS_TEXTURE_SET_ID = 2;
-constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 11;
-
+constexpr uint32_t kBINDLESS_TEXTURE_SET_ID = 1;
+constexpr uint32_t kBINDLESS_TEXTURE_BINDING = 0;
 constexpr uint32_t kMAX_BINDLESS_RESOURCES = 1024;
 
 constexpr uint8_t kMAX_IMAGE_OUTPUT = 8;

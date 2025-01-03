@@ -1,4 +1,4 @@
-#include "graphics/scene/gltf_loader.h"
+#include "graphics/scene_graph/gltf_loader.h"
 
 // std
 #include <iostream>
@@ -10,14 +10,15 @@
 #include <fastgltf/tools.hpp>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
+// Add this with other GLM includes
+#include <glm/gtc/type_ptr.hpp> 
 // lincore
-#include "graphics/scene/scene_types.h"
+#include "graphics/scene_graph/scene_types.h"
 #include "foundation/resources.h"
 #include "foundation/logging.h"
 #include "graphics/vk_device.h"
-#include "graphics/scene/scene_node.h"
-// Add this with other GLM includes
-#include <glm/gtc/type_ptr.hpp> // for glm::make_mat4
+#include "graphics/scene_graph/scene_node.h"
+
 
 namespace lincore::scene
 {
@@ -323,44 +324,44 @@ namespace lincore::scene
         buffer_info.Reset()
             .Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                  ResourceUsageType::Immutable,
-                 static_cast<uint32_t>(sizeof(MaterialInstance::Parameters) * ctx.asset.materials.size()))
+                 static_cast<uint32_t>(sizeof(MaterialInstance) * ctx.asset.materials.size()))
             .SetPersistent();
         buffer_info.initial_data = nullptr;
         ctx.material_data_buffer_handle = ctx.device->CreateResource(buffer_info);
 
         Buffer *material_data_buffer = ctx.device->GetResource<Buffer>(ctx.material_data_buffer_handle.index);
-        MaterialInstance::Parameters *material_data = static_cast<MaterialInstance::Parameters *>(material_data_buffer->mapped_data);
-        // 遍历材质
+        MaterialInstance *material_data = static_cast<MaterialInstance*>(material_data_buffer->mapped_data);
+
         for (size_t i = 0; i < ctx.asset.materials.size(); i++)
         {
             const auto &gltf_mat = ctx.asset.materials[i];
             auto material = std::make_shared<MaterialInstance>();
             std::string material_name = gltf_mat.name.empty() ? "material_" + std::to_string(i) : std::string(gltf_mat.name.c_str());
             // 基础颜色
-            material->parameters.base_color_factor = glm::vec4(
+            material->base_color_factor = glm::vec4(
                 gltf_mat.pbrData.baseColorFactor[0],
                 gltf_mat.pbrData.baseColorFactor[1],
                 gltf_mat.pbrData.baseColorFactor[2],
                 gltf_mat.pbrData.baseColorFactor[3]);
 
             // 金属度和粗糙度
-            material->parameters.metallic_factor = gltf_mat.pbrData.metallicFactor;
-            material->parameters.roughness_factor = gltf_mat.pbrData.roughnessFactor;
+            material->metallic_factor = gltf_mat.pbrData.metallicFactor;
+            material->roughness_factor = gltf_mat.pbrData.roughnessFactor;
 
             // 法线贴图缩放
             if (gltf_mat.normalTexture)
             {
-                material->parameters.normal_scale = gltf_mat.normalTexture->scale;
+                material->normal_scale = gltf_mat.normalTexture->scale;
             }
 
             // 自发光因子
-            material->parameters.emissive_factor = glm::vec3(
+            material->emissive_factor = glm::vec3(
                 gltf_mat.emissiveFactor[0],
                 gltf_mat.emissiveFactor[1],
                 gltf_mat.emissiveFactor[2]);
 
             // Alpha裁剪
-            material->parameters.alpha_cutoff = gltf_mat.alphaCutoff;
+            //material->alpha_cutoff = gltf_mat.alphaCutoff;
 
             // 材质标志, 默认不透明
             uint32_t flags = 0;
@@ -379,40 +380,40 @@ namespace lincore::scene
             {
                 flags |= MATERIAL_FLAG_ALPHA_TEST;
             }
-            material->parameters.material_flags = flags;
+            //material->parameters.material_flags = flags;
 
             TextureHandle &dummy_texture_handle = ctx.device->default_resources_.images.error_checker_board_image;
             SamplerHandle &dummy_sampler = ctx.device->default_resources_.samplers.linear;
 
-            material->texture_indices.base_color = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
-            material->texture_indices.metallic_roughness = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
-            material->texture_indices.normal = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
-            material->texture_indices.emissive = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
+            material->base_color_index = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
+            material->metallic_roughness_index = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
+            material->normal_index = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
+            material->emissive_index = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
 
             // 加载贴图
             if (gltf_mat.pbrData.baseColorTexture)
             {
-                material->texture_indices.base_color = LoadTexture(ctx, gltf_mat.pbrData.baseColorTexture->textureIndex);
+                material->base_color_index = LoadTexture(ctx, gltf_mat.pbrData.baseColorTexture->textureIndex);
             }
 
             if (gltf_mat.pbrData.metallicRoughnessTexture)
             {
-                material->texture_indices.metallic_roughness = LoadTexture(ctx, gltf_mat.pbrData.metallicRoughnessTexture->textureIndex);
+                material->metallic_roughness_index = LoadTexture(ctx, gltf_mat.pbrData.metallicRoughnessTexture->textureIndex);
             }
 
             if (gltf_mat.normalTexture)
             {
-                material->texture_indices.normal = LoadTexture(ctx, gltf_mat.normalTexture->textureIndex);
+                material->normal_index = LoadTexture(ctx, gltf_mat.normalTexture->textureIndex);
             }
 
             if (gltf_mat.emissiveTexture)
             {
-                material->texture_indices.emissive = LoadTexture(ctx, gltf_mat.emissiveTexture->textureIndex);
+                material->emissive_index = LoadTexture(ctx, gltf_mat.emissiveTexture->textureIndex);
             }
 
             ctx.material_cache[i] = material;
             ctx.output->AddMaterial(material_name, material);
-            material_data[i] = material->parameters;
+            material_data[i] = *material;
         }
 
         return true;

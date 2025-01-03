@@ -3,8 +3,8 @@
 #include "graphics/vk_pipelines.h"
 #include "graphics/vk_device.h"
 #include "graphics/vk_command_buffer.h"
-#include "graphics/scene/scene_view.h"
-#include "graphics/scene/scene_graph.h"
+#include "graphics/scene_graph/scene_view.h"
+#include "graphics/scene_graph/scene_graph.h"
 namespace lincore
 {
 
@@ -29,7 +29,7 @@ namespace lincore
 
     void MeshPass::PrepareShader()
     {
-        shader_ = gpu_device_->CreateShaderEffect({"shaders/test.vert.spv", "shaders/test.frag.spv"}, "MeshPass");
+        shader_ = gpu_device_->CreateShaderEffect({"shaders/mesh.vert.spv", "shaders/mesh.frag.spv"}, "MeshPass");
         shader_->ReflectLayout();
     }
 

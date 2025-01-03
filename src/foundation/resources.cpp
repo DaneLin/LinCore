@@ -2146,6 +2146,11 @@ namespace lincore
 		return VK_FORMAT_UNDEFINED;
 	}
 
+	const std::string GetAssetPath(const std::string& path)
+	{
+		return std::string("../../" + path);
+	}
+
 	TextureCreation &TextureCreation::Reset()
 	{
 		mip_level_count = 1;

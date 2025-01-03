@@ -329,6 +329,8 @@ namespace lincore
 
 	FrameData &GpuDevice::BeginFrame()
 	{
+		UpdateBindlessDescriptors();
+
 		FrameData &frame = GetCurrentFrame();
 
 		VK_CHECK(vkWaitForFences(device_, 1, &frame.render_fence, VK_TRUE, UINT64_MAX));
@@ -470,10 +472,6 @@ namespace lincore
 		{
 			vkDestroySemaphore(device_, semaphore, nullptr);
 		}
-	}
-
-	void GpuDevice::UploadBuffer(BufferHandle &buffer_handle, void *buffer_data, size_t size, VkBufferUsageFlags usage, bool transfer)
-	{
 	}
 
 	void GpuDevice::CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle)
@@ -684,7 +682,6 @@ namespace lincore
 							   has_extension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
 		ray_query_present_ = has_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME);
 
-		// 输出日志，方便调试
 		LOGI("  Extension support status:");
 		LOGI("    Bindless: {}", bindless_supported_);
 		LOGI("    Dynamic Rendering: {}", dynamic_rendering_extension_present_);
@@ -784,6 +781,12 @@ namespace lincore
 		default_resources_.samplers.linear = CreateResource(sampler_info);
 
 		AddBindlessSampledImage(default_resources_.images.error_checker_board_image, default_resources_.samplers.linear);
+
+		BufferCreation buffer_info{};
+		buffer_info.Reset()
+			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(GPUSceneData))
+			.SetPersistent();
+		global_scene_data_buffer_ = CreateResource(buffer_info);
 
 		return true;
 	}

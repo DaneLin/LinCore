@@ -1,8 +1,8 @@
-#include "graphics/renderer/passes/render_pass.h"
+#include "graphics/render_pass/render_pass.h"
 #include "graphics/vk_device.h"
 #include "foundation/resources.h"
 #include "foundation/logging.h"
-#include "graphics/scene/scene_graph.h"
+#include "graphics/scene_graph/scene_graph.h"
 
 namespace lincore
 {

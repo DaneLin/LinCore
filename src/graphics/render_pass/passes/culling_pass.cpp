@@ -1,4 +1,4 @@
-#include "graphics/renderer/passes/culling_pass.h"
+#include "graphics/render_pass/passes/culling_pass.h"
 // lincore
 #include "graphics/vk_device.h"
 #include "graphics/vk_command_buffer.h"
