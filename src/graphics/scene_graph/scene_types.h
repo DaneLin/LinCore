@@ -83,11 +83,13 @@ namespace lincore
             float metallic_factor{1.0f};
             float roughness_factor{1.0f};
             float normal_scale{1.0f};
-            float padding[2];
-            uint32_t base_color_index{UINT32_MAX};
-            uint32_t metallic_roughness_index{UINT32_MAX};
-            uint32_t normal_index{UINT32_MAX};
-            uint32_t emissive_index{UINT32_MAX};
+            float reflectance_factor{0.5f};
+            float padding;
+
+            uint32_t base_color_index{0};
+            uint32_t metallic_roughness_index{0};
+            uint32_t normal_index{0};
+            uint32_t emissive_index{0};
         };
 
         /**

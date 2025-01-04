@@ -2177,11 +2177,17 @@ namespace lincore
 		return *this;
 	}
 
-	TextureCreation &TextureCreation::SetSize(uint16_t width, uint16_t height, uint16_t depth)
+	TextureCreation &TextureCreation::SetSize(uint16_t width, uint16_t height, uint16_t depth, bool generate_mipmaps)
 	{
 		this->width = width;
 		this->height = height;
 		this->depth = depth;
+
+		if (generate_mipmaps)
+		{
+			this->mip_level_count = static_cast<uint8_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+		}
+
 		return *this;
 	}
 

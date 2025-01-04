@@ -6,7 +6,7 @@ layout(std140, set = 0, binding = 0) uniform SceneData {
     vec4 sunlight_direction;
     vec4 sunlight_color;
     vec3 camera_position;
-    float sunlight_intensity;
+    float padding;
 } scene_data;
 
 struct Vertex {
@@ -58,7 +58,8 @@ struct MaterialData
    float metallic_factor;
    float roughness_factor;
    float normal_scale;
-   float padding[2];
+   float reflectance_factor;
+   float padding;
    uint base_color_tex_id;
    uint metallic_roughness_tex_id;
    uint normal_tex_id;

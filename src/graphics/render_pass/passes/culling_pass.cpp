@@ -44,6 +44,8 @@ namespace lincore
 
     void CullingPass::ExecutePass(CommandBuffer *cmd, FrameData *frame)
     {
+        VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "culling_pass");
+
         // 计算管线
         cmd->BindPipeline(pipeline_, VK_PIPELINE_BIND_POINT_COMPUTE);
         

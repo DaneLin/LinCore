@@ -7,7 +7,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
 
 float D_GGX(float NoH, float roughness)
 {
-    float alpha = roughness * roughness;
+  float alpha = roughness * roughness;
 	float alpha2 = alpha * alpha;
 	float NoH2 = NoH * NoH;
 	float b = (NoH2 * (alpha2 - 1.0) + 1.0);
@@ -16,7 +16,7 @@ float D_GGX(float NoH, float roughness)
 
 float G1_GGX_Schlick(float NoV, float roughness)
 {
-    float alpha = roughness * roughness;
+  float alpha = roughness * roughness;
 	float k = alpha / 2.0;
 	return max(NoV, 0.001) / (NoV * (1.0 - k) + k);
 }
@@ -38,8 +38,7 @@ float disneyDiffuseFactor(float NoV, float NoL, float VoH, float roughness) {
   return F_in * F_out;
 }
 
-vec3 brdfMicrofacet(in vec3 L, in vec3 V, in vec3 N,
-                        in float metallic, in float roughness, in vec3 baseColor, in float reflectance) {
+vec3 brdfMicrofacet(in vec3 L, in vec3 V, in vec3 N, in float metallic, in float roughness, in vec3 baseColor, in float reflectance) {
 
   vec3 H = normalize(V + L);
   

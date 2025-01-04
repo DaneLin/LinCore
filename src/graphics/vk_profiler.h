@@ -71,7 +71,7 @@ namespace lincore
 
 		void DebugPrintQueryUsage();
 
-		std::unordered_map<std::string, double> timing_;
+		std::unordered_map<std::string, float> timing_;
 		std::unordered_map<std::string, int32_t> stats_;
 
 	private:

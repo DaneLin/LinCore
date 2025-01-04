@@ -583,23 +583,126 @@ namespace lincore
 			// Transition image layout for transfer
 			gpu_device_->command_buffer_manager_.ImmediateSubmit([&](CommandBuffer *cmd)
 																 {
-					// UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_COPY_DEST, 0, texture->mip_level_count, false);
 					cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
-					VkBufferImageCopy region = {};
-					region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-					region.imageSubresource.mipLevel = 0;
-					region.imageSubresource.baseArrayLayer = 0;
-					region.imageSubresource.layerCount = texture->array_layer_count;
-					region.imageExtent = texture->vk_extent;
+					VkBufferImageCopy copy_region = {};
+					copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+					copy_region.imageSubresource.mipLevel = 0;
+					copy_region.imageSubresource.baseArrayLayer = 0;
+					copy_region.imageSubresource.layerCount = texture->array_layer_count;
+					copy_region.imageExtent = texture->vk_extent;
 
-					vkCmdCopyBufferToImage(cmd->GetCommandBuffer(), GetBuffer(staging_buffer)->vk_buffer, texture->vk_image,
-						VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-					// TODO : deal with mip levels
-					// UtilAddImageBarrier(gpu_device_, cmd->GetCommandBuffer(), texture, RESOURCE_STATE_SHADER_RESOURCE, 0, texture->mip_level_count, false);
-					if (creation.transfer_queue) {
-						cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-							gpu_device_->queue_indices_.transfer_family, gpu_device_->queue_indices_.graphics_family);
+					vkCmdCopyBufferToImage(cmd->GetCommandBuffer(),
+										GetBuffer(staging_buffer)->vk_buffer,
+										texture->vk_image,
+										VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+										1,
+										&copy_region);
+
+					// Generate mipmaps if needed
+					if (texture->mip_level_count > 1)
+					{
+						VkImageMemoryBarrier barrier{};
+						barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+						barrier.image = texture->vk_image;
+						barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+						barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+						barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+						barrier.subresourceRange.baseArrayLayer = 0;
+						barrier.subresourceRange.layerCount = texture->array_layer_count;
+						barrier.subresourceRange.levelCount = 1;
+
+						int32_t mip_width = texture->vk_extent.width;
+						int32_t mip_height = texture->vk_extent.height;
+
+						// First transition all mip levels to UNDEFINED -> TRANSFER_DST_OPTIMAL
+						barrier.subresourceRange.baseMipLevel = 0;
+						barrier.subresourceRange.levelCount = texture->mip_level_count;
+						barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+						barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+						barrier.srcAccessMask = 0;
+						barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+						vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+							VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+							VK_PIPELINE_STAGE_TRANSFER_BIT,
+							0,
+							0, nullptr,
+							0, nullptr,
+							1, &barrier);
+
+						barrier.subresourceRange.levelCount = 1;
+
+						for (uint32_t i = 1; i < texture->mip_level_count; i++) {
+							// Transition previous mip level to TRANSFER_SRC
+							barrier.subresourceRange.baseMipLevel = i - 1;
+							barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+							barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+							barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+							vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+								VK_PIPELINE_STAGE_TRANSFER_BIT,
+								VK_PIPELINE_STAGE_TRANSFER_BIT,
+								0,
+								0, nullptr,
+								0, nullptr,
+								1, &barrier);
+
+							VkImageBlit blit{};
+							blit.srcOffsets[0] = {0, 0, 0};
+							blit.srcOffsets[1] = {mip_width, mip_height, 1};
+							blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+							blit.srcSubresource.mipLevel = i - 1;
+							blit.srcSubresource.baseArrayLayer = 0;
+							blit.srcSubresource.layerCount = texture->array_layer_count;
+							blit.dstOffsets[0] = {0, 0, 0};
+							blit.dstOffsets[1] = {mip_width > 1 ? mip_width / 2 : 1,
+												mip_height > 1 ? mip_height / 2 : 1,
+												1};
+							blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+							blit.dstSubresource.mipLevel = i;
+							blit.dstSubresource.baseArrayLayer = 0;
+							blit.dstSubresource.layerCount = texture->array_layer_count;
+
+							vkCmdBlitImage(cmd->GetCommandBuffer(),
+								texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+								texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+								1, &blit,
+								VK_FILTER_LINEAR);
+
+							// Transition previous mip level to SHADER_READ_ONLY
+							barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+							barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+							barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+							barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+							vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+								VK_PIPELINE_STAGE_TRANSFER_BIT,
+								VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+								0,
+								0, nullptr,
+								0, nullptr,
+								1, &barrier);
+
+							if (mip_width > 1) mip_width /= 2;
+							if (mip_height > 1) mip_height /= 2;
+						}
+
+						// Transition last mip level to SHADER_READ_ONLY
+						barrier.subresourceRange.baseMipLevel = texture->mip_level_count - 1;
+						barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+						barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+						barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+						barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+						vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+							VK_PIPELINE_STAGE_TRANSFER_BIT,
+							VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+							0,
+							0, nullptr,
+							0, nullptr,
+							1, &barrier);
 					}
 					else {
 						cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -719,28 +822,31 @@ namespace lincore
 		create_info.addressModeW = creation.address_mode_w;
 
 		// LOD parameters
-		// TODO: 添加LOD参数
-		// create_info.mipLodBias = creation.mip_lod_bias;
-		// create_info.minLod = creation.min_lod;
-		// create_info.maxLod = creation.max_lod;
+		create_info.mipLodBias = 0.0f;
+		create_info.minLod = 0.0f;
+		create_info.maxLod = VK_LOD_CLAMP_NONE; // Allow using all available mip levels
 
-		// Anisotropy
-		// TODO: 添加各向异性参数
-		// create_info.anisotropyEnable = creation.enable_anisotropy;
-		// create_info.maxAnisotropy = creation.max_anisotropy;
+		// Anisotropy - only enable if the feature is supported
+		if (gpu_device_->features_.samplerAnisotropy)
+		{
+			create_info.anisotropyEnable = VK_TRUE;
+			create_info.maxAnisotropy = gpu_device_->properties_.limits.maxSamplerAnisotropy;
+		}
+		else
+		{
+			create_info.anisotropyEnable = VK_FALSE;
+			create_info.maxAnisotropy = 1.0f;
+		}
 
-		// Compare operation
-		// TODO: 添加比较操作参数
-		// create_info.compareEnable = creation.enable_compare;
-		// create_info.compareOp = creation.compare_op;
+		// Compare operation - 用于阴影贴图等
+		create_info.compareEnable = VK_FALSE;
+		create_info.compareOp = VK_COMPARE_OP_ALWAYS;
 
 		// Border color
-		// TODO: 添加边框颜色参数
-		// create_info.borderColor = creation.border_color;
+		create_info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 
 		// Unnormalized coordinates
-		// TODO: 添加未归一化坐标参数
-		// create_info.unnormalizedCoordinates = creation.unnormalized_coordinates;
+		create_info.unnormalizedCoordinates = VK_FALSE;
 
 		VK_CHECK(vkCreateSampler(gpu_device_->device_, &create_info, nullptr, &sampler->vk_sampler));
 		if (creation.name)
@@ -854,5 +960,4 @@ namespace lincore
 			texture_creation_infos_.erase(handle);
 		}
 	}
-
 } // namespace lincore

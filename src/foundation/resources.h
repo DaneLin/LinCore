@@ -255,7 +255,7 @@ namespace lincore
 		TextureCreation& Reset();
 		TextureCreation& SetImmediate();
 		TextureCreation& SetTransferSrc();
-		TextureCreation& SetSize(uint16_t width, uint16_t height, uint16_t depth);
+		TextureCreation& SetSize(uint16_t width, uint16_t height, uint16_t depth, bool generate_mipmaps = true);
 		TextureCreation& SetFlags(uint8_t flags);
 		TextureCreation& SetMips(uint32_t mip_level_count);
 		TextureCreation& SetLayers(uint32_t layer_count);

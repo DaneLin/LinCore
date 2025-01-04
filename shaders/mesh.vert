@@ -28,7 +28,8 @@ void main() {
     gl_Position = scene_data.viewproj * world_pos;
     
     // 计算法线
-    out_normal = normalize((model_matrix * vec4(v.normal, 0.0)).xyz);
+    mat3 normal_matrix = transpose(inverse(mat3(model_matrix)));
+    out_normal = normalize(normal_matrix * v.normal);
 
     // 获取材质数据
     uint material_index = object_buffer.objects[object_index].material_index;

@@ -107,6 +107,7 @@ namespace lincore
             // 场景查询
             const Bounds &GetSceneBounds() const { return scene_bounds_; }
             size_t GetNodeCount() const { return node_lookup_.size(); }
+            size_t GetPendingIndexCount() const { return pending_.total_index_size; }
 
             // 获取GPU资源
             GPUResourcePool &GetGPUResourcePool() { return gpu_resources_; }

@@ -135,7 +135,7 @@ namespace lincore
 			uint64_t end = query_state[timer.end_time_stamp];
 
 			uint64_t time_stamp = end - begin;
-			timing_[timer.name] = (double(time_stamp) * period_) * 1e-6;
+			timing_[timer.name] = (float(time_stamp) * period_) * 1e-6;
 		}
 
 		for (auto& st : state.stat_recorders)

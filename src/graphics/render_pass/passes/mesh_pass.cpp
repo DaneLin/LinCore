@@ -70,6 +70,8 @@ namespace lincore
 
     void MeshPass::ExecutePass(CommandBuffer *cmd, FrameData *frame)
     {
+        VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "mesh_pass");
+
         std::vector<VkRenderingAttachmentInfo> color_attachments = gpu_device_->CreateRenderingAttachmentsColor(color_targets_);
         VkRenderingAttachmentInfo depth_attachment = gpu_device_->CreateRenderingAttachmentsDepth(depth_target_);
 

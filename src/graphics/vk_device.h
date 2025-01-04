@@ -230,16 +230,10 @@ namespace lincore
 		 */
 		DescriptorAllocatorGrowable descriptor_allocator_;
 
-		/**
-		 * @brief 全局描述符集布局
-		 * 包含绑定纹理布局
-		 */
 		VkDescriptorSetLayout bindless_texture_layout_{VK_NULL_HANDLE};
 		VkDescriptorSet bindless_texture_set_{VK_NULL_HANDLE};
-		// 全局单个更新数组
    		BindlessUpdateArray bindless_updates;
-
-		VkDescriptorSetLayout gpu_scene_data_descriptor_layout_;
+		
 		GPUSceneData scene_data_;
 		BufferHandle global_scene_data_buffer_;
 

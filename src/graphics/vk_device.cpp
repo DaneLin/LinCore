@@ -175,23 +175,12 @@ namespace lincore
 		}
 
 		// make sure both the descriptor allocator and the new layout get cleaned up properly
-		main_deletion_queue_.PushFunction([&]()
-										  {
+		main_deletion_queue_.PushFunction(
+			[&]()
+			{
 				descriptor_allocator_.DestroyPools(device_);
 
 				vkDestroyDescriptorSetLayout(device_, bindless_texture_layout_, nullptr); });
-
-		{
-			DescriptorLayoutBuilder builder;
-			builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-#if LC_DRAW_INDIRECT
-			builder.AddBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-#endif
-			gpu_scene_data_descriptor_layout_ = builder.Build(device_, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
-
-			main_deletion_queue_.PushFunction([&]()
-											  { vkDestroyDescriptorSetLayout(device_, gpu_scene_data_descriptor_layout_, nullptr); });
-		}
 	}
 
 	void GpuDevice::InitFrameDatas()
@@ -272,10 +261,11 @@ namespace lincore
 			VkPhysicalDeviceProperties props;
 			vkGetPhysicalDeviceProperties(device, &props);
 			LOGI("  - {} (Type: {})", props.deviceName,
-				 props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ? "Discrete" : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated"
-																					 : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU		? "Virtual"
-																					 : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU				? "CPU"
-																																					: "Other");
+				 props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU	  ? "Discrete"
+				 : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ? "Integrated"
+				 : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU	  ? "Virtual"
+				 : props.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU			  ? "CPU"
+																			  : "Other");
 		}
 	}
 
@@ -413,8 +403,7 @@ namespace lincore
 		Texture *tex = GetResource<Texture>(texture_handle.index);
 		Sampler *sampler = GetResource<Sampler>(sampler_handle.index);
 		tex->sampler = sampler;
-		return bindless_updates.AddTextureUpdate(tex->vk_image_view,
-												 sampler->vk_sampler);
+		return bindless_updates.AddTextureUpdate(tex->vk_image_view, sampler->vk_sampler);
 	}
 
 	VkFence GpuDevice::CreateFence(bool signaled, const char *debug_name)
@@ -487,7 +476,7 @@ namespace lincore
 		UtilAddBufferBarrier(this, cmd->vk_command_buffer_, dst->vk_buffer, dst->state, ResourceState::RESOURCE_STATE_UNORDERED_ACCESS, dst->size);
 	}
 
-	ShaderEffect *GpuDevice::CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string& name)
+	ShaderEffect *GpuDevice::CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string &name)
 	{
 		return shader_manager_.GetShaderEffect(file_names, name);
 	}
@@ -562,6 +551,7 @@ namespace lincore
 		required_features.features_10.multiDrawIndirect = true;
 		required_features.features_10.geometryShader = true;
 		required_features.features_10.inheritedQueries = true;
+		required_features.features_10.samplerAnisotropy = true;
 
 		// 选择物理设备
 		vkb::PhysicalDeviceSelector selector{vkb_inst};
@@ -717,7 +707,7 @@ namespace lincore
 			.SetImmediate()
 			.SetName("draw image")
 			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Texture2D)
-			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth)
+			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth, false)
 			.SetFlags(TextureFlags::Compute_mask | TextureFlags::RenderTarget_mask);
 		draw_image_handle_ = CreateResource(image_info);
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graphics/render_pass/render_pass.h"
+#include "graphics/vk_profiler.h"
 
 namespace lincore
 {

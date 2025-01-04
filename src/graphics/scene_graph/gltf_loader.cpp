@@ -535,7 +535,7 @@ namespace lincore::scene
 
         // 创建纹理
         TextureCreation creation;
-        creation.SetSize(width, height, 1)
+        creation.SetSize(width, height, 1, true)
             .SetFormat(VK_FORMAT_R8G8B8A8_UNORM)
             .SetFlags(TextureFlags::Default)
             .SetData(pixels)
