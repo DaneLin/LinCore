@@ -1,8 +1,13 @@
-# LinCore 简介 (Introduction)
-&emsp;&emsp;一个基于vkguide教程的Vulkan代码实验平台，基于Vulkan1.3的新特性，将会实现教程中的所有功能，并且将会基于《Mastering Graphics Programming
-with Vulkan》进一步拓展该引擎，并实现更多图形学算法。
+# LinCore
+
+[English](README_EN.md) | [中文](README_CN.md)
+
+&emsp;&emsp;一个基于vkguide教程的Vulkan代码实验平台，基于Vulkan1.3的新特性，将会实现教程中的所有功能，并且将会基于《Mastering Graphics Programming with Vulkan》进一步拓展该引擎，并实现更多图形学算法。
 
 A Vulkan code experimentation platform based on the vkguide tutorial, leveraging new features of Vulkan 1.3. It will implement all functionalities from the tutorial and further expand the engine based on 'Mastering Graphics Programming with Vulkan', incorporating additional graphics algorithms.
+
+详细信息请查看对应语言的README文件。
+Please check the corresponding language README file for detailed information.
 
 # 已实现特性 (Implemented Features)
 - [x] 自动管线布局创建 Automating Pipeline Layout Creation 
