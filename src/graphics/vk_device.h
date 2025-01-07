@@ -224,6 +224,8 @@ namespace lincore
 		std::vector<VkImageView> swapchain_image_views_;
 		VkExtent2D swapchain_extent_{};
 
+		VkSemaphore timeline_semaphore_;
+
 		/**
 		 * @brief 描述符分配器
 		 * 包含描述符分配器
@@ -435,6 +437,8 @@ namespace lincore
 		bool InitDefaultResources();
 		void InitDescriptors();
 		void InitFrameDatas();
+
+		void InitSynchronization();
 
 		void SetupDebugMessenger();
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);

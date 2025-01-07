@@ -42,12 +42,12 @@ void main()
     vec3 radiance = rgb2lin(emission.rgb);
     
     // 添加环境光
-    float ambient_intensity = 0.03;
-    vec3 ambient = base_color * ambient_intensity;
-    if (metallic > 0.5) {
-        ambient *= metallic; // 金属的环境反射更强
-    }
-    radiance += ambient;
+    // float ambient_intensity = 0.03;
+    // vec3 ambient = base_color * ambient_intensity;
+    // if (metallic > 0.5) {
+    //     ambient *= metallic; // 金属的环境反射更强
+    // }
+    // radiance += ambient;
 
     float light_intensity = scene_data.sunlight_direction.w;
     float irradiance = max(dot(light_dir, n), 0.0) * light_intensity;

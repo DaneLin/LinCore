@@ -7,20 +7,22 @@
 - [x] 简易CVar系统
 - [x] 无绑定资源管理
 - [x] 管线缓存
-- [x] 多线程记录命令 (Secondary command buffer)
+- [x] 多线程记录命令
 - [x] 简易SceneGraph
 - [x] Microfacet BRDF (Cook-Torrance)
+- [x] GPU驱动渲染
 
 # 待实现特性
-- [ ] 帧图
 - [ ] 异步计算
+- [ ] IBL
 - [ ] 阴影映射
-- [ ] 全局光照
 
 # 参考
+&emsp;&emsp;以下是本项目参考的教程、博客和代码库。
 ## 教程
 https://vkguide.dev/  
-https://vulkan-tutorial.com/
+https://vulkan-tutorial.com/  
+https://www.uni-marburg.de/en/fb12/research-groups/grafikmultimedia/lectures/graphics
 
 ## 博客
 https://themaister.net/blog/2017/08/  

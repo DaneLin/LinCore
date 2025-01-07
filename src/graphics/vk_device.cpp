@@ -213,6 +213,18 @@ namespace lincore
 		}
 	}
 
+	void GpuDevice::InitSynchronization()
+	{
+		VkSemaphoreCreateInfo semaphore_create_info = vkinit::SemaphoreCreateInfo();
+		// extra structure for timeline semaphore
+		VkSemaphoreTypeCreateInfo timeline_semaphore_info = {
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+			.initialValue = 0};
+		semaphore_create_info.pNext = &timeline_semaphore_info;
+		VK_CHECK(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &timeline_semaphore_));
+	}
+
 	void GpuDevice::UpdateBindlessDescriptors()
 	{
 		if (bindless_updates.updates.empty())
@@ -546,6 +558,7 @@ namespace lincore
 		required_features.features_12.descriptorBindingVariableDescriptorCount = true;
 		required_features.features_12.hostQueryReset = true;
 		required_features.features_12.drawIndirectCount = true;
+		required_features.features_12.timelineSemaphore = true;
 		required_features.features_11.shaderDrawParameters = true;
 		required_features.features_10.pipelineStatisticsQuery = true;
 		required_features.features_10.multiDrawIndirect = true;

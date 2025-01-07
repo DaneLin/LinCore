@@ -52,8 +52,6 @@ namespace lincore
 
 		DeletionQueue main_deletion_queue_;
 
-		VkPipelineLayout mesh_pipeline_layout_;
-
 		int current_background_effect_{ 0 };
 		int current_scene_{ 0 };
 

@@ -325,7 +325,7 @@ namespace lincore
 				ImGui::AlignTextToFramePadding();
 				ImGui::Text("Sun Direction"); ImGui::SameLine(150);
 				ImGui::SetNextItemWidth(200);
-				if (ImGui::SliderFloat3("##sun_direction", direction, -10.0f, 10.0f))
+				if (ImGui::SliderFloat3("##sun_direction", direction, -100.0f, 100.0f))
 				{
 					gpu_device_.scene_data_.sunlight_direction.x = direction[0];
 					gpu_device_.scene_data_.sunlight_direction.y = direction[1];
@@ -337,7 +337,7 @@ namespace lincore
 				ImGui::AlignTextToFramePadding();
 				ImGui::Text("Sun Power"); ImGui::SameLine(150);
 				ImGui::SetNextItemWidth(200);
-				if (ImGui::SliderFloat("##sun_power", &power, 0.0f, 10.0f))
+				if (ImGui::SliderFloat("##sun_power", &power, 0.0f, 1000.0f))
 				{
 					gpu_device_.scene_data_.sunlight_direction.w = power;
 				}

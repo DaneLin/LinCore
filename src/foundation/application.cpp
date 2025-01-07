@@ -5,7 +5,7 @@
 #include "foundation/timestep.h"
 #include "events/event.h"
 #include "events/window_event.h"
-
+#include "application.h"
 
 namespace lincore
 {
@@ -19,12 +19,11 @@ namespace lincore
         WindowProps props;
         props.title = name;
         window_ = std::make_unique<Window>(props);
-        window_->SetEventCallback([this](Event& e) { OnEvent(e); });
+        window_->SetEventCallback([this](Event &e)
+                                  { OnEvent(e); });
         // Create ImGui layer
         imgui_layer_ = new ImGuiLayer();
         PushOverlay(imgui_layer_);
-        // Initialize application
-        Init();
     }
     Application::~Application()
     {
@@ -51,13 +50,15 @@ namespace lincore
             if (!is_minimized_)
             {
                 // Update layers
-                for (Layer* layer : layer_stack_)
+                for (Layer *layer : layer_stack_)
                 {
                     layer->OnUpdate(timestep);
                 }
+
+
                 // ImGui update
                 imgui_layer_->NewFrame();
-                for (Layer* layer : layer_stack_)
+                for (Layer *layer : layer_stack_)
                 {
                     layer->OnImGuiRender();
                 }
@@ -77,6 +78,10 @@ namespace lincore
                 delete event;
             }
         }
+    }
+    float Application::CalculateDeltaTime()
+    {
+        return 0.0f;
     }
     void Application::OnEvent(Event &e)
     {

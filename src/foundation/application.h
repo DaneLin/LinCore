@@ -35,7 +35,6 @@ namespace lincore
         ImGuiLayer *GetImGuiLayer() { return imgui_layer_; }
         float GetLastFrameTime() const { return last_frame_time_; }
 
-    protected:
         virtual void Init();
         virtual void Shutdown();
 

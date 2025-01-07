@@ -7,20 +7,22 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 - [x] Simple CVar System
 - [x] Bindless Resource Management
 - [x] Pipeline Cache
-- [x] Multi-threaded command recording (Secondary command buffer)
+- [x] Multi-threaded command recording
 - [x] Simple SceneGraph
 - [x] Microfacet BRDF (Cook-Torrance)
+- [x] GPU Driven Rendering
 
 # To-Do Features
-- [ ] Frame Graph
 - [ ] Async Compute
+- [ ] IBL
 - [ ] Shadow Mapping
-- [ ] Global Illumination
 
 # References
+This project is based on the following tutorials, blogs and codebases.
 ## Tutorials
 https://vkguide.dev/  
-https://vulkan-tutorial.com/
+https://vulkan-tutorial.com/  
+https://www.uni-marburg.de/en/fb12/research-groups/grafikmultimedia/lectures/graphics
 
 ## Blogs
 https://themaister.net/blog/2017/08/  
