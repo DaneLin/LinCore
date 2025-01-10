@@ -122,7 +122,8 @@ namespace lincore
 			}
 			else if (desc_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
 					 desc_type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
-					 desc_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+					 desc_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
+					 desc_type == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
 			{
 				Texture *texture = gpu_device_->GetResource<Texture>(resource.handle);
 				if (texture->state != new_state)

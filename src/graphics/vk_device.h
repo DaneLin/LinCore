@@ -15,11 +15,10 @@
 #include "vk_command_buffer.h"
 #include "vk_initializers.h"
 #include "vk_resources.h"
-#include "vk_types.h"
 #include "vk_profiler.h"
 #include "vk_descriptors.h"
 #include "vk_pipelines.h"
-
+#include "graphics/scene_graph/scene_types.h"
 // 前向声明
 namespace vkb
 {
@@ -236,7 +235,7 @@ namespace lincore
 		VkDescriptorSet bindless_texture_set_{VK_NULL_HANDLE};
    		BindlessUpdateArray bindless_updates;
 		
-		GPUSceneData scene_data_;
+		scene::GPUSceneData scene_data_;
 		BufferHandle global_scene_data_buffer_;
 
 		ResourceManager resource_manager_;

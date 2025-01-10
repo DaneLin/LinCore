@@ -13,6 +13,7 @@
 #include "foundation/logging.h"
 #include "graphics/vk_pipelines.h"
 
+
 namespace lincore
 {
 	bool GpuDevice::Init(const CreateInfo &create_info)
@@ -787,7 +788,7 @@ namespace lincore
 
 		BufferCreation buffer_info{};
 		buffer_info.Reset()
-			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(GPUSceneData))
+			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(scene::GPUSceneData))
 			.SetPersistent();
 		global_scene_data_buffer_ = CreateResource(buffer_info);
 

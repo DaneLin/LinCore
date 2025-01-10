@@ -17,7 +17,7 @@
 #include "foundation/cvars.h"
 #include "foundation/logging.h"
 #include "graphics/vk_initializers.h"
-#include "graphics/vk_types.h"
+#include "graphics/scene_graph/scene_types.h"
 #include "graphics/vk_pipelines.h"
 #include "graphics/vk_profiler.h"
 #include "graphics/vk_device.h"
@@ -80,7 +80,9 @@ namespace lincore
             .Finalize();
 
 		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
-		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
+		//std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/FlightHelmet/glTF/FlightHelmet.gltf"), load_config);
+		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
 		scene_graph_ = std::make_unique<scene::SceneGraph>(&gpu_device_);
 		scene_graph_->Init();
 		scene_graph_->BeginSceneUpdate();
@@ -155,30 +157,30 @@ namespace lincore
 
 			sky_background_pass_.Execute(cmd, &current_frame_data);
 
-			scene::SceneView scene_view;
-			scene_view.SetViewType(scene::SceneView::ViewType::Main);
-			scene_view.SetCamera(&main_camera_);
+			// scene::SceneView scene_view;
+			// scene_view.SetViewType(scene::SceneView::ViewType::Main);
+			// scene_view.SetCamera(&main_camera_);
 
-			scene::DrawCullData draw_cull_data = scene_view.GetCullData();
-			scene::GPUResourcePool gpu_resource_pool = scene_graph_->GetGPUResourcePool();
-			draw_cull_data.draw_count = gpu_resource_pool.draw_count;
+			// scene::DrawCullData draw_cull_data = scene_view.GetCullData();
+			// scene::GPUResourcePool gpu_resource_pool = scene_graph_->GetGPUResourcePool();
+			// draw_cull_data.draw_count = gpu_resource_pool.draw_count;
 
-			scene_graph_->ReadyCullingData(cmd);
+			// scene_graph_->ReadyCullingData(cmd);
 
-			culling_pass_.SetCullData(draw_cull_data);
+			// culling_pass_.SetCullData(draw_cull_data);
 
-			culling_pass_.Execute(cmd, &current_frame_data);
+			// culling_pass_.Execute(cmd, &current_frame_data);
 
-			// 在执行计算着色器后，绘制前添加内存屏障
-			UtilAddStateBarrier(&gpu_device_, cmd->vk_command_buffer_, PipelineStage::ComputeShader, PipelineStage::DrawIndirect);
+			// // 在执行计算着色器后，绘制前添加内存屏障
+			// UtilAddStateBarrier(&gpu_device_, cmd->vk_command_buffer_, PipelineStage::ComputeShader, PipelineStage::DrawIndirect);
 
-			mesh_pass_.Execute(cmd, &current_frame_data);
+			// mesh_pass_.Execute(cmd, &current_frame_data);
 			
-			// Update mesh draw time from GPU profiler
-			if (gpu_device_.profiler_.timing_.contains("mesh_pass"))
-			{
-				engine_stats_.mesh_draw_time = gpu_device_.profiler_.timing_["mesh_pass"];
-			}
+			// // Update mesh draw time from GPU profiler
+			// if (gpu_device_.profiler_.timing_.contains("mesh_pass"))
+			// {
+			// 	engine_stats_.mesh_draw_time = gpu_device_.profiler_.timing_["mesh_pass"];
+			// }
 		}
 
 		{
@@ -401,7 +403,7 @@ namespace lincore
 		gpu_device_.scene_data_.camera_position = main_camera_.position_;
 
 		Buffer *gpu_scene_data_buffer = gpu_device_.GetResource<Buffer>(gpu_device_.global_scene_data_buffer_.index);
-		GPUSceneData *scene_uniform_data = (GPUSceneData *)gpu_scene_data_buffer->vma_allocation->GetMappedData();
+		scene::GPUSceneData *scene_uniform_data = (scene::GPUSceneData *)gpu_scene_data_buffer->vma_allocation->GetMappedData();
 		*scene_uniform_data = gpu_device_.scene_data_;
 
 		auto end = std::chrono::system_clock::now();

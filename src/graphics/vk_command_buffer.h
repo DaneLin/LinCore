@@ -77,9 +77,7 @@ namespace lincore
 		// Resource updates
 		void TransitionImage(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t src_queue_family_index = VK_QUEUE_FAMILY_IGNORED, uint32_t dst_queue_family_index = VK_QUEUE_FAMILY_IGNORED);
 		void CopyImageToImage(VkImage source, VkImage destination, VkExtent2D src_size, VkExtent2D dst_size);
-		void GenerateMipmaps(VkImage image, VkExtent2D image_size);
-
-		
+		void CopyBufferToImage(VkBuffer buffer, VkImage image, VkImageLayout layout, VkBufferImageCopy copy_region);
 
 		VkCommandBuffer GetCommandBuffer() { return vk_command_buffer_; }
 		bool IsRecording() const { return is_recording_; }
