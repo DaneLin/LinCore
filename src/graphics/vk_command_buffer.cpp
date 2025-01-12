@@ -5,8 +5,9 @@
 
 namespace lincore
 {
-	void CommandBuffer::Init(CommandBufferLevel level)
+	void CommandBuffer::Init(GpuDevice* gpu_device, CommandBufferLevel level)
 	{
+		gpu_device_ = gpu_device;
 		level_ = level;
 	}
 
@@ -205,78 +206,17 @@ namespace lincore
 		vkCmdPipelineBarrier2(vk_command_buffer_, &dep_info);
 	}
 
-	void CommandBuffer::UploadTextureData(void *data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
-	{
-		// TODO: replace with resource manager
-		/*TextureHandle image = CreateImage(data, size, format, usage, mipmapped);
-		TransitionImage(image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);*/
-	}
-
-	void CommandBuffer::TransitionImage(VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t src_queue_family_index, uint32_t dst_queue_family_index)
-	{
-		VkImageMemoryBarrier2 barrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-		barrier.oldLayout = old_layout;
-		barrier.newLayout = new_layout;
-		barrier.image = image;
-		barrier.srcQueueFamilyIndex = src_queue_family_index;
-		barrier.dstQueueFamilyIndex = dst_queue_family_index;
-		barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-		if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL || new_layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
-		{
-			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-		}
-
-		// Configure access masks and pipeline stages based on layouts
-		switch (old_layout)
-		{
-		case VK_IMAGE_LAYOUT_UNDEFINED:
-			barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
-			barrier.srcAccessMask = VK_ACCESS_2_NONE;
-			break;
-		case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-			barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-			barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-			break;
-		case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-			barrier.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-			barrier.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-			break;
-		}
-
-		switch (new_layout)
-		{
-		case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-			barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-			barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-			break;
-		case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-			barrier.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-			barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-			break;
-		case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-			barrier.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-			barrier.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-			break;
-		}
-
-		VkDependencyInfo dependency_info{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
-		dependency_info.imageMemoryBarrierCount = 1;
-		dependency_info.pImageMemoryBarriers = &barrier;
-
-		vkCmdPipelineBarrier2(vk_command_buffer_, &dependency_info);
-	}
-
-	void CommandBuffer::CopyImageToImage(VkImage source, VkImage destination, VkExtent2D src_size, VkExtent2D dst_size)
+	void CommandBuffer::CopyImageToImage(VkImage source, VkImage destination, VkExtent3D src_size, VkExtent3D dst_size)
 	{
 		VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
 
 		blit_region.srcOffsets[1].x = src_size.width;
 		blit_region.srcOffsets[1].y = src_size.height;
-		blit_region.srcOffsets[1].z = 1;
+		blit_region.srcOffsets[1].z = src_size.depth;
 
 		blit_region.dstOffsets[1].x = dst_size.width;
 		blit_region.dstOffsets[1].y = dst_size.height;
-		blit_region.dstOffsets[1].z = 1;
+		blit_region.dstOffsets[1].z = dst_size.depth;
 
 		blit_region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 		blit_region.srcSubresource.baseArrayLayer = 0;
@@ -305,12 +245,113 @@ namespace lincore
         vkCmdCopyBufferToImage(vk_command_buffer_, buffer, image, layout, 1, &copy_region);
     }
 
-	void CommandBuffer::PushConstants(VkPipelineLayout layout, VkShaderStageFlags stage_flags, uint32_t offset, uint32_t size, const void *values)
+    void CommandBuffer::AddImageBarrier(Texture *texture, ResourceState new_state,
+							 uint32_t base_mip_level, uint32_t mip_count,
+							 uint32_t base_array_layer, uint32_t array_layer_count,
+							 uint32_t destination_family,
+							 QueueType::Enum destination_queue_type)
+    {
+		if (gpu_device_->synchronization2_extension_present_)
+		{
+			VkImageMemoryBarrier2KHR barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR};
+			barrier.srcAccessMask = UtilToVkAccessFlags2(texture->state);
+			barrier.srcStageMask = UtilDeterminePipelineStageFlags2(barrier.srcAccessMask, texture->queue_type);
+			barrier.dstAccessMask = UtilToVkAccessFlags2(new_state);
+			barrier.dstStageMask = UtilDeterminePipelineStageFlags2(barrier.dstAccessMask, destination_queue_type);
+			barrier.oldLayout = UtilToVkImageLayout2(texture->state);
+			barrier.newLayout = UtilToVkImageLayout2(new_state);
+			barrier.srcQueueFamilyIndex = texture->queue_family;
+			barrier.dstQueueFamilyIndex = destination_family;
+			barrier.image = texture->vk_image;
+			barrier.subresourceRange.aspectMask =  TextureFormat::HasDepthOrStencil(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseArrayLayer = base_array_layer;
+			barrier.subresourceRange.layerCount = array_layer_count;
+			barrier.subresourceRange.baseMipLevel = base_mip_level;
+			barrier.subresourceRange.levelCount = mip_count;
+
+			VkDependencyInfoKHR dependency_info{VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR};
+			dependency_info.imageMemoryBarrierCount = 1;
+			dependency_info.pImageMemoryBarriers = &barrier;
+
+			vkCmdPipelineBarrier2KHR(vk_command_buffer_, &dependency_info);
+		}
+		else
+		{
+			VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+			barrier.image = texture->vk_image;
+			barrier.srcQueueFamilyIndex = texture->queue_family;
+			barrier.dstQueueFamilyIndex = destination_family;
+			barrier.subresourceRange.aspectMask = TextureFormat::HasDepthOrStencil(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseArrayLayer = base_array_layer;
+			barrier.subresourceRange.layerCount = array_layer_count;
+			barrier.subresourceRange.levelCount = mip_count;
+
+			barrier.subresourceRange.baseMipLevel = base_mip_level;
+			barrier.oldLayout = UtilToVkImageLayout(texture->state);
+			barrier.newLayout = UtilToVkImageLayout(new_state);
+			barrier.srcAccessMask = UtilToVkAccessFlags(texture->state);
+			barrier.dstAccessMask = UtilToVkAccessFlags(new_state);
+
+			const VkPipelineStageFlags source_stage_mask = UtilDeterminePipelineStageFlags(barrier.srcAccessMask, texture->queue_type);
+			const VkPipelineStageFlags destination_stage_mask = UtilDeterminePipelineStageFlags(barrier.dstAccessMask, destination_queue_type);
+
+			vkCmdPipelineBarrier(vk_command_buffer_, source_stage_mask, destination_stage_mask, 0,
+								0, nullptr, 0, nullptr, 1, &barrier);
+		}
+		texture->state = new_state;
+		texture->queue_type = destination_queue_type;
+		texture->queue_family = destination_family;
+    }
+
+    void CommandBuffer::AddBufferBarrier(Buffer *buffer, ResourceState new_state,
+							  uint32_t destination_family,
+							  QueueType::Enum destination_queue_type)
+    {
+		if (gpu_device_->synchronization2_extension_present_)
+		{
+			VkBufferMemoryBarrier2KHR barrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2_KHR};
+			barrier.srcAccessMask = UtilToVkAccessFlags2(buffer->state);
+			barrier.srcStageMask = UtilDeterminePipelineStageFlags2(barrier.srcAccessMask, buffer->queue_type);
+			barrier.dstAccessMask = UtilToVkAccessFlags2(new_state);
+			barrier.dstStageMask = UtilDeterminePipelineStageFlags2(barrier.dstAccessMask, destination_queue_type);
+			barrier.buffer = buffer->vk_buffer;
+			barrier.offset = 0;
+			barrier.size = buffer->size;
+
+			VkDependencyInfoKHR dependency_info{VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR};
+			dependency_info.bufferMemoryBarrierCount = 1;
+			dependency_info.pBufferMemoryBarriers = &barrier;
+
+			vkCmdPipelineBarrier2KHR(vk_command_buffer_, &dependency_info);
+		}
+		else
+		{
+			VkBufferMemoryBarrier barrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+			barrier.buffer = buffer->vk_buffer;
+			barrier.srcQueueFamilyIndex = buffer->queue_family;
+			barrier.dstQueueFamilyIndex = destination_family;
+			barrier.offset = 0;
+			barrier.size = buffer->size;
+			barrier.srcAccessMask = UtilToVkAccessFlags(buffer->state);
+			barrier.dstAccessMask = UtilToVkAccessFlags(new_state);
+
+			const VkPipelineStageFlags source_stage_mask = UtilDeterminePipelineStageFlags(barrier.srcAccessMask, buffer->queue_type);
+			const VkPipelineStageFlags destination_stage_mask = UtilDeterminePipelineStageFlags(barrier.dstAccessMask, destination_queue_type);
+
+			vkCmdPipelineBarrier(vk_command_buffer_, source_stage_mask, destination_stage_mask, 0,
+								 0, nullptr, 1, &barrier, 0, nullptr);
+		}
+		buffer->state = new_state;
+		buffer->queue_type = destination_queue_type;
+		buffer->queue_family = destination_family;
+    }
+
+    void CommandBuffer::PushConstants(VkPipelineLayout layout, VkShaderStageFlags stage_flags, uint32_t offset, uint32_t size, const void *values)
 	{
 		vkCmdPushConstants(vk_command_buffer_, layout, stage_flags, offset, size, values);
 	}
 
-	void CommandBufferManager::Init(GpuDevice *gpu_device, uint32_t num_threads)
+    void CommandBufferManager::Init(GpuDevice *gpu_device, uint32_t num_threads)
 	{
 		gpu_device_ = gpu_device;
 		num_pools_per_frame = num_threads;
@@ -344,7 +385,7 @@ namespace lincore
 
 			CommandBuffer &cmd = command_buffers_[i];
 			vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &cmd.vk_command_buffer_);
-			cmd.Init(CommandBufferLevel::kPrimary);
+			cmd.Init(gpu_device_, CommandBufferLevel::kPrimary);
 
 			gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd.vk_command_buffer_, "Primary Command Buffer" + i);
 		}
@@ -362,7 +403,7 @@ namespace lincore
 
 			CommandBuffer &cmd = secondary_command_buffers_[i];
 			VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &cmd.vk_command_buffer_));
-			cmd.Init(CommandBufferLevel::kSecondary);
+			cmd.Init(gpu_device_, CommandBufferLevel::kSecondary);
 			gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd.vk_command_buffer_, "Secondary Command Buffer" + i);
 		}
 
@@ -375,7 +416,7 @@ namespace lincore
 		alloc_info.commandBufferCount = 1;
 
 		VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &alloc_info, &immediate_buffer_.vk_command_buffer_));
-		immediate_buffer_.Init(CommandBufferLevel::kPrimary);
+		immediate_buffer_.Init(gpu_device_, CommandBufferLevel::kPrimary);
 		gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)immediate_buffer_.vk_command_buffer_, "Immediate Command Buffer");
 
 		VkFenceCreateInfo fence_info{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
@@ -396,7 +437,7 @@ namespace lincore
 		transfer_alloc_info.commandBufferCount = 1;
 
 		VK_CHECK(vkAllocateCommandBuffers(gpu_device_->device_, &transfer_alloc_info, &transfer_buffer_.vk_command_buffer_));
-		transfer_buffer_.Init(CommandBufferLevel::kPrimary);
+		transfer_buffer_.Init(gpu_device_, CommandBufferLevel::kPrimary);
 		gpu_device_->SetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)transfer_buffer_.vk_command_buffer_, "Transfer Command Buffer");
 
 		VK_CHECK(vkCreateFence(gpu_device_->device_, &fence_info, nullptr, &transfer_fence_));
@@ -496,7 +537,7 @@ namespace lincore
 
 		// Set up command buffer submission info
 		VkCommandBufferSubmitInfo cmd_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
-		cmd_info.commandBuffer = cmd_buffer.GetCommandBuffer();
+		cmd_info.commandBuffer = cmd_buffer.GetVkCommandBuffer();
 
 		// Submit the command buffer
 		VkSubmitInfo2 submit_info{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};

@@ -81,6 +81,8 @@ namespace lincore
 		void Run();
 
 		void UpdateScene();
+
+		void DrawImGui();
 	};
 
 }

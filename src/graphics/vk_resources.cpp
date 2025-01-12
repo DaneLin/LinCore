@@ -250,7 +250,7 @@ namespace lincore
 		buffer->size = creation.size;
 		buffer->parent_buffer = k_invalid_buffer;
 		buffer->global_offset = 0;
-
+		buffer->queue_type = creation.queue_type;
 		// Cache creation info
 		{
 			std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
@@ -464,7 +464,7 @@ namespace lincore
 		texture->vk_format = creation.format;
 		texture->parent_texture = k_invalid_texture;
 		texture->alias_texture = creation.alias;
-
+		texture->queue_type = creation.queue_type;
 		// Cache creation info
 		{
 			std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
@@ -582,9 +582,10 @@ namespace lincore
 
 			// Transition image layout for transfer
 			gpu_device_->command_buffer_manager_.ImmediateSubmit(
-				[&](CommandBuffer *cmd)
+				[this, texture, staging_buffer](CommandBuffer *cmd)
 				{
-					UtilAddImageBarrier(gpu_device_, cmd->vk_command_buffer_, texture, RESOURCE_STATE_COPY_DEST, texture->mip_base_level, texture->mip_level_count, false);
+					// Copy staging buffer to texture
+					cmd->AddImageBarrier(texture, RESOURCE_STATE_COPY_DEST, texture->mip_base_level, texture->mip_level_count);
 
 					VkBufferImageCopy copy_region = {};
 					copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -613,7 +614,7 @@ namespace lincore
 							barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 							barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-						vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+						vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 							VK_PIPELINE_STAGE_TRANSFER_BIT,
 							VK_PIPELINE_STAGE_TRANSFER_BIT,
 							0,
@@ -633,7 +634,7 @@ namespace lincore
 							barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 							barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-							vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+							vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								0,
@@ -648,7 +649,7 @@ namespace lincore
 							barrier.srcAccessMask = 0;
 							barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
-							vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+							vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								0,
@@ -672,7 +673,7 @@ namespace lincore
 							blit.dstSubresource.baseArrayLayer = 0;
 							blit.dstSubresource.layerCount = texture->array_layer_count;
 
-							vkCmdBlitImage(cmd->GetCommandBuffer(),
+							vkCmdBlitImage(cmd->GetVkCommandBuffer(),
 								texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 								texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 								1, &blit,
@@ -685,7 +686,7 @@ namespace lincore
 							barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 							barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-							vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+							vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 								0,
@@ -704,7 +705,7 @@ namespace lincore
 						barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 						barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-						vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+						vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 							VK_PIPELINE_STAGE_TRANSFER_BIT,
 							VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 							0,
@@ -713,7 +714,7 @@ namespace lincore
 							1, &barrier);
 					}
 					else {
-						UtilAddImageBarrier(gpu_device_, cmd->vk_command_buffer_, texture, RESOURCE_STATE_SHADER_RESOURCE, texture->mip_base_level, texture->mip_level_count, false);
+						cmd->AddImageBarrier(texture, RESOURCE_STATE_SHADER_RESOURCE, texture->mip_base_level, texture->mip_level_count);
 					} }, submit_queue);
 			// Destroy staging buffer
 			DestroyBuffer(staging_buffer);

@@ -212,6 +212,8 @@ namespace lincore
 	{
 		VkBufferUsageFlags type_flags = 0;
 		ResourceUsageType::Enum usage = ResourceUsageType::Immutable;
+		QueueType::Enum queue_type = QueueType::Graphics;
+		uint32_t queue_family = VK_QUEUE_FAMILY_IGNORED;
 		uint32_t size = 0;
 		uint32_t persistent = 0;
 		uint32_t device_only = 0;
@@ -228,6 +230,8 @@ namespace lincore
 		BufferCreation& SetPersistent();
 		BufferCreation& SetDeviceOnly();
 		BufferCreation& SetImmediate();
+		BufferCreation& SetQueueType(QueueType::Enum queue_type);
+		BufferCreation& SetQueueFamily(uint32_t queue_family);
 	}; // struct BufferCreation
 
 	struct TextureCreation
@@ -243,7 +247,7 @@ namespace lincore
 		VkFormat format = VK_FORMAT_UNDEFINED;
 
 		TextureType::Enum type = TextureType::Texture2D;
-
+		QueueType::Enum queue_type = QueueType::Graphics;
 		TextureHandle alias = k_invalid_texture;
 
 		const char* name = nullptr;
@@ -251,7 +255,7 @@ namespace lincore
 		bool transfer_queue = false;
 
 		bool immediate_creation  = false;
-
+		uint32_t queue_family = VK_QUEUE_FAMILY_IGNORED;
 		TextureCreation& Reset();
 		TextureCreation& SetImmediate();
 		TextureCreation& SetTransferSrc();
@@ -264,6 +268,8 @@ namespace lincore
 		TextureCreation& SetName(const char* name);
 		TextureCreation& SetData(void* data);
 		TextureCreation& SetAlias(TextureHandle alias);
+		TextureCreation& SetQueueType(QueueType::Enum queue_type);
+		TextureCreation& SetQueueFamily(uint32_t queue_family);
 	}; // struct TextureCreation
 
 	struct TextureSubResource
@@ -681,6 +687,8 @@ namespace lincore
 
 		VkBufferUsageFlags type_flags = 0;
 		ResourceUsageType::Enum usage = ResourceUsageType::Immutable;
+		QueueType::Enum queue_type = QueueType::Graphics;
+		uint32_t queue_family = VK_QUEUE_FAMILY_IGNORED;
 		uint32_t size = 0;
 		uint32_t global_offset = 0;    // Offset into global constant, if dynamic
 
@@ -734,7 +742,8 @@ namespace lincore
 		TextureHandle parent_texture;    // Used when a texture view.
 		TextureHandle alias_texture;
 		TextureType::Enum type = TextureType::Texture2D;
-
+		QueueType::Enum queue_type = QueueType::Graphics;
+		uint32_t queue_family = VK_QUEUE_FAMILY_IGNORED;
 		Sampler* sampler = nullptr;
 
 		const char* name = nullptr;
@@ -859,8 +868,6 @@ namespace lincore
 
 	VkPipelineStageFlags ToVkPipelineStage(PipelineStage::Enum value);
 
-	//
-	//
 	VkAccessFlags UtilToVkAccessFlags(ResourceState state);
 	VkAccessFlags UtilToVkAccessFlags2(ResourceState state);
 
@@ -875,33 +882,6 @@ namespace lincore
 	VkPipelineStageFlags2KHR UtilDeterminePipelineStageFlags2(VkAccessFlags2KHR access_flags, QueueType::Enum queue_type);
 
 	ResourceState UtilDetermineResourceState(VkDescriptorType type, VkShaderStageFlags stage_flags = VK_SHADER_STAGE_ALL_GRAPHICS);
-
-	void UtilAddImageBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, Texture* texture, ResourceState new_state,
-		uint32_t base_mip_level, uint32_t mip_count, bool is_depth);
-
-	void UtilAddImageBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, VkImage image, ResourceState old_state, ResourceState new_state,
-		uint32_t base_mip_level, uint32_t mip_count, bool is_depth);
-
-	void UtilAddImageBarrierExt(GpuDevice* gpu, VkCommandBuffer command_buffer, VkImage image, ResourceState old_state, ResourceState new_state,
-		uint32_t base_mip_level, uint32_t mip_count, uint32_t base_array_layer, uint32_t array_layer_count, bool is_depth, uint32_t source_family, uint32_t destination_family,
-		QueueType::Enum source_queue_type, QueueType::Enum destination_queue_type);
-
-	void UtilAddImageBarrierExt(GpuDevice* gpu, VkCommandBuffer command_buffer, Texture* texture, ResourceState new_state,
-		uint32_t base_mip_level, uint32_t mip_count, uint32_t base_array_layer, uint32_t array_layer_count, bool is_depth,
-		uint32_t source_family = VK_QUEUE_FAMILY_IGNORED, uint32_t destination_family = VK_QUEUE_FAMILY_IGNORED,
-		QueueType::Enum source_queue_type = QueueType::Graphics, QueueType::Enum destination_queue_type = QueueType::Graphics);
-
-	void UtilAddBufferBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, Buffer* buffer, ResourceState old_state, ResourceState new_state,
-		uint32_t buffer_size);
-
-	void UtilAddBufferBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, VkBuffer buffer, ResourceState old_state, ResourceState new_state,
-		uint32_t buffer_size);
-
-	void UtilAddBufferBarrierExt(GpuDevice* gpu, VkCommandBuffer command_buffer, VkBuffer buffer, ResourceState old_state, ResourceState new_state,
-		uint32_t buffer_size, uint32_t source_family, uint32_t destination_family,
-		QueueType::Enum source_queue_type, QueueType::Enum destination_queue_type);
-
-	void UtilAddStateBarrier(GpuDevice* gpu, VkCommandBuffer command_buffer, PipelineStage::Enum source_stage, PipelineStage::Enum destination_stage);
 
 	VkFormat UtilStringToVkFormat(const char* format);
 

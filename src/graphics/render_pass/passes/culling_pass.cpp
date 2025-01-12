@@ -90,4 +90,8 @@ namespace lincore
             0, nullptr
         );
     }
+    void CullingPass::SetupQueueType()
+    {
+        queue_type_ = QueueType::Compute;
+    }
 }

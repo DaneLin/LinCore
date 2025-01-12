@@ -13,7 +13,6 @@
 #include "foundation/logging.h"
 #include "graphics/vk_pipelines.h"
 
-
 namespace lincore
 {
 	bool GpuDevice::Init(const CreateInfo &create_info)
@@ -379,11 +378,12 @@ namespace lincore
 		frame.cmd->End();
 		// 准备提交信息
 		VkCommandBufferSubmitInfo cmd_info{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};
-		cmd_info.commandBuffer = frame.cmd->GetCommandBuffer();
+		cmd_info.commandBuffer = frame.cmd->GetVkCommandBuffer();
 
 		VkSemaphoreSubmitInfo wait_info{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
 		wait_info.semaphore = frame.swapchain_semaphore;
-		wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+		wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
+							  VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR; // 确保等待所有可能的操作;
 
 		VkSemaphoreSubmitInfo signal_info{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
 		signal_info.semaphore = frame.render_semaphore;
@@ -484,9 +484,9 @@ namespace lincore
 		copy_region.dstOffset = 0;
 		copy_region.srcOffset = 0;
 		copy_region.size = src->size;
-		vkCmdCopyBuffer(cmd->vk_command_buffer_, src->vk_buffer, dst->vk_buffer, 1, &copy_region);
+		vkCmdCopyBuffer(cmd->GetVkCommandBuffer(), src->vk_buffer, dst->vk_buffer, 1, &copy_region);
 
-		UtilAddBufferBarrier(this, cmd->vk_command_buffer_, dst->vk_buffer, dst->state, ResourceState::RESOURCE_STATE_UNORDERED_ACCESS, dst->size);
+		cmd->AddBufferBarrier(dst, ResourceState::RESOURCE_STATE_UNORDERED_ACCESS);
 	}
 
 	ShaderEffect *GpuDevice::CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string &name)
@@ -814,6 +814,25 @@ namespace lincore
 		swapchain_ = vkb_swapchain.swapchain;
 		swapchain_images_ = vkb_swapchain.get_images().value();
 		swapchain_image_views_ = vkb_swapchain.get_image_views().value();
+
+		swapchain_textures_.resize(swapchain_images_.size());
+		for (size_t i = 0; i < swapchain_images_.size(); ++i)
+		{
+			swapchain_textures_[i].vk_image = swapchain_images_[i];
+			swapchain_textures_[i].vk_image_view = swapchain_image_views_[i];
+			swapchain_textures_[i].vk_format = swapchain_image_format_;
+			swapchain_textures_[i].vk_usage = default_swapchain_info_.usage;
+			swapchain_textures_[i].vk_extent = {swapchain_extent_.width, swapchain_extent_.height, 1};
+			swapchain_textures_[i].array_layer_count = 1;
+			swapchain_textures_[i].mip_level_count = 1;
+			swapchain_textures_[i].flags = 0;
+			swapchain_textures_[i].state = RESOURCE_STATE_UNDEFINED;
+			swapchain_textures_[i].vma_allocation = VK_NULL_HANDLE;
+			swapchain_textures_[i].queue_type = QueueType::Enum::Graphics;
+			swapchain_textures_[i].queue_family = queue_indices_.graphics_family;
+			SetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)swapchain_textures_[i].vk_image, ("swapchain image" + std::to_string(i)).c_str());
+		}
+
 		return true;
 	}
 

@@ -222,6 +222,7 @@ namespace lincore
 		std::vector<VkImage> swapchain_images_;
 		std::vector<VkImageView> swapchain_image_views_;
 		VkExtent2D swapchain_extent_{};
+		std::vector<Texture> swapchain_textures_;
 
 		VkSemaphore timeline_semaphore_;
 
@@ -284,6 +285,7 @@ namespace lincore
 		// Draw resources
 		Texture *GetDrawImage() { return resource_manager_.GetTexture(draw_image_handle_); }
 		Texture *GetDepthImage() { return resource_manager_.GetTexture(depth_image_handle_); }
+		Texture *GetSwapchainImage(uint32_t index) { return &swapchain_textures_[index]; }
 
 		// resource management
 		void CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle);

@@ -76,27 +76,27 @@ namespace lincore
 		ImGui::Render();
 	}
 
-	void ImGuiLayer::Draw(CommandBuffer *cmd, uint32_t swapchain_image_index)
+	void ImGuiLayer::Draw(CommandBuffer* cmd, uint32_t swapchain_image_index)
 	{
-		UtilAddImageBarrier(gpu_device_, cmd->vk_command_buffer_,gpu_device_->GetDrawImage(), ResourceState::RESOURCE_STATE_COPY_SOURCE,0,1,false);
-		//cmd->TransitionImage(gpu_device_->GetDrawImage()->vk_image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-		cmd->TransitionImage(gpu_device_->swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-		
+		// 将绘制图像复制到交换链图像
+		Texture* draw_image = gpu_device_->GetDrawImage();
+		Texture* swapchain_image = gpu_device_->GetSwapchainImage(swapchain_image_index);
+		cmd->AddImageBarrier(draw_image, ResourceState::RESOURCE_STATE_COPY_SOURCE);
+		cmd->AddImageBarrier(swapchain_image, ResourceState::RESOURCE_STATE_COPY_DEST);
 
-		// execute a copy from the draw image into the swapchain
-		cmd->CopyImageToImage(gpu_device_->GetDrawImage()->vk_image, gpu_device_->swapchain_images_[swapchain_image_index], gpu_device_->draw_extent_, gpu_device_->swapchain_extent_);
-		cmd->TransitionImage(gpu_device_->swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		cmd->CopyImageToImage(draw_image->vk_image, swapchain_image->vk_image, draw_image->vk_extent, swapchain_image->vk_extent);
+		cmd->AddImageBarrier(swapchain_image, ResourceState::RESOURCE_STATE_RENDER_TARGET);
 
-		VkRenderingAttachmentInfo color_attachment = vkinit::AttachmentInfo(gpu_device_->swapchain_image_views_[swapchain_image_index], nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		VkRenderingAttachmentInfo color_attachment = vkinit::AttachmentInfo(swapchain_image->vk_image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		VkRenderingInfo render_info = vkinit::RenderingInfo(gpu_device_->swapchain_extent_, &color_attachment, nullptr);
 
 		cmd->BeginRendering(render_info);
 
-		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd->vk_command_buffer_);
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd->GetVkCommandBuffer());
 
 		cmd->EndRendering();
 
-		cmd->TransitionImage(gpu_device_->swapchain_images_[swapchain_image_index], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		cmd->AddImageBarrier(swapchain_image,  ResourceState::RESOURCE_STATE_PRESENT);
 	}
 
 	void ImGuiLayer::InitImGui()

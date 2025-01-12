@@ -97,4 +97,9 @@ namespace lincore
         cmd->EndRendering();
     }
 
+	void MeshPass::SetupQueueType()
+	{   
+		queue_type_ = QueueType::Graphics;
+	}
+
 }

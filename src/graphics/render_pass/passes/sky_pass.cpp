@@ -54,4 +54,8 @@ namespace lincore
 		// 分发计算
 		cmd->Dispatch(static_cast<uint32_t>(std::ceil(gpu_device_->draw_extent_.width / 16.0)), static_cast<uint32_t>(std::ceil(gpu_device_->draw_extent_.height / 16.0)), 1);
 	}
+	void SkyBackgroundPass::SetupQueueType()
+	{
+		queue_type_ = QueueType::Compute;
+	}
 }
