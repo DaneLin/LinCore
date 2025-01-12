@@ -382,12 +382,11 @@ namespace lincore
 
 		VkSemaphoreSubmitInfo wait_info{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
 		wait_info.semaphore = frame.swapchain_semaphore;
-		wait_info.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
-							  VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT_KHR; // 确保等待所有可能的操作;
+		wait_info.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT_KHR; // 确保等待所有可能的操作;
 
 		VkSemaphoreSubmitInfo signal_info{VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO};
 		signal_info.semaphore = frame.render_semaphore;
-		signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+		signal_info.stageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT_KHR;
 		VkSubmitInfo2 submit_info{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};
 		submit_info.commandBufferInfoCount = 1;
 		submit_info.pCommandBufferInfos = &cmd_info;
@@ -675,27 +674,27 @@ namespace lincore
 		};
 
 		// 检查各个扩展的支持情况
-		bindless_supported_ = has_extension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
-		dynamic_rendering_extension_present_ = has_extension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-		timeline_semaphore_extension_present_ = has_extension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
-		synchronization2_extension_present_ = has_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-		mesh_shaders_extension_present_ = has_extension(VK_EXT_MESH_SHADER_EXTENSION_NAME);
-		multiview_extension_present_ = has_extension(VK_KHR_MULTIVIEW_EXTENSION_NAME);
-		fragment_shading_rate_present_ = has_extension(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
-		ray_tracing_present_ = has_extension(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) && has_extension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
-							   has_extension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
-		ray_query_present_ = has_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+		enabled_features_.bindless_supported_ = has_extension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+		enabled_features_.dynamic_rendering_extension_present_ = has_extension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+		enabled_features_.timeline_semaphore_extension_present_ = has_extension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+		enabled_features_.synchronization2_extension_present_ = has_extension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+		enabled_features_.mesh_shaders_extension_present_ = has_extension(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+		enabled_features_.multiview_extension_present_ = has_extension(VK_KHR_MULTIVIEW_EXTENSION_NAME);
+		enabled_features_.fragment_shading_rate_present_ = has_extension(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+		enabled_features_.ray_tracing_present_ = has_extension(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) && has_extension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+												 has_extension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+		enabled_features_.ray_query_present_ = has_extension(VK_KHR_RAY_QUERY_EXTENSION_NAME);
 
 		LOGI("  Extension support status:");
-		LOGI("    Bindless: {}", bindless_supported_);
-		LOGI("    Dynamic Rendering: {}", dynamic_rendering_extension_present_);
-		LOGI("    Timeline Semaphore: {}", timeline_semaphore_extension_present_);
-		LOGI("    Synchronization2: {}", synchronization2_extension_present_);
-		LOGI("    Mesh Shaders: {}", mesh_shaders_extension_present_);
-		LOGI("    Multiview: {}", multiview_extension_present_);
-		LOGI("    Fragment Shading Rate: {}", fragment_shading_rate_present_);
-		LOGI("    Ray Tracing Pipeline: {}", ray_tracing_present_);
-		LOGI("    Ray Query: {}", ray_query_present_);
+		LOGI("    Bindless: {}", enabled_features_.bindless_supported_);
+		LOGI("    Dynamic Rendering: {}", enabled_features_.dynamic_rendering_extension_present_);
+		LOGI("    Timeline Semaphore: {}", enabled_features_.timeline_semaphore_extension_present_);
+		LOGI("    Synchronization2: {}", enabled_features_.synchronization2_extension_present_);
+		LOGI("    Mesh Shaders: {}", enabled_features_.mesh_shaders_extension_present_);
+		LOGI("    Multiview: {}", enabled_features_.multiview_extension_present_);
+		LOGI("    Fragment Shading Rate: {}", enabled_features_.fragment_shading_rate_present_);
+		LOGI("    Ray Tracing Pipeline: {}", enabled_features_.ray_tracing_present_);
+		LOGI("    Ray Query: {}", enabled_features_.ray_query_present_);
 
 		// 设置debug messenger
 		if (bUseValidationLayers)

@@ -129,7 +129,7 @@ namespace lincore
 		/**
 		 * @brief 创建信息
 		 * 包含应用程序名称、引擎名称、API版本、窗口尺寸和窗口指针
-		 */	
+		 */
 		struct CreateInfo
 		{
 			const char *app_name;
@@ -204,7 +204,7 @@ namespace lincore
 		VmaAllocator vma_allocator_ = VK_NULL_HANDLE;
 
 		uint32_t current_frame_{0};
-		uint32_t previous_frame_{ 1 };
+		uint32_t previous_frame_{1};
 		FrameData frames_[kFRAME_OVERLAP];
 
 		/**
@@ -234,8 +234,8 @@ namespace lincore
 
 		VkDescriptorSetLayout bindless_texture_layout_{VK_NULL_HANDLE};
 		VkDescriptorSet bindless_texture_set_{VK_NULL_HANDLE};
-   		BindlessUpdateArray bindless_updates;
-		
+		BindlessUpdateArray bindless_updates;
+
 		scene::GPUSceneData scene_data_;
 		BufferHandle global_scene_data_buffer_;
 
@@ -246,15 +246,18 @@ namespace lincore
 		VulkanProfiler profiler_;
 		PipelineCache pipeline_cache_;
 
-		bool bindless_supported_ = false;
-		bool dynamic_rendering_extension_present_ = false;
-		bool timeline_semaphore_extension_present_ = false;
-		bool synchronization2_extension_present_ = false;
-		bool mesh_shaders_extension_present_ = false;
-		bool multiview_extension_present_ = false;
-		bool fragment_shading_rate_present_ = false;
-		bool ray_tracing_present_ = false;
-		bool ray_query_present_ = false;
+		struct
+		{
+			bool bindless_supported_ = false;
+			bool dynamic_rendering_extension_present_ = false;
+			bool timeline_semaphore_extension_present_ = false;
+			bool synchronization2_extension_present_ = false;
+			bool mesh_shaders_extension_present_ = false;
+			bool multiview_extension_present_ = false;
+			bool fragment_shading_rate_present_ = false;
+			bool ray_tracing_present_ = false;
+			bool ray_query_present_ = false;
+		} enabled_features_;
 
 	public:
 		bool Init(const CreateInfo &create_info);
@@ -290,11 +293,11 @@ namespace lincore
 		// resource management
 		void CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle);
 
-		ShaderEffect* CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string& name = "");
+		ShaderEffect *CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string &name = "");
 
 		// 创建渲染附件
-		std::vector<VkRenderingAttachmentInfo> CreateRenderingAttachmentsColor(std::vector<TextureHandle>& color_targets);
-		VkRenderingAttachmentInfo CreateRenderingAttachmentsDepth(TextureHandle& depth_target);
+		std::vector<VkRenderingAttachmentInfo> CreateRenderingAttachmentsColor(std::vector<TextureHandle> &color_targets);
+		VkRenderingAttachmentInfo CreateRenderingAttachmentsDepth(TextureHandle &depth_target);
 
 		/**
 		 * @brief 通用资源访问模板函数
@@ -406,13 +409,15 @@ namespace lincore
 			void *pUserData);
 
 		// 切换垂直同步
-		void ToggleVSync(bool vsync_enabled) {
+		void ToggleVSync(bool vsync_enabled)
+		{
 			default_swapchain_info_.present_mode = vsync_enabled ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR;
 			ResizeSwapchain(swapchain_extent_.width, swapchain_extent_.height);
 		}
-		
+
 		// 获取当前垂直同步状态
-		bool IsVSyncEnabled() const {
+		bool IsVSyncEnabled() const
+		{
 			return default_swapchain_info_.present_mode == VK_PRESENT_MODE_FIFO_KHR;
 		}
 
@@ -443,7 +448,7 @@ namespace lincore
 
 		void SetupDebugMessenger();
 		void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo);
-   		void UpdateBindlessDescriptors();
+		void UpdateBindlessDescriptors();
 		void LogAvailableDevices();
 		/**
 		 * @brief 用于编译期断言的辅助模板

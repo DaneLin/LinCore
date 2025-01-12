@@ -251,7 +251,7 @@ namespace lincore
 							 uint32_t destination_family,
 							 QueueType::Enum destination_queue_type)
     {
-		if (gpu_device_->synchronization2_extension_present_)
+		if (gpu_device_->enabled_features_.synchronization2_extension_present_)
 		{
 			VkImageMemoryBarrier2KHR barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR};
 			barrier.srcAccessMask = UtilToVkAccessFlags2(texture->state);
@@ -307,7 +307,7 @@ namespace lincore
 							  uint32_t destination_family,
 							  QueueType::Enum destination_queue_type)
     {
-		if (gpu_device_->synchronization2_extension_present_)
+		if (gpu_device_->enabled_features_.synchronization2_extension_present_)
 		{
 			VkBufferMemoryBarrier2KHR barrier{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2_KHR};
 			barrier.srcAccessMask = UtilToVkAccessFlags2(buffer->state);
