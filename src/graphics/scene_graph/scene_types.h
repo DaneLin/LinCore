@@ -15,6 +15,20 @@ namespace lincore
     namespace scene
     {
         /**
+         * @brief GPU场景数据
+         * 包含视图、投影、视图投影矩阵和太阳方向、颜色、相机位置
+         */
+        struct alignas(16) GPUSceneData
+        {
+            glm::mat4 view;
+            glm::mat4 proj;
+            glm::mat4 viewproj;
+            glm::vec4 sunlight_direction; // w for sun power
+            glm::vec4 sunlight_color;
+            glm::vec3 camera_position;
+            float pad0;
+        };
+        /**
          * @brief 3D变换组件
          * 包含位置、旋转和缩放信息
          * 提供矩阵转换和分解功能

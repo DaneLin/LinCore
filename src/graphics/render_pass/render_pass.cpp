@@ -3,6 +3,7 @@
 #include "foundation/resources.h"
 #include "foundation/logging.h"
 #include "graphics/scene_graph/scene_graph.h"
+#include "render_pass.h"
 
 namespace lincore
 {
@@ -47,7 +48,7 @@ namespace lincore
 		return *this;
 	}
 
-	RenderPassBase& RenderPassBase::SetSceneGraph(scene::SceneGraph* graph)
+	RenderPassBase &RenderPassBase::SetSceneGraph(scene::SceneGraph *graph)
 	{
 		scene_graph_ = graph;
 		return *this;
@@ -60,6 +61,7 @@ namespace lincore
 			LOGE("RenderPassBase::Finalize() called multiple times");
 			return;
 		}
+		SetupQueueType();
 		PrepareShader();
 		ValidateInput();
 		ValidateOutput();
@@ -71,6 +73,7 @@ namespace lincore
 	void RenderPassBase::Execute(CommandBuffer *cmd, FrameData *frame)
 	{
 		UpdateInputResources(cmd, frame);
+		UpdateRenderTargets(cmd);
 		ExecutePass(cmd, frame);
 	}
 
@@ -115,24 +118,41 @@ namespace lincore
 				Buffer *buffer = gpu_device_->GetResource<Buffer>(resource.handle);
 				if (buffer->state != new_state)
 				{
-					UtilAddBufferBarrier(gpu_device_, cmd->vk_command_buffer_, buffer->vk_buffer, buffer->state, new_state, buffer->size);
-					buffer->state = new_state;
+					cmd->AddBufferBarrier(buffer, new_state, buffer->queue_family, queue_type_);
 				}
 				shader_->BindBuffer(key.c_str(), UtilToVkDescriptorBufferInfo(buffer));
 			}
 			else if (desc_type == VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ||
 					 desc_type == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE ||
-					 desc_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE)
+					 desc_type == VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE ||
+					 desc_type == VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT)
 			{
 				Texture *texture = gpu_device_->GetResource<Texture>(resource.handle);
 				if (texture->state != new_state)
 				{
-					UtilAddImageBarrier(gpu_device_, cmd->vk_command_buffer_, texture, new_state, 0, 1, false);
-					texture->state = new_state;
+					cmd->AddImageBarrier(texture, new_state,
+										 texture->mip_base_level, texture->mip_level_count,
+										 texture->array_base_layer, texture->array_layer_count,
+										 texture->queue_family, queue_type_);
 				}
 				shader_->BindImage(key.c_str(), UtilToVkDescriptorImageInfo(texture));
 			}
 		}
 		shader_->BuildSets(&frame->frame_descriptors);
 	}
+
+	void RenderPassBase::UpdateRenderTargets(CommandBuffer *cmd)
+	{
+		// Add memory barriers to ensure proper synchronization
+        for (const auto& target : color_targets_) {
+            Texture* texture = gpu_device_->GetResource<Texture>(target.index);
+            cmd->AddImageBarrier(texture, ResourceState::RESOURCE_STATE_RENDER_TARGET);
+        }
+        if (depth_target_.index != k_invalid_index) {
+            Texture* depth_texture = gpu_device_->GetResource<Texture>(depth_target_.index);
+            cmd->AddImageBarrier(depth_texture, ResourceState::RESOURCE_STATE_DEPTH_WRITE);
+        }
+	}
 }
+
+

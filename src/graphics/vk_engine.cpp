@@ -17,7 +17,7 @@
 #include "foundation/cvars.h"
 #include "foundation/logging.h"
 #include "graphics/vk_initializers.h"
-#include "graphics/vk_types.h"
+#include "graphics/scene_graph/scene_types.h"
 #include "graphics/vk_pipelines.h"
 #include "graphics/vk_profiler.h"
 #include "graphics/vk_device.h"
@@ -70,17 +70,19 @@ namespace lincore
 
 		// Initialize sunlight parameters
 		gpu_device_.scene_data_.sunlight_direction = glm::vec4(-0.5f, -1.0f, -0.5f, 5.0f); // w component is sun power
-		gpu_device_.scene_data_.sunlight_color = glm::vec4(1.0f, 0.95f, 0.8f, 1.0f); // Warm sunlight color
+		gpu_device_.scene_data_.sunlight_color = glm::vec4(1.0f, 0.95f, 0.8f, 1.0f);	   // Warm sunlight color
 
 		scene::LoadConfig load_config;
 		load_config.debug_name = "Main Scene";
 
 		sky_background_pass_.Init(&gpu_device_)
-            .BindInputs({{"image", gpu_device_.draw_image_handle_.index}})
-            .Finalize();
+			.BindInputs({{"image", gpu_device_.draw_image_handle_.index}})
+			.Finalize();
 
 		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
-		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/FlightHelmet/glTF/FlightHelmet.gltf"), load_config);
+		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
 		scene_graph_ = std::make_unique<scene::SceneGraph>(&gpu_device_);
 		scene_graph_->Init();
 		scene_graph_->BeginSceneUpdate();
@@ -96,13 +98,11 @@ namespace lincore
 			.Finalize();
 
 		mesh_pass_.Init(&gpu_device_)
-			.BindInputs({
-				{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
-				{"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
-				{"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
-				{"scene_data", gpu_device_.global_scene_data_buffer_.index},
-				{"material_data_buffer", gpu_resource_pool.material_buffer.index}
-			})
+			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
+						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
+						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
+						 {"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
 			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}},
 							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
 			.SetSceneGraph(scene_graph_.get())
@@ -151,7 +151,7 @@ namespace lincore
 
 		// Main Render Pass Logic
 		{
-			gpu_device_.profiler_.GrabQueries(cmd->GetCommandBuffer());
+			gpu_device_.profiler_.GrabQueries(cmd->GetVkCommandBuffer());
 
 			sky_background_pass_.Execute(cmd, &current_frame_data);
 
@@ -169,11 +169,10 @@ namespace lincore
 
 			culling_pass_.Execute(cmd, &current_frame_data);
 
-			// 在执行计算着色器后，绘制前添加内存屏障
-			UtilAddStateBarrier(&gpu_device_, cmd->vk_command_buffer_, PipelineStage::ComputeShader, PipelineStage::DrawIndirect);
+			
 
 			mesh_pass_.Execute(cmd, &current_frame_data);
-			
+
 			// Update mesh draw time from GPU profiler
 			if (gpu_device_.profiler_.timing_.contains("mesh_pass"))
 			{
@@ -182,7 +181,7 @@ namespace lincore
 		}
 
 		{
-			VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_.profiler_, "imgui_pass");
+			VulkanScopeTimer timer(cmd->GetVkCommandBuffer(), &gpu_device_.profiler_, "imgui_pass");
 			imgui_layer_.Draw(cmd, swapchain_image_index);
 		}
 
@@ -244,7 +243,43 @@ namespace lincore
 				resize_requested_ = false;
 			}
 
-			// imgui new frame
+			DrawImGui();
+
+			// our draw function
+			Draw();
+
+			auto frame_end = std::chrono::steady_clock::now();
+			auto frame_duration = std::chrono::duration_cast<std::chrono::microseconds>(frame_end - frame_start);
+			engine_stats_.frame_time = frame_duration.count() / 1000.f; // Convert to milliseconds
+		}
+	}
+
+	void VulkanEngine::UpdateScene()
+	{
+		engine_stats_.scene_update_time = 0;
+		auto start = std::chrono::system_clock::now();
+
+		main_camera_.Update();
+
+		gpu_device_.scene_data_.view = main_camera_.GetViewMatrix();
+		gpu_device_.scene_data_.proj = main_camera_.GetProjectionMatrix();
+		gpu_device_.scene_data_.proj[1][1] *= -1;
+		gpu_device_.scene_data_.viewproj = gpu_device_.scene_data_.proj * gpu_device_.scene_data_.view;
+		// Update camera position for shaders
+		gpu_device_.scene_data_.camera_position = main_camera_.position_;
+
+		Buffer *gpu_scene_data_buffer = gpu_device_.GetResource<Buffer>(gpu_device_.global_scene_data_buffer_.index);
+		scene::GPUSceneData *scene_uniform_data = (scene::GPUSceneData *)gpu_scene_data_buffer->vma_allocation->GetMappedData();
+		*scene_uniform_data = gpu_device_.scene_data_;
+
+		auto end = std::chrono::system_clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+		engine_stats_.scene_update_time = elapsed.count() / 1000.f;
+	}
+
+	void VulkanEngine::DrawImGui()
+	{
+		// imgui new frame
 			imgui_layer_.NewFrame();
 
 			// Performance window (fixed at top-right corner)
@@ -253,13 +288,13 @@ namespace lincore
 				const float MENU_BAR_HEIGHT = ImGui::GetFrameHeight(); // Get the height of the menu bar
 				ImVec2 window_pos(window_extent_.width - WINDOW_PADDING, WINDOW_PADDING + MENU_BAR_HEIGHT);
 				ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-				
+
 				ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove |
-											  ImGuiWindowFlags_NoResize |
-											  ImGuiWindowFlags_AlwaysAutoResize |
-											  ImGuiWindowFlags_NoSavedSettings |
-											  ImGuiWindowFlags_NoNav;
-				
+												ImGuiWindowFlags_NoResize |
+												ImGuiWindowFlags_AlwaysAutoResize |
+												ImGuiWindowFlags_NoSavedSettings |
+												ImGuiWindowFlags_NoNav;
+
 				ImGui::Begin("Performance", nullptr, window_flags);
 				ImGui::Text("Frame Time: %.2f ms", engine_stats_.frame_time);
 				ImGui::Text("Update Time: %.2f ms", engine_stats_.scene_update_time);
@@ -271,10 +306,10 @@ namespace lincore
 				}
 				ImGui::Text("Draw Time: %.2f ms", total_draw_time);
 
-				ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", 
-					main_camera_.position_.x,
-					main_camera_.position_.y,
-					main_camera_.position_.z);
+				ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)",
+							main_camera_.position_.x,
+							main_camera_.position_.y,
+							main_camera_.position_.z);
 
 				if (ImGui::TreeNode("Render Timings"))
 				{
@@ -298,19 +333,22 @@ namespace lincore
 
 			// Main control panel window
 			ImGui::Begin("Control Panel", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-			
+
 			// Rendering Settings section
 			if (ImGui::CollapsingHeader("Rendering Settings", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Render Scale"); ImGui::SameLine(150);
+				ImGui::Text("Render Scale");
+				ImGui::SameLine(150);
 				ImGui::SetNextItemWidth(200);
 				ImGui::SliderFloat("##render_scale", &gpu_device_.render_scale_, 0.3f, 1.0f);
 
 				ImGui::AlignTextToFramePadding();
-				ImGui::Text("VSync"); ImGui::SameLine(150);
+				ImGui::Text("VSync");
+				ImGui::SameLine(150);
 				bool vsync = gpu_device_.IsVSyncEnabled();
-				if (ImGui::Checkbox("##vsync", &vsync)) {
+				if (ImGui::Checkbox("##vsync", &vsync))
+				{
 					gpu_device_.ToggleVSync(vsync);
 				}
 			}
@@ -319,11 +357,12 @@ namespace lincore
 			if (ImGui::CollapsingHeader("Lighting Settings", ImGuiTreeNodeFlags_DefaultOpen))
 			{
 				// Direction control (w component is used for sun power)
-				float direction[3] = { gpu_device_.scene_data_.sunlight_direction.x,
-									gpu_device_.scene_data_.sunlight_direction.y,
-									gpu_device_.scene_data_.sunlight_direction.z };
+				float direction[3] = {gpu_device_.scene_data_.sunlight_direction.x,
+									  gpu_device_.scene_data_.sunlight_direction.y,
+									  gpu_device_.scene_data_.sunlight_direction.z};
 				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Sun Direction"); ImGui::SameLine(150);
+				ImGui::Text("Sun Direction");
+				ImGui::SameLine(150);
 				ImGui::SetNextItemWidth(200);
 				if (ImGui::SliderFloat3("##sun_direction", direction, -100.0f, 100.0f))
 				{
@@ -335,7 +374,8 @@ namespace lincore
 				// Sun power control
 				float power = gpu_device_.scene_data_.sunlight_direction.w;
 				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Sun Power"); ImGui::SameLine(150);
+				ImGui::Text("Sun Power");
+				ImGui::SameLine(150);
 				ImGui::SetNextItemWidth(200);
 				if (ImGui::SliderFloat("##sun_power", &power, 0.0f, 1000.0f))
 				{
@@ -343,11 +383,12 @@ namespace lincore
 				}
 
 				// Color control
-				float color[3] = { gpu_device_.scene_data_.sunlight_color.x,
-								gpu_device_.scene_data_.sunlight_color.y,
-								gpu_device_.scene_data_.sunlight_color.z };
+				float color[3] = {gpu_device_.scene_data_.sunlight_color.x,
+								  gpu_device_.scene_data_.sunlight_color.y,
+								  gpu_device_.scene_data_.sunlight_color.z};
 				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Sun Color"); ImGui::SameLine(150);
+				ImGui::Text("Sun Color");
+				ImGui::SameLine(150);
 				ImGui::SetNextItemWidth(200);
 				if (ImGui::ColorEdit3("##sun_color", color))
 				{
@@ -376,37 +417,6 @@ namespace lincore
 
 			// make imgui calculate internal draw structures
 			imgui_layer_.EndFrame();
-
-			// our draw function
-			Draw();
-
-			auto frame_end = std::chrono::steady_clock::now();
-			auto frame_duration = std::chrono::duration_cast<std::chrono::microseconds>(frame_end - frame_start);
-			engine_stats_.frame_time = frame_duration.count() / 1000.f;  // Convert to milliseconds
-		}
-	}
-
-	void VulkanEngine::UpdateScene()
-	{
-		engine_stats_.scene_update_time = 0;
-		auto start = std::chrono::system_clock::now();
-
-		main_camera_.Update();
-
-		gpu_device_.scene_data_.view = main_camera_.GetViewMatrix();
-		gpu_device_.scene_data_.proj = main_camera_.GetProjectionMatrix();
-		gpu_device_.scene_data_.proj[1][1] *= -1;
-		gpu_device_.scene_data_.viewproj = gpu_device_.scene_data_.proj * gpu_device_.scene_data_.view;
-		// Update camera position for shaders
-		gpu_device_.scene_data_.camera_position = main_camera_.position_;
-
-		Buffer *gpu_scene_data_buffer = gpu_device_.GetResource<Buffer>(gpu_device_.global_scene_data_buffer_.index);
-		GPUSceneData *scene_uniform_data = (GPUSceneData *)gpu_scene_data_buffer->vma_allocation->GetMappedData();
-		*scene_uniform_data = gpu_device_.scene_data_;
-
-		auto end = std::chrono::system_clock::now();
-		auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-		engine_stats_.scene_update_time = elapsed.count() / 1000.f;
 	}
 
 }

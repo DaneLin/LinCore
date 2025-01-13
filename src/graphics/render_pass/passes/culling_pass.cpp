@@ -46,6 +46,7 @@ namespace lincore
     {
         VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "culling_pass");
 
+        
         // 计算管线
         cmd->BindPipeline(pipeline_, VK_PIPELINE_BIND_POINT_COMPUTE);
         
@@ -55,7 +56,7 @@ namespace lincore
         // 设置push常量
         cmd->PushConstants(shader_->built_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(scene::DrawCullData), &cull_data_);
         
-        // 添加内存屏障，确保draw buffer可写
+        // // 添加内存屏障，确保draw buffer可写
         VkMemoryBarrier barrier{
             VK_STRUCTURE_TYPE_MEMORY_BARRIER,    // sType
             nullptr,                             // pNext
@@ -89,5 +90,9 @@ namespace lincore
             0, nullptr,
             0, nullptr
         );
+    }
+    void CullingPass::SetupQueueType()
+    {
+        queue_type_ = QueueType::Compute;
     }
 }

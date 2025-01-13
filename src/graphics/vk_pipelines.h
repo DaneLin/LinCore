@@ -5,6 +5,12 @@
 
 namespace lincore
 {
+	enum class PassType : uint8_t
+	{
+		kCompute,
+		kRaster,
+		kMesh
+	};
 
 	namespace render_graph
 	{
@@ -33,20 +39,22 @@ namespace lincore
 	};
 
 	// Pipeline状态配置
-	struct PipelineStateConfig {
+	struct PipelineStateConfig
+	{
 		// 图形管线配置
 		VkPrimitiveTopology topology{VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST};
 		VkPolygonMode polygon_mode{VK_POLYGON_MODE_FILL};
 		VkCullModeFlags cull_mode{VK_CULL_MODE_BACK_BIT};
 		VkFrontFace front_face{VK_FRONT_FACE_CLOCKWISE};
-		
+
 		// 深度测试配置
 		bool depth_test{true};
 		bool depth_write{true};
 		VkCompareOp depth_compare_op{VK_COMPARE_OP_LESS};
-		
+
 		// 混合模式
-		enum class BlendMode {
+		enum class BlendMode
+		{
 			None,
 			Additive,
 			AlphaBlend
@@ -55,7 +63,7 @@ namespace lincore
 		// 获取默认配置
 		static PipelineStateConfig GetDefault(PassType type);
 	};
-		
+
 	class PipelineBuilder
 	{
 	public:
@@ -75,7 +83,7 @@ namespace lincore
 		void Clear();
 
 		VkPipeline BuildPipeline(VkDevice device, VkPipelineCache cache = VK_NULL_HANDLE);
-		void ApplyConfig(const PipelineStateConfig& config);
+		void ApplyConfig(const PipelineStateConfig &config);
 
 		void SetShaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader);
 

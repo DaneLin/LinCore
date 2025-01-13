@@ -76,6 +76,8 @@ namespace lincore
 		// pass执行逻辑
 		virtual void ExecutePass(CommandBuffer *cmd, FrameData *frame) = 0;
 
+		virtual void SetupQueueType() = 0;
+
 	private:
 		// 验证输入
 		void ValidateInput();
@@ -83,6 +85,8 @@ namespace lincore
 		void ValidateOutput();
 		// 更新输入资源
 		void UpdateInputResources(CommandBuffer *cmd, FrameData *frame);
+
+		void UpdateRenderTargets(CommandBuffer *cmd);
 
 	protected:
 		GpuDevice *gpu_device_{nullptr};
@@ -93,6 +97,8 @@ namespace lincore
 		PassOutput pass_output_;
 		std::vector<TextureHandle> color_targets_;
 		TextureHandle depth_target_;
+
+		QueueType::Enum queue_type_{QueueType::Graphics};
 
 		scene::SceneGraph* scene_graph_{ nullptr };
 

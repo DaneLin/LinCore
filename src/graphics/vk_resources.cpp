@@ -250,7 +250,7 @@ namespace lincore
 		buffer->size = creation.size;
 		buffer->parent_buffer = k_invalid_buffer;
 		buffer->global_offset = 0;
-
+		buffer->queue_type = creation.queue_type;
 		// Cache creation info
 		{
 			std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
@@ -464,7 +464,7 @@ namespace lincore
 		texture->vk_format = creation.format;
 		texture->parent_texture = k_invalid_texture;
 		texture->alias_texture = creation.alias;
-
+		texture->queue_type = creation.queue_type;
 		// Cache creation info
 		{
 			std::unique_lock<std::shared_mutex> lock(creation_info_mutex_);
@@ -581,9 +581,11 @@ namespace lincore
 			VkQueue &submit_queue = creation.transfer_queue ? gpu_device_->transfer_queue_ : gpu_device_->graphics_queue_;
 
 			// Transition image layout for transfer
-			gpu_device_->command_buffer_manager_.ImmediateSubmit([&](CommandBuffer *cmd)
-																 {
-					cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			gpu_device_->command_buffer_manager_.ImmediateSubmit(
+				[this, texture, staging_buffer](CommandBuffer *cmd)
+				{
+					// Copy staging buffer to texture
+					cmd->AddImageBarrier(texture, RESOURCE_STATE_COPY_DEST, texture->mip_base_level, texture->mip_level_count);
 
 					VkBufferImageCopy copy_region = {};
 					copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -592,56 +594,62 @@ namespace lincore
 					copy_region.imageSubresource.layerCount = texture->array_layer_count;
 					copy_region.imageExtent = texture->vk_extent;
 
-					vkCmdCopyBufferToImage(cmd->GetCommandBuffer(),
-										GetBuffer(staging_buffer)->vk_buffer,
-										texture->vk_image,
-										VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-										1,
-										&copy_region);
+					cmd->CopyBufferToImage(GetBuffer(staging_buffer)->vk_buffer, texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, copy_region);
 
 					// Generate mipmaps if needed
 					if (texture->mip_level_count > 1)
 					{
 						VkImageMemoryBarrier barrier{};
-						barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-						barrier.image = texture->vk_image;
-						barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-						barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-						barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-						barrier.subresourceRange.baseArrayLayer = 0;
-						barrier.subresourceRange.layerCount = texture->array_layer_count;
-						barrier.subresourceRange.levelCount = 1;
+							barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+							barrier.image = texture->vk_image;
+							barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+							barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+							barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+							barrier.subresourceRange.baseArrayLayer = 0;
+							barrier.subresourceRange.layerCount = texture->array_layer_count;
+							barrier.subresourceRange.levelCount = texture->mip_level_count;
+							barrier.subresourceRange.baseMipLevel = 0;
+							barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+							barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-						int32_t mip_width = texture->vk_extent.width;
-						int32_t mip_height = texture->vk_extent.height;
-
-						// First transition all mip levels to UNDEFINED -> TRANSFER_DST_OPTIMAL
-						barrier.subresourceRange.baseMipLevel = 0;
-						barrier.subresourceRange.levelCount = texture->mip_level_count;
-						barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-						barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-						barrier.srcAccessMask = 0;
-						barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-						vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
-							VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+						vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
+							VK_PIPELINE_STAGE_TRANSFER_BIT,
 							VK_PIPELINE_STAGE_TRANSFER_BIT,
 							0,
 							0, nullptr,
 							0, nullptr,
 							1, &barrier);
 
-						barrier.subresourceRange.levelCount = 1;
+						int32_t mip_width = texture->vk_extent.width;
+						int32_t mip_height = texture->vk_extent.height;
 
 						for (uint32_t i = 1; i < texture->mip_level_count; i++) {
 							// Transition previous mip level to TRANSFER_SRC
 							barrier.subresourceRange.baseMipLevel = i - 1;
+							barrier.subresourceRange.levelCount = 1;
 							barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 							barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 							barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 							barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-							vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+							vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
+								VK_PIPELINE_STAGE_TRANSFER_BIT,
+								VK_PIPELINE_STAGE_TRANSFER_BIT,
+								0,
+								0, nullptr,
+								0, nullptr,
+								1, &barrier);
+
+							// Set up current mip level as transfer destination
+							barrier.subresourceRange.baseMipLevel = i;
+							barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+							barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							barrier.srcAccessMask = 0;
+							barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+							vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								0,
@@ -665,19 +673,20 @@ namespace lincore
 							blit.dstSubresource.baseArrayLayer = 0;
 							blit.dstSubresource.layerCount = texture->array_layer_count;
 
-							vkCmdBlitImage(cmd->GetCommandBuffer(),
+							vkCmdBlitImage(cmd->GetVkCommandBuffer(),
 								texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 								texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 								1, &blit,
 								VK_FILTER_LINEAR);
 
 							// Transition previous mip level to SHADER_READ_ONLY
+							barrier.subresourceRange.baseMipLevel = i - 1;
 							barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 							barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 							barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 							barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-							vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+							vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 								VK_PIPELINE_STAGE_TRANSFER_BIT,
 								VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 								0,
@@ -696,7 +705,7 @@ namespace lincore
 						barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 						barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-						vkCmdPipelineBarrier(cmd->GetCommandBuffer(),
+						vkCmdPipelineBarrier(cmd->GetVkCommandBuffer(),
 							VK_PIPELINE_STAGE_TRANSFER_BIT,
 							VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
 							0,
@@ -705,11 +714,8 @@ namespace lincore
 							1, &barrier);
 					}
 					else {
-						cmd->TransitionImage(texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+						cmd->AddImageBarrier(texture, RESOURCE_STATE_SHADER_RESOURCE, texture->mip_base_level, texture->mip_level_count);
 					} }, submit_queue);
-
-			// Update texture state
-			texture->state = RESOURCE_STATE_SHADER_RESOURCE;
 			// Destroy staging buffer
 			DestroyBuffer(staging_buffer);
 		}

@@ -22,6 +22,7 @@ namespace lincore
 		virtual void PrepareShader() override;
 		virtual void PreparePipeline() override;
 		virtual void ExecutePass(CommandBuffer* cmd, FrameData* frame) override;
+		virtual void SetupQueueType() override;
 
 	private:
 		VkPipeline pipeline_{ VK_NULL_HANDLE };
