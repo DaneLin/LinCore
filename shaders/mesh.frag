@@ -27,8 +27,8 @@ void main()
 {
     MaterialData material = material_data_buffer.materials[object_buffer.objects[in_object_id].material_index];
     vec3 base_color = rgb2lin(texture(textures[material.base_color_tex_id], in_uv).rgb * material.base_color_factor.rgb);
-    float roughness = texture(textures[material.metallic_roughness_tex_id], in_uv).r * material.roughness_factor;
-    float metallic = texture(textures[material.metallic_roughness_tex_id], in_uv).g * material.metallic_factor;
+    float roughness = texture(textures[material.metallic_roughness_tex_id], in_uv).g * material.roughness_factor;
+    float metallic = texture(textures[material.metallic_roughness_tex_id], in_uv).b * material.metallic_factor;
     vec4 emission = vec4(0.0);
     float reflectance = material.reflectance_factor;
     
