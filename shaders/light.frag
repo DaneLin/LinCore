@@ -53,5 +53,4 @@ void main()
     }
 
     out_color = vec4(radiance, 1.0);
-    out_color = vec4(arm, 1.0);
 }

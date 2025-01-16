@@ -295,7 +295,7 @@ namespace lincore
 			barrier.oldLayout = UtilToVkImageLayout2(texture->state);
 			barrier.newLayout = UtilToVkImageLayout2(new_state);
 			barrier.srcQueueFamilyIndex = texture->queue_family;
-			barrier.dstQueueFamilyIndex = destination_family;
+			barrier.dstQueueFamilyIndex = destination_family == VK_QUEUE_FAMILY_IGNORED ? texture->queue_family : destination_family;
 			barrier.image = texture->vk_image;
 			barrier.subresourceRange.aspectMask =  TextureFormat::HasDepthOrStencil(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
 			barrier.subresourceRange.baseArrayLayer = base_array_layer;
