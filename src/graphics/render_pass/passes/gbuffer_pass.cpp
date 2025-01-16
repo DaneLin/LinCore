@@ -47,16 +47,13 @@ namespace lincore
         pipelineBuilder.DisableBlending();
         pipelineBuilder.EnableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
-        // render format
-        // position, normal, albedo, arm, emission
+        // 更新后的GBuffer格式
         std::vector<VkFormat> formats;
-        formats.push_back(VK_FORMAT_R16G16B16A16_SFLOAT);
-        formats.push_back(VK_FORMAT_R16G16B16A16_SFLOAT);
-        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
-        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
-        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
-        pipelineBuilder.SetColorAttachmentFormats(formats);
+        formats.push_back(VK_FORMAT_R16G16B16A16_SFLOAT);      // g_normal_rough: 压缩法线(rg) + 粗糙度(b) + 金属度(a)
+        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);      // g_albedo_spec: 基础颜色(rgb) + 反射率(a)
+        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);      // g_emission: 自发光(rgb)
 
+        pipelineBuilder.SetColorAttachmentFormats(formats);
         pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
 
         gbuffer_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
@@ -67,10 +64,21 @@ namespace lincore
     {
         VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "gbuffer_pass");
 
+        // 确保深度图像处于正确的布局
+        Texture* depth_texture = gpu_device_->GetResource<Texture>(depth_target_.index);
+        cmd->AddImageBarrier(depth_texture, 
+            ResourceState::RESOURCE_STATE_DEPTH_WRITE,
+            0, depth_texture->mip_level_count,  // 转换所有mip级别
+            0, depth_texture->array_layer_count
+        );
+
         VkClearValue clear_values;
         clear_values.color = { 0.0f, 0.0f, 0.0f, 1.0f };
         std::vector<VkRenderingAttachmentInfo> color_attachments = gpu_device_->CreateRenderingAttachmentsColor(color_targets_, &clear_values);
-        VkRenderingAttachmentInfo depth_attachment = gpu_device_->CreateRenderingAttachmentsDepth(depth_target_);
+        VkRenderingAttachmentInfo depth_attachment = vkinit::DepthAttachmentInfo(
+            depth_texture->vk_image_view,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+        );
 
         VkRenderingInfo render_info = vkinit::RenderingInfo(gpu_device_->draw_extent_, color_attachments, &depth_attachment);
         cmd->BeginRendering(render_info);

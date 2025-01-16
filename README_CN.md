@@ -11,6 +11,7 @@
 - [x] 简易SceneGraph
 - [x] Microfacet BRDF (Cook-Torrance)
 - [x] GPU驱动渲染
+- [x] 延迟渲染
 
 # 待实现特性
 - [ ] 异步计算

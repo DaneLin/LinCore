@@ -12,12 +12,11 @@ layout (location = 0) in vec3 in_normal;
 layout (location = 1) in vec2 in_uv;
 layout (location = 2) flat in uint in_object_id;
 layout (location = 3) in vec3 world_position;
-// 输出
-layout (location = 0) out vec4 g_position;
-layout (location = 1) out vec4 g_normal;
-layout (location = 2) out vec4 g_albedo_spec;
-layout (location = 3) out vec4 g_arm;
-layout (location = 4) out vec4 g_emission;
+
+// 输出 - 优化后的GBuffer布局
+layout (location = 0) out vec4 g_normal_rough;     // xy: 压缩法线, z: 粗糙度, w: 金属度
+layout (location = 1) out vec4 g_albedo_spec;      // rgb: 基础颜色, a: 反射率
+layout (location = 2) out vec4 g_emission;         // rgb: 自发光, a: 未使用
 
 vec3 applyNormalMap(in vec3 normal, in vec3 viewVec, in vec2 texcoord, in uint normal_tex_id)
 {
@@ -41,9 +40,9 @@ void main()
     vec3 view_dir = normalize(scene_data.camera_position - world_position);
     n = applyNormalMap(n, view_dir, in_uv, material.normal_tex_id);
 
-    g_position = vec4(world_position,1.0);
-    g_normal = vec4(n,1.0);
-    g_arm = vec4(0.0, roughness, metallic,1.0);
+    // 压缩法线并输出到优化后的GBuffer
+    vec2 encoded_normal = EncodeNormal(n);
+    g_normal_rough = vec4(encoded_normal, roughness, metallic);
     g_albedo_spec = vec4(base_color, reflectance);
-    g_emission = emission;
+    g_emission = vec4(emission.rgb, 0.0);
 }

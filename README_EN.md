@@ -11,6 +11,7 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 - [x] Simple SceneGraph
 - [x] Microfacet BRDF (Cook-Torrance)
 - [x] GPU Driven Rendering
+- [x] Deferred Rendering
 
 # To-Do Features
 - [ ] Async Compute

@@ -72,10 +72,8 @@ namespace lincore
 		LightPass light_pass_;
 
 		// gbuffer
-		TextureHandle gbuffer_position_handle_;
-		TextureHandle gbuffer_normal_handle_;
+		TextureHandle gbuffer_normal_rough_handle_;
 		TextureHandle gbuffer_albedo_spec_handle_;
-		TextureHandle gbuffer_arm_handle_;
 		TextureHandle gbuffer_emission_handle_;
 
 		ImGuiLayer imgui_layer_;

@@ -44,10 +44,11 @@ namespace lincore
         pipelineBuilder.SetPolygonMode(VK_POLYGON_MODE_FILL);
         pipelineBuilder.SetCullMode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
         pipelineBuilder.SetMultisamplingNone();
+        pipelineBuilder.DisableBlending();
 
         // render format
         pipelineBuilder.SetColorAttachmentFormat(gpu_device_->GetDrawImage()->vk_format);
-        //pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
+        pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
 
         light_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
         gpu_device_->SetDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)light_pipeline_, "light_pipeline");
@@ -65,11 +66,11 @@ namespace lincore
         cmd->BindPipeline(light_pipeline_);
         cmd->SetViewport(0, 0, static_cast<float>(gpu_device_->draw_extent_.width), static_cast<float>(gpu_device_->draw_extent_.height), 0.f, 1.f);
         cmd->SetScissor(0, 0, gpu_device_->draw_extent_.width, gpu_device_->draw_extent_.height);
+
         // 绑定描述符集
         shader_->ApplyBinds(cmd->vk_command_buffer_);
 
         cmd->Draw(4, 1, 0, 0);
-
         cmd->EndRendering();
     }
 

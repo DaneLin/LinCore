@@ -109,21 +109,13 @@ namespace lincore
 			.Finalize();
 
 		TextureCreation gbuffer_creation{};
-		gbuffer_creation.SetName("gbuffer_position")
+		gbuffer_creation.SetName("gbuffer_normal_rough")
 			.SetSize(window_extent_.width, window_extent_.height, 1, false)
 			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Enum::Texture2D)
 			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
-		gbuffer_position_handle_ = gpu_device_.CreateResource(gbuffer_creation);
-		Texture *gbuffer_position_texture = gpu_device_.GetResource<Texture>(gbuffer_position_handle_.index);
-		gbuffer_position_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
-
-		gbuffer_creation.SetName("gbuffer_normal")
-			.SetSize(window_extent_.width, window_extent_.height, 1, false)
-			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Enum::Texture2D)
-			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
-		gbuffer_normal_handle_ = gpu_device_.CreateResource(gbuffer_creation);
-		Texture *gbuffer_normal_texture = gpu_device_.GetResource<Texture>(gbuffer_normal_handle_.index);
-		gbuffer_normal_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+		gbuffer_normal_rough_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+			Texture *gbuffer_normal_rough_texture = gpu_device_.GetResource<Texture>(gbuffer_normal_rough_handle_.index);
+		gbuffer_normal_rough_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
 
 		gbuffer_creation.SetName("gbuffer_albedo_spec")
 			.SetSize(window_extent_.width, window_extent_.height, 1, false)
@@ -133,14 +125,6 @@ namespace lincore
 		Texture *gbuffer_albedo_spec_texture = gpu_device_.GetResource<Texture>(gbuffer_albedo_spec_handle_.index);
 		gbuffer_albedo_spec_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
 
-		gbuffer_creation.SetName("gbuffer_arm")
-			.SetSize(window_extent_.width, window_extent_.height, 1, false)
-			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
-			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
-		gbuffer_arm_handle_ = gpu_device_.CreateResource(gbuffer_creation);
-		Texture *gbuffer_arm_texture = gpu_device_.GetResource<Texture>(gbuffer_arm_handle_.index);
-		gbuffer_arm_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
-
 		gbuffer_creation.SetName("gbuffer_emission")
 			.SetSize(window_extent_.width, window_extent_.height, 1, false)
 			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
@@ -149,16 +133,18 @@ namespace lincore
 		Texture *gbuffer_emission_texture = gpu_device_.GetResource<Texture>(gbuffer_emission_handle_.index);
 		gbuffer_emission_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
 
+
+		Texture *depth_image = gpu_device_.GetResource<Texture>(gpu_device_.depth_image_handle_.index);
+		depth_image->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
 		gbuffer_pass_.Init(&gpu_device_)
 			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
 						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
 						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
 						 {"scene_data", gpu_device_.global_scene_data_buffer_.index},
 						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
-			.BindRenderTargets({{"g_position", gbuffer_position_handle_.index},
-								{"g_normal", gbuffer_normal_handle_.index},
+			.BindRenderTargets({{"g_normal_rough", gbuffer_normal_rough_handle_.index},
 								{"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
-								{"g_arm", gbuffer_arm_handle_.index},
 								{"g_emission", gbuffer_emission_handle_.index}},
 							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
 			.SetSceneGraph(scene_graph_.get())
@@ -166,11 +152,10 @@ namespace lincore
 
 		light_pass_.Init(&gpu_device_)
 			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
-						 {"g_position", gbuffer_position_handle_.index},
-						 {"g_normal", gbuffer_normal_handle_.index},
+						 {"g_normal_rough", gbuffer_normal_rough_handle_.index},
 						 {"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
-						 {"g_arm", gbuffer_arm_handle_.index},
-						 {"g_emission", gbuffer_emission_handle_.index}})
+						 {"g_emission", gbuffer_emission_handle_.index},
+						 {"depth_texture", gpu_device_.depth_image_handle_.index}})
 			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}})
 			.Finalize();
 		// everything went fine

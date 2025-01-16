@@ -13,6 +13,7 @@
 - [x] 简易SceneGraph
 - [x] Microfacet BRDF (Cook-Torrance)
 - [x] GPU Driven Rendering
+- [x] 延迟渲染 
 
 # 待实现特性
 - [ ] 异步计算

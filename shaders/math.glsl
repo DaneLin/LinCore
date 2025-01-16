@@ -29,3 +29,30 @@ mat3 cotangentFrame(in vec3 N, in vec3 p, in vec2 uv)
     float invmax = inversesqrt( max( dot(T,T), dot(B,B) ) );
     return mat3( T * invmax, B * invmax, N );
 }
+
+// 法线压缩函数
+vec2 OctWrap(vec2 v) {
+    return (1.0 - abs(v.yx)) * (step(0.0, v.xy) * 2.0 - 1.0);
+}
+
+vec2 EncodeNormal(vec3 n) {
+    n /= (abs(n.x) + abs(n.y) + abs(n.z));
+    n.xy = n.z >= 0.0 ? n.xy : OctWrap(n.xy);
+    return n.xy * 0.5 + 0.5;
+}
+
+vec3 DecodeNormal(vec2 encoded) {
+    vec2 f = encoded * 2.0 - 1.0;
+    vec3 n = vec3(f.x, f.y, 1.0 - abs(f.x) - abs(f.y));
+    float t = max(-n.z, 0.0);
+    n.xy += vec2(n.x >= 0.0 ? -t : t, n.y >= 0.0 ? -t : t);
+    return normalize(n);
+}
+
+vec3 ReconstructWorldPosition(float depth, vec2 uv) {
+    vec4 clipSpacePosition = vec4(uv * 2.0 - 1.0, depth, 1.0);
+    vec4 viewSpacePosition = inverse(scene_data.proj) * clipSpacePosition;
+    viewSpacePosition /= viewSpacePosition.w;
+    vec4 worldSpacePosition = inverse(scene_data.view) * viewSpacePosition;
+    return worldSpacePosition.xyz;
+}

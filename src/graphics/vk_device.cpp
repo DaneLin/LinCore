@@ -728,10 +728,10 @@ namespace lincore
 			.SetImmediate()
 			.SetName("depth image")
 			.SetFormatType(VK_FORMAT_D32_SFLOAT, TextureType::Texture2D)
-			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth)
+			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth, false)
 			.SetFlags(TextureFlags::Compute_mask | TextureFlags::RenderTarget_mask | TextureFlags::Default_mask);
 		depth_image_handle_ = CreateResource(image_info);
-
+		
 		return true;
 	}
 
