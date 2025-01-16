@@ -1,4 +1,4 @@
-#include "mesh_pass.h"
+#include "gbuffer_pass.h"
 
 #include "graphics/vk_pipelines.h"
 #include "graphics/vk_device.h"
@@ -8,32 +8,27 @@
 namespace lincore
 {
 
-    MeshPass::~MeshPass()
+    GBufferPass::~GBufferPass()
     {
         Shutdown();
     }
 
-    void MeshPass::Shutdown()
+    void GBufferPass::Shutdown()
     {
-        if (opaque_pipeline_ != VK_NULL_HANDLE)
+        if (gbuffer_pipeline_ != VK_NULL_HANDLE)
         {
-            vkDestroyPipeline(gpu_device_->device_, opaque_pipeline_, nullptr);
-            opaque_pipeline_ = VK_NULL_HANDLE;
-        }
-        if (transparent_pipeline_ != VK_NULL_HANDLE)
-        {
-            vkDestroyPipeline(gpu_device_->device_, transparent_pipeline_, nullptr);
-            transparent_pipeline_ = VK_NULL_HANDLE;
+            vkDestroyPipeline(gpu_device_->device_, gbuffer_pipeline_, nullptr);
+            gbuffer_pipeline_ = VK_NULL_HANDLE;
         }
     }
 
-    void MeshPass::PrepareShader()
+    void GBufferPass::PrepareShader()
     {
-        shader_ = gpu_device_->CreateShaderEffect({"shaders/mesh.vert.spv", "shaders/mesh.frag.spv"}, "MeshPass");
+        shader_ = gpu_device_->CreateShaderEffect({"shaders/mrt.vert.spv", "shaders/mrt.frag.spv"}, "GBufferPass");
         shader_->ReflectLayout();
     }
 
-    void MeshPass::PreparePipeline()
+    void GBufferPass::PreparePipeline()
     {
         // 验证 shader_ 是否正确设置
         if (!shader_ || shader_->built_layout_ == VK_NULL_HANDLE)
@@ -53,32 +48,34 @@ namespace lincore
         pipelineBuilder.EnableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
         // render format
-        pipelineBuilder.SetColorAttachmentFormat(gpu_device_->GetDrawImage()->vk_format);
+        // position, normal, albedo, arm, emission
+        std::vector<VkFormat> formats;
+        formats.push_back(VK_FORMAT_R16G16B16A16_SFLOAT);
+        formats.push_back(VK_FORMAT_R16G16B16A16_SFLOAT);
+        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
+        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
+        formats.push_back(VK_FORMAT_R8G8B8A8_UNORM);
+        pipelineBuilder.SetColorAttachmentFormats(formats);
+
         pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
 
-        opaque_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
-        gpu_device_->SetDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)opaque_pipeline_, "opaque_pipeline");
-
-        // create the transparent variant
-        pipelineBuilder.EnableBlendingAdditive();
-
-        pipelineBuilder.EnableDepthtest(false, VK_COMPARE_OP_GREATER_OR_EQUAL);
-
-        transparent_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
-        gpu_device_->SetDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)transparent_pipeline_, "transparent_pipeline");
+        gbuffer_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
+        gpu_device_->SetDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)gbuffer_pipeline_, "gbuffer_pipeline");
     }
 
-    void MeshPass::ExecutePass(CommandBuffer *cmd, FrameData *frame)
+    void GBufferPass::ExecutePass(CommandBuffer *cmd, FrameData *frame)
     {
-        VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "mesh_pass");
+        VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "gbuffer_pass");
 
-        std::vector<VkRenderingAttachmentInfo> color_attachments = gpu_device_->CreateRenderingAttachmentsColor(color_targets_);
+        VkClearValue clear_values;
+        clear_values.color = { 0.0f, 0.0f, 0.0f, 1.0f };
+        std::vector<VkRenderingAttachmentInfo> color_attachments = gpu_device_->CreateRenderingAttachmentsColor(color_targets_, &clear_values);
         VkRenderingAttachmentInfo depth_attachment = gpu_device_->CreateRenderingAttachmentsDepth(depth_target_);
 
-        VkRenderingInfo render_info = vkinit::RenderingInfo(gpu_device_->draw_extent_, color_attachments.data(), &depth_attachment);
+        VkRenderingInfo render_info = vkinit::RenderingInfo(gpu_device_->draw_extent_, color_attachments, &depth_attachment);
         cmd->BeginRendering(render_info);
 
-        cmd->BindPipeline(opaque_pipeline_);
+        cmd->BindPipeline(gbuffer_pipeline_);
         cmd->SetViewport(0, 0, static_cast<float>(gpu_device_->draw_extent_.width), static_cast<float>(gpu_device_->draw_extent_.height), 0.f, 1.f);
         cmd->SetScissor(0, 0, gpu_device_->draw_extent_.width, gpu_device_->draw_extent_.height);
         // 绑定描述符集
@@ -97,7 +94,7 @@ namespace lincore
         cmd->EndRendering();
     }
 
-	void MeshPass::SetupQueueType()
+	void GBufferPass::SetupQueueType()
 	{   
 		queue_type_ = QueueType::Graphics;
 	}

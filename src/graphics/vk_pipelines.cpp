@@ -5,6 +5,7 @@
 #include "foundation/logging.h"
 #include "graphics/vk_initializers.h"
 #include "graphics/vk_engine.h"
+#include "vk_pipelines.h"
 
 namespace lincore
 {
@@ -13,6 +14,7 @@ namespace lincore
 		input_assembly_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
 		rasterizer_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
 		color_blend_attachment_ = {};
+		color_blend_attachments_.clear();
 		multisampling_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
 		pipeline_layout_ = {};
 		depth_stencil_ = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
@@ -30,15 +32,23 @@ namespace lincore
 		viewport_state.viewportCount = 1;
 		viewport_state.scissorCount = 1;
 
-		// setup dummy color blending. We aren't using transparent objects yet so this is fine
+		// setup color blending
 		VkPipelineColorBlendStateCreateInfo color_blending{};
 		color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
 		color_blending.pNext = nullptr;
-
 		color_blending.logicOpEnable = VK_FALSE;
 		color_blending.logicOp = VK_LOGIC_OP_COPY;
-		color_blending.attachmentCount = 1;
-		color_blending.pAttachments = &color_blend_attachment_;
+
+		// 使用多个color blend attachments
+		if (!color_blend_attachments_.empty()) {
+			color_blending.attachmentCount = static_cast<uint32_t>(color_blend_attachments_.size());
+			color_blending.pAttachments = color_blend_attachments_.data();
+		} else {
+			// 如果没有设置多个attachments，使用单个默认的attachment
+			color_blending.attachmentCount = 1;
+			color_blending.pAttachments = &color_blend_attachment_;
+		}
+		
 
 		// completely clear vertexinputstatecreateinfo, as we have no need for it
 		VkPipelineVertexInputStateCreateInfo vertex_input_info = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
@@ -160,22 +170,51 @@ namespace lincore
 
 	void PipelineBuilder::DisableBlending()
 	{
-		// default write mask
-		color_blend_attachment_.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		// no blending
-		color_blend_attachment_.blendEnable = VK_FALSE;
+		// 如果有多个attachments，设置所有的attachment
+		if (!color_blend_attachments_.empty()) {
+			for (auto& attachment : color_blend_attachments_) {
+				attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+				attachment.blendEnable = VK_FALSE;
+				attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+				attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+				attachment.colorBlendOp = VK_BLEND_OP_ADD;
+				attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+				attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+				attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			}
+		} else {
+			// 设置默认的单个attachment
+			color_blend_attachment_.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			color_blend_attachment_.blendEnable = VK_FALSE;
+			color_blend_attachment_.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			color_blend_attachment_.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+			color_blend_attachment_.colorBlendOp = VK_BLEND_OP_ADD;
+			color_blend_attachment_.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			color_blend_attachment_.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			color_blend_attachment_.alphaBlendOp = VK_BLEND_OP_ADD;
+		}
 	}
 
 	void PipelineBuilder::SetColorAttachmentFormat(VkFormat format)
 	{
-		color_attachment_format_ = format;
+		color_attachment_formats_.push_back(format);
 
-		render_info_.colorAttachmentCount = 1;
-		render_info_.pColorAttachmentFormats = &color_attachment_format_;
+		render_info_.colorAttachmentCount = color_attachment_formats_.size();
+		render_info_.pColorAttachmentFormats = color_attachment_formats_.data();
+		// 同时设置相同数量的color blend attachments
+		SetColorBlendAttachments(color_attachment_formats_.size());
 	}
 
-	void PipelineBuilder::SetDepthFormat(VkFormat format)
-	{
+    void PipelineBuilder::SetColorAttachmentFormats(std::vector<VkFormat>& formats)
+    {
+        color_attachment_formats_ = formats;
+        render_info_.colorAttachmentCount = formats.size();
+        render_info_.pColorAttachmentFormats = formats.data();
+        // 同时设置相同数量的color blend attachments
+        SetColorBlendAttachments(formats.size());
+    }
+    void PipelineBuilder::SetDepthFormat(VkFormat format)
+    {
 		render_info_.depthAttachmentFormat = format;
 	}
 
@@ -207,28 +246,64 @@ namespace lincore
 
 	void PipelineBuilder::EnableBlendingAdditive()
 	{
-		color_blend_attachment_.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		color_blend_attachment_.blendEnable = VK_TRUE;
-		color_blend_attachment_.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-		color_blend_attachment_.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
-		color_blend_attachment_.colorBlendOp = VK_BLEND_OP_ADD;
-		color_blend_attachment_.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		color_blend_attachment_.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		color_blend_attachment_.alphaBlendOp = VK_BLEND_OP_ADD;
+		// 如果有多个attachments，设置所有的attachment
+		if (!color_blend_attachments_.empty()) {
+			for (auto& attachment : color_blend_attachments_) {
+				attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+				attachment.blendEnable = VK_TRUE;
+				attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+				attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+				attachment.colorBlendOp = VK_BLEND_OP_ADD;
+				attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+				attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+				attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			}
+		} else {
+			// 设置默认的单个attachment
+			color_blend_attachment_.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			color_blend_attachment_.blendEnable = VK_TRUE;
+			color_blend_attachment_.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			color_blend_attachment_.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			color_blend_attachment_.colorBlendOp = VK_BLEND_OP_ADD;
+			color_blend_attachment_.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			color_blend_attachment_.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			color_blend_attachment_.alphaBlendOp = VK_BLEND_OP_ADD;
+		}
 	}
 
 	// outColor = srcColor * srcColorBlendFactor <op> dstColor * dstColorBlendFactor;
 
 	void PipelineBuilder::EnableBlendingAlphablend()
 	{
-		color_blend_attachment_.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-		color_blend_attachment_.blendEnable = VK_TRUE;
-		color_blend_attachment_.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-		color_blend_attachment_.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-		color_blend_attachment_.colorBlendOp = VK_BLEND_OP_ADD;
-		color_blend_attachment_.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		color_blend_attachment_.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		color_blend_attachment_.alphaBlendOp = VK_BLEND_OP_ADD;
+		// 如果有多个attachments，设置所有的attachment
+		if (!color_blend_attachments_.empty()) {
+			for (auto& attachment : color_blend_attachments_) {
+				attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+				attachment.blendEnable = VK_TRUE;
+				attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+				attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+				attachment.colorBlendOp = VK_BLEND_OP_ADD;
+				attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+				attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+				attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			}
+		} else {
+			// 设置默认的单个attachment
+			color_blend_attachment_.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			color_blend_attachment_.blendEnable = VK_TRUE;
+			color_blend_attachment_.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			color_blend_attachment_.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			color_blend_attachment_.colorBlendOp = VK_BLEND_OP_ADD;
+			color_blend_attachment_.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			color_blend_attachment_.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			color_blend_attachment_.alphaBlendOp = VK_BLEND_OP_ADD;
+		}
+	}
+
+	void PipelineBuilder::SetColorBlendAttachments(uint32_t count)
+	{
+		color_blend_attachments_.resize(count);
+		DisableBlending();  // 使用DisableBlending来初始化所有attachment的状态
 	}
 
 	void PipelineCache::Init(VkDevice device, const std::string cache_file_path)

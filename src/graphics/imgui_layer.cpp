@@ -76,11 +76,11 @@ namespace lincore
 		ImGui::Render();
 	}
 
-	void ImGuiLayer::Draw(CommandBuffer* cmd, uint32_t swapchain_image_index)
+	void ImGuiLayer::Draw(CommandBuffer *cmd, uint32_t swapchain_image_index)
 	{
 		// 将绘制图像复制到交换链图像
-		Texture* draw_image = gpu_device_->GetDrawImage();
-		Texture* swapchain_image = gpu_device_->GetSwapchainImage(swapchain_image_index);
+		Texture *draw_image = gpu_device_->GetDrawImage();
+		Texture *swapchain_image = gpu_device_->GetSwapchainImage(swapchain_image_index);
 		cmd->AddImageBarrier(draw_image, ResourceState::RESOURCE_STATE_COPY_SOURCE);
 		cmd->AddImageBarrier(swapchain_image, ResourceState::RESOURCE_STATE_COPY_DEST);
 
@@ -96,24 +96,25 @@ namespace lincore
 
 		cmd->EndRendering();
 
-		cmd->AddImageBarrier(swapchain_image,  ResourceState::RESOURCE_STATE_PRESENT);
+		cmd->AddImageBarrier(swapchain_image, ResourceState::RESOURCE_STATE_PRESENT);
 	}
 
 	void ImGuiLayer::InitImGui()
 	{
 		// 1: create descriptor pool for IMGUI
 		//  the size of the pool is very oversize, but it's copied from imgui demo itself.
-		VkDescriptorPoolSize pool_sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-											 {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-											 {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-											 {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-											 {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-											 {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-											 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-											 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-											 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-											 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-											 {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
+		VkDescriptorPoolSize pool_sizes[] = {
+			{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
+			{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
+			{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
+			{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
+			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
+			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
+			{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
+			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
+			{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}};
 
 		VkDescriptorPoolCreateInfo pool_info = {};
 		pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;

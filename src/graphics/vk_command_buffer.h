@@ -71,11 +71,10 @@ namespace lincore
 		// Pipeline barriers
 		void PipelineBarrier2(const VkDependencyInfo &dep_info);
 
-		void UploadTextureData(void *data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped);
-
 		// Resource updates
 		void CopyImageToImage(VkImage source, VkImage destination, VkExtent3D src_size, VkExtent3D dst_size);
 		void CopyBufferToImage(VkBuffer buffer, VkImage image, VkImageLayout layout, VkBufferImageCopy copy_region);
+		void CopyImageToImage(Texture *src, Texture *dst);
 
 		// Image barrier methods
 		void AddImageBarrier(Texture *texture, ResourceState new_state,

@@ -29,18 +29,24 @@ namespace lincore
 		info.subresourceRange.baseArrayLayer = creation.sub_resource.array_base_layer;
 		info.subresourceRange.layerCount = creation.sub_resource.array_layer_count;
 		VK_CHECK(vkCreateImageView(gpu.device_, &info, nullptr, &texture->vk_image_view));
-
 		gpu.SetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)texture->vk_image_view, creation.name);
 	}
 
 	static VkImageUsageFlags VulkanGetImageUsage(const TextureCreation &creation)
 	{
-		const bool is_render_target = (creation.flags & TextureFlags::RenderTarget_mask) == TextureFlags::RenderTarget_mask;
-		const bool is_compute_used = (creation.flags & TextureFlags::Compute_mask) == TextureFlags::Compute_mask;
-		const bool is_shading_rate_texture = (creation.flags & TextureFlags::ShadingRate_mask) == TextureFlags::ShadingRate_mask;
+		const bool is_render_target = (creation.flags & TextureFlags::RenderTarget_mask) != 0;
+		const bool is_compute_used = (creation.flags & TextureFlags::Compute_mask) != 0;
+		const bool is_shading_rate_texture = (creation.flags & TextureFlags::ShadingRate_mask) != 0;
+		const bool is_default = (creation.flags & TextureFlags::Default_mask) != 0;
 
-		// Default to always readable from shader.
-		VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+		// Initialize usage flags
+		VkImageUsageFlags usage = 0;
+
+		// If it's a default texture or a render target, add SAMPLED_BIT
+		// This allows both default textures and render targets to be sampled
+		if (is_default || is_render_target) {
+			usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+		}
 
 		if (TextureFormat::HasDepthOrStencil(creation.format))
 		{
@@ -51,7 +57,9 @@ namespace lincore
 		else
 		{
 			usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-			usage |= is_render_target ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : 0;
+			if (is_render_target) {
+				usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+			}
 			// 只有非深度/模板纹理才能用作存储图像
 			usage |= is_compute_used ? VK_IMAGE_USAGE_STORAGE_BIT : 0;
 		}

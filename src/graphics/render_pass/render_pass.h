@@ -59,7 +59,7 @@ namespace lincore
 
 		// Pass配置API
 		RenderPassBase &BindInputs(std::initializer_list<PassInput::Resource> resources);
-		RenderPassBase &BindRenderTargets(std::initializer_list<PassOutput::Resource> color_resources, std::initializer_list<PassOutput::Resource> depth_resources);
+		RenderPassBase &BindRenderTargets(std::initializer_list<PassOutput::Resource> color_resources, std::initializer_list<PassOutput::Resource> depth_resources = {});
 		RenderPassBase& SetSceneGraph(scene::SceneGraph* graph);
 		// 完成Pass配置并初始化
 		virtual void Finalize();
