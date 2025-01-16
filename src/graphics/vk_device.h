@@ -296,7 +296,7 @@ namespace lincore
 		ShaderEffect *CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string &name = "");
 
 		// 创建渲染附件
-		std::vector<VkRenderingAttachmentInfo> CreateRenderingAttachmentsColor(std::vector<TextureHandle> &color_targets);
+		std::vector<VkRenderingAttachmentInfo> CreateRenderingAttachmentsColor(std::vector<TextureHandle> &color_targets, VkClearValue *clear_color = nullptr);
 		VkRenderingAttachmentInfo CreateRenderingAttachmentsDepth(TextureHandle &depth_target);
 
 		/**

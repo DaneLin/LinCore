@@ -80,9 +80,9 @@ namespace lincore
 			.Finalize();
 
 		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
-		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
+		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
 		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/FlightHelmet/glTF/FlightHelmet.gltf"), load_config);
-		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
 		scene_graph_ = std::make_unique<scene::SceneGraph>(&gpu_device_);
 		scene_graph_->Init();
 		scene_graph_->BeginSceneUpdate();
@@ -107,6 +107,72 @@ namespace lincore
 							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
 			.SetSceneGraph(scene_graph_.get())
 			.Finalize();
+
+		TextureCreation gbuffer_creation{};
+		gbuffer_creation.SetName("gbuffer_position")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_position_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_position_texture = gpu_device_.GetResource<Texture>(gbuffer_position_handle_.index);
+		gbuffer_position_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		gbuffer_creation.SetName("gbuffer_normal")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_normal_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_normal_texture = gpu_device_.GetResource<Texture>(gbuffer_normal_handle_.index);
+		gbuffer_normal_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		gbuffer_creation.SetName("gbuffer_albedo_spec")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_albedo_spec_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_albedo_spec_texture = gpu_device_.GetResource<Texture>(gbuffer_albedo_spec_handle_.index);
+		gbuffer_albedo_spec_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		gbuffer_creation.SetName("gbuffer_arm")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_arm_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_arm_texture = gpu_device_.GetResource<Texture>(gbuffer_arm_handle_.index);
+		gbuffer_arm_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		gbuffer_creation.SetName("gbuffer_emission")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_emission_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_emission_texture = gpu_device_.GetResource<Texture>(gbuffer_emission_handle_.index);
+		gbuffer_emission_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		gbuffer_pass_.Init(&gpu_device_)
+			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
+						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
+						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
+						 {"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
+			.BindRenderTargets({{"g_position", gbuffer_position_handle_.index},
+								{"g_normal", gbuffer_normal_handle_.index},
+								{"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
+								{"g_arm", gbuffer_arm_handle_.index},
+								{"g_emission", gbuffer_emission_handle_.index}},
+							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
+			.SetSceneGraph(scene_graph_.get())
+			.Finalize();
+
+		light_pass_.Init(&gpu_device_)
+			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"g_position", gbuffer_position_handle_.index},
+						 {"g_normal", gbuffer_normal_handle_.index},
+						 {"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
+						 {"g_arm", gbuffer_arm_handle_.index},
+						 {"g_emission", gbuffer_emission_handle_.index}})
+			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}})
+			.Finalize();
 		// everything went fine
 		is_initialized_ = true;
 	}
@@ -121,6 +187,9 @@ namespace lincore
 			sky_background_pass_.Shutdown();
 			culling_pass_.Shutdown();
 			mesh_pass_.Shutdown();
+			gbuffer_pass_.Shutdown();
+			light_pass_.Shutdown();
+
 			scene_graph_.reset();
 			imgui_layer_.Shutdown();
 			main_deletion_queue_.Flush();
@@ -162,16 +231,14 @@ namespace lincore
 			scene::DrawCullData draw_cull_data = scene_view.GetCullData();
 			scene::GPUResourcePool gpu_resource_pool = scene_graph_->GetGPUResourcePool();
 			draw_cull_data.draw_count = gpu_resource_pool.draw_count;
-
 			scene_graph_->ReadyCullingData(cmd);
 
 			culling_pass_.SetCullData(draw_cull_data);
-
 			culling_pass_.Execute(cmd, &current_frame_data);
 
-			
-
-			mesh_pass_.Execute(cmd, &current_frame_data);
+			// mesh_pass_.Execute(cmd, &current_frame_data);
+			gbuffer_pass_.Execute(cmd, &current_frame_data);
+			light_pass_.Execute(cmd, &current_frame_data);
 
 			// Update mesh draw time from GPU profiler
 			if (gpu_device_.profiler_.timing_.contains("mesh_pass"))
@@ -280,143 +347,143 @@ namespace lincore
 	void VulkanEngine::DrawImGui()
 	{
 		// imgui new frame
-			imgui_layer_.NewFrame();
+		imgui_layer_.NewFrame();
 
-			// Performance window (fixed at top-right corner)
+		// Performance window (fixed at top-right corner)
+		{
+			const float WINDOW_PADDING = 10.0f;
+			const float MENU_BAR_HEIGHT = ImGui::GetFrameHeight(); // Get the height of the menu bar
+			ImVec2 window_pos(window_extent_.width - WINDOW_PADDING, WINDOW_PADDING + MENU_BAR_HEIGHT);
+			ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+
+			ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove |
+											ImGuiWindowFlags_NoResize |
+											ImGuiWindowFlags_AlwaysAutoResize |
+											ImGuiWindowFlags_NoSavedSettings |
+											ImGuiWindowFlags_NoNav;
+
+			ImGui::Begin("Performance", nullptr, window_flags);
+			ImGui::Text("Frame Time: %.2f ms", engine_stats_.frame_time);
+			ImGui::Text("Update Time: %.2f ms", engine_stats_.scene_update_time);
+
+			float total_draw_time = 0.0f;
+			for (auto &[k, v] : gpu_device_.profiler_.timing_)
 			{
-				const float WINDOW_PADDING = 10.0f;
-				const float MENU_BAR_HEIGHT = ImGui::GetFrameHeight(); // Get the height of the menu bar
-				ImVec2 window_pos(window_extent_.width - WINDOW_PADDING, WINDOW_PADDING + MENU_BAR_HEIGHT);
-				ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+				total_draw_time += v;
+			}
+			ImGui::Text("Draw Time: %.2f ms", total_draw_time);
 
-				ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoMove |
-												ImGuiWindowFlags_NoResize |
-												ImGuiWindowFlags_AlwaysAutoResize |
-												ImGuiWindowFlags_NoSavedSettings |
-												ImGuiWindowFlags_NoNav;
+			ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)",
+						main_camera_.position_.x,
+						main_camera_.position_.y,
+						main_camera_.position_.z);
 
-				ImGui::Begin("Performance", nullptr, window_flags);
-				ImGui::Text("Frame Time: %.2f ms", engine_stats_.frame_time);
-				ImGui::Text("Update Time: %.2f ms", engine_stats_.scene_update_time);
-
-				float total_draw_time = 0.0f;
+			if (ImGui::TreeNode("Render Timings"))
+			{
 				for (auto &[k, v] : gpu_device_.profiler_.timing_)
 				{
-					total_draw_time += v;
+					ImGui::Text("%s: %.2f ms", k.c_str(), v);
 				}
-				ImGui::Text("Draw Time: %.2f ms", total_draw_time);
-
-				ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)",
-							main_camera_.position_.x,
-							main_camera_.position_.y,
-							main_camera_.position_.z);
-
-				if (ImGui::TreeNode("Render Timings"))
-				{
-					for (auto &[k, v] : gpu_device_.profiler_.timing_)
-					{
-						ImGui::Text("%s: %.2f ms", k.c_str(), v);
-					}
-					ImGui::TreePop();
-				}
-
-				if (ImGui::TreeNode("Detailed Stats"))
-				{
-					for (auto &[k, v] : gpu_device_.profiler_.stats_)
-					{
-						ImGui::Text("%s: %d", k.c_str(), v);
-					}
-					ImGui::TreePop();
-				}
-				ImGui::End();
+				ImGui::TreePop();
 			}
 
-			// Main control panel window
-			ImGui::Begin("Control Panel", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
-
-			// Rendering Settings section
-			if (ImGui::CollapsingHeader("Rendering Settings", ImGuiTreeNodeFlags_DefaultOpen))
+			if (ImGui::TreeNode("Detailed Stats"))
 			{
-				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Render Scale");
-				ImGui::SameLine(150);
-				ImGui::SetNextItemWidth(200);
-				ImGui::SliderFloat("##render_scale", &gpu_device_.render_scale_, 0.3f, 1.0f);
-
-				ImGui::AlignTextToFramePadding();
-				ImGui::Text("VSync");
-				ImGui::SameLine(150);
-				bool vsync = gpu_device_.IsVSyncEnabled();
-				if (ImGui::Checkbox("##vsync", &vsync))
+				for (auto &[k, v] : gpu_device_.profiler_.stats_)
 				{
-					gpu_device_.ToggleVSync(vsync);
+					ImGui::Text("%s: %d", k.c_str(), v);
 				}
+				ImGui::TreePop();
 			}
-
-			// Lighting Settings section
-			if (ImGui::CollapsingHeader("Lighting Settings", ImGuiTreeNodeFlags_DefaultOpen))
-			{
-				// Direction control (w component is used for sun power)
-				float direction[3] = {gpu_device_.scene_data_.sunlight_direction.x,
-									  gpu_device_.scene_data_.sunlight_direction.y,
-									  gpu_device_.scene_data_.sunlight_direction.z};
-				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Sun Direction");
-				ImGui::SameLine(150);
-				ImGui::SetNextItemWidth(200);
-				if (ImGui::SliderFloat3("##sun_direction", direction, -100.0f, 100.0f))
-				{
-					gpu_device_.scene_data_.sunlight_direction.x = direction[0];
-					gpu_device_.scene_data_.sunlight_direction.y = direction[1];
-					gpu_device_.scene_data_.sunlight_direction.z = direction[2];
-				}
-
-				// Sun power control
-				float power = gpu_device_.scene_data_.sunlight_direction.w;
-				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Sun Power");
-				ImGui::SameLine(150);
-				ImGui::SetNextItemWidth(200);
-				if (ImGui::SliderFloat("##sun_power", &power, 0.0f, 1000.0f))
-				{
-					gpu_device_.scene_data_.sunlight_direction.w = power;
-				}
-
-				// Color control
-				float color[3] = {gpu_device_.scene_data_.sunlight_color.x,
-								  gpu_device_.scene_data_.sunlight_color.y,
-								  gpu_device_.scene_data_.sunlight_color.z};
-				ImGui::AlignTextToFramePadding();
-				ImGui::Text("Sun Color");
-				ImGui::SameLine(150);
-				ImGui::SetNextItemWidth(200);
-				if (ImGui::ColorEdit3("##sun_color", color))
-				{
-					gpu_device_.scene_data_.sunlight_color.x = color[0];
-					gpu_device_.scene_data_.sunlight_color.y = color[1];
-					gpu_device_.scene_data_.sunlight_color.z = color[2];
-				}
-			}
-
 			ImGui::End();
+		}
 
-			// Keep the debug menu bar
-			if (ImGui::BeginMainMenuBar())
+		// Main control panel window
+		ImGui::Begin("Control Panel", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+		// Rendering Settings section
+		if (ImGui::CollapsingHeader("Rendering Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("Render Scale");
+			ImGui::SameLine(150);
+			ImGui::SetNextItemWidth(200);
+			ImGui::SliderFloat("##render_scale", &gpu_device_.render_scale_, 0.3f, 1.0f);
+
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("VSync");
+			ImGui::SameLine(150);
+			bool vsync = gpu_device_.IsVSyncEnabled();
+			if (ImGui::Checkbox("##vsync", &vsync))
 			{
-				if (ImGui::BeginMenu("Debug"))
+				gpu_device_.ToggleVSync(vsync);
+			}
+		}
+
+		// Lighting Settings section
+		if (ImGui::CollapsingHeader("Lighting Settings", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			// Direction control (w component is used for sun power)
+			float direction[3] = {gpu_device_.scene_data_.sunlight_direction.x,
+								  gpu_device_.scene_data_.sunlight_direction.y,
+								  gpu_device_.scene_data_.sunlight_direction.z};
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("Sun Direction");
+			ImGui::SameLine(150);
+			ImGui::SetNextItemWidth(200);
+			if (ImGui::SliderFloat3("##sun_direction", direction, -100.0f, 100.0f))
+			{
+				gpu_device_.scene_data_.sunlight_direction.x = direction[0];
+				gpu_device_.scene_data_.sunlight_direction.y = direction[1];
+				gpu_device_.scene_data_.sunlight_direction.z = direction[2];
+			}
+
+			// Sun power control
+			float power = gpu_device_.scene_data_.sunlight_direction.w;
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("Sun Power");
+			ImGui::SameLine(150);
+			ImGui::SetNextItemWidth(200);
+			if (ImGui::SliderFloat("##sun_power", &power, 0.0f, 1000.0f))
+			{
+				gpu_device_.scene_data_.sunlight_direction.w = power;
+			}
+
+			// Color control
+			float color[3] = {gpu_device_.scene_data_.sunlight_color.x,
+							  gpu_device_.scene_data_.sunlight_color.y,
+							  gpu_device_.scene_data_.sunlight_color.z};
+			ImGui::AlignTextToFramePadding();
+			ImGui::Text("Sun Color");
+			ImGui::SameLine(150);
+			ImGui::SetNextItemWidth(200);
+			if (ImGui::ColorEdit3("##sun_color", color))
+			{
+				gpu_device_.scene_data_.sunlight_color.x = color[0];
+				gpu_device_.scene_data_.sunlight_color.y = color[1];
+				gpu_device_.scene_data_.sunlight_color.z = color[2];
+			}
+		}
+
+		ImGui::End();
+
+		// Keep the debug menu bar
+		if (ImGui::BeginMainMenuBar())
+		{
+			if (ImGui::BeginMenu("Debug"))
+			{
+				if (ImGui::BeginMenu("CVAR"))
 				{
-					if (ImGui::BeginMenu("CVAR"))
-					{
-						CVarSystem::Get()->DrawImguiEditor();
-						ImGui::EndMenu();
-					}
+					CVarSystem::Get()->DrawImguiEditor();
 					ImGui::EndMenu();
 				}
-				ImGui::EndMainMenuBar();
+				ImGui::EndMenu();
 			}
+			ImGui::EndMainMenuBar();
+		}
 
-			// make imgui calculate internal draw structures
-			imgui_layer_.EndFrame();
+		// make imgui calculate internal draw structures
+		imgui_layer_.EndFrame();
 	}
 
 }

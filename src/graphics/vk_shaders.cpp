@@ -493,7 +493,7 @@ namespace lincore
 						}
 
 						vkUpdateDescriptorSets(gpu_device_->device_, static_cast<uint32_t>(writes[i].size()), writes[i].data(), 0, nullptr);
-						gpu_device_->SetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)new_descriptor, "ShaderEffect");
+						// gpu_device_->SetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)new_descriptor, "ShaderEffect");
 					}
 
 					cached_descriptor_sets_[i] = new_descriptor;

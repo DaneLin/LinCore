@@ -245,6 +245,40 @@ namespace lincore
         vkCmdCopyBufferToImage(vk_command_buffer_, buffer, image, layout, 1, &copy_region);
     }
 
+    void CommandBuffer::CopyImageToImage(Texture *src, Texture *dst)
+    {
+		VkImageBlit2 blit_region{.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr};
+
+		blit_region.srcOffsets[1].x = src->vk_extent.width;
+		blit_region.srcOffsets[1].y = src->vk_extent.height;
+		blit_region.srcOffsets[1].z = src->vk_extent.depth;
+
+		blit_region.dstOffsets[1].x = dst->vk_extent.width;
+		blit_region.dstOffsets[1].y = dst->vk_extent.height;
+		blit_region.dstOffsets[1].z = dst->vk_extent.depth;
+
+		blit_region.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		blit_region.srcSubresource.baseArrayLayer = 0;
+		blit_region.srcSubresource.layerCount = 1;
+		blit_region.srcSubresource.mipLevel = 0;
+
+		blit_region.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		blit_region.dstSubresource.baseArrayLayer = 0;
+		blit_region.dstSubresource.layerCount = 1;
+		blit_region.dstSubresource.mipLevel = 0;
+
+		VkBlitImageInfo2 blitInfo{.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr};
+		blitInfo.dstImage = dst->vk_image;
+		blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		blitInfo.srcImage = src->vk_image;
+		blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+		blitInfo.regionCount = 1;
+		blitInfo.pRegions = &blit_region;
+		blitInfo.filter = VK_FILTER_LINEAR;
+
+		vkCmdBlitImage2(vk_command_buffer_, &blitInfo);
+    }
+
     void CommandBuffer::AddImageBarrier(Texture *texture, ResourceState new_state,
 							 uint32_t base_mip_level, uint32_t mip_count,
 							 uint32_t base_array_layer, uint32_t array_layer_count,

@@ -132,6 +132,9 @@ VkRenderingAttachmentInfo vkinit::AttachmentInfo(
 
 	color_attachment.imageView = view;
 	color_attachment.imageLayout = layout;
+	color_attachment.resolveMode = VK_RESOLVE_MODE_NONE;
+	color_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	color_attachment.resolveImageView = VK_NULL_HANDLE;
 	color_attachment.loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 	color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	if (clear)
@@ -152,6 +155,9 @@ VkRenderingAttachmentInfo vkinit::DepthAttachmentInfo(
 
 	depth_attachment.imageView = view;
 	depth_attachment.imageLayout = layout;
+	depth_attachment.resolveMode = VK_RESOLVE_MODE_NONE;
+	depth_attachment.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	depth_attachment.resolveImageView = VK_NULL_HANDLE;
 	depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 	depth_attachment.clearValue.depthStencil.depth = 0.f;

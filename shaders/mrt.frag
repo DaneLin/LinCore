@@ -13,7 +13,11 @@ layout (location = 1) in vec2 in_uv;
 layout (location = 2) flat in uint in_object_id;
 layout (location = 3) in vec3 world_position;
 // 输出
-layout (location = 0) out vec4 out_color;
+layout (location = 0) out vec4 g_position;
+layout (location = 1) out vec4 g_normal;
+layout (location = 2) out vec4 g_albedo_spec;
+layout (location = 3) out vec4 g_arm;
+layout (location = 4) out vec4 g_emission;
 
 vec3 applyNormalMap(in vec3 normal, in vec3 viewVec, in vec2 texcoord, in uint normal_tex_id)
 {
@@ -26,28 +30,20 @@ vec3 applyNormalMap(in vec3 normal, in vec3 viewVec, in vec2 texcoord, in uint n
 void main() 
 {
     MaterialData material = material_data_buffer.materials[object_buffer.objects[in_object_id].material_index];
-    vec3 base_color = rgb2lin(texture(textures[material.base_color_tex_id], in_uv).rgb * material.base_color_factor.rgb);
+    // 直接使用纹理颜色，不做颜色空间转换
+    vec3 base_color = texture(textures[material.base_color_tex_id], in_uv).rgb * material.base_color_factor.rgb;
     float roughness = texture(textures[material.metallic_roughness_tex_id], in_uv).g * material.roughness_factor;
     float metallic = texture(textures[material.metallic_roughness_tex_id], in_uv).b * material.metallic_factor;
     vec4 emission = texture(textures[material.emissive_tex_id], in_uv);
     float reflectance = material.reflectance_factor;
-    
-    vec3 light_dir = normalize(-scene_data.sunlight_direction.xyz);
-    vec3 view_dir = normalize(scene_data.camera_position - world_position);
     vec3 n = normalize(in_normal);
-    
     // 应用法线贴图
+    vec3 view_dir = normalize(scene_data.camera_position - world_position);
     n = applyNormalMap(n, view_dir, in_uv, material.normal_tex_id);
 
-    vec3 radiance = rgb2lin(emission.rgb);
-
-    float light_intensity = scene_data.sunlight_direction.w;
-    float irradiance = max(dot(light_dir, n), 0.0) * light_intensity;
-    if (irradiance > 0.0)
-    {
-        vec3 brdf = brdfMicrofacet(light_dir, view_dir, n, metallic, roughness, base_color, reflectance);
-        radiance += brdf * irradiance * scene_data.sunlight_color.rgb;
-    }
-
-    out_color = vec4(lin2rgb(radiance), 1.0);
+    g_position = vec4(world_position,1.0);
+    g_normal = vec4(n,1.0);
+    g_arm = vec4(0.0, roughness, metallic,1.0);
+    g_albedo_spec = vec4(base_color, reflectance);
+    g_emission = emission;
 }

@@ -17,6 +17,9 @@
 #include "graphics/render_pass/passes/sky_pass.h"
 #include "graphics/render_pass/passes/culling_pass.h"
 #include "graphics/render_pass/passes/mesh_pass.h"
+#include "graphics/render_pass/passes/gbuffer_pass.h"
+#include "graphics/render_pass/passes/light_pass.h"
+
 
 namespace lincore
 {
@@ -65,6 +68,15 @@ namespace lincore
 		SkyBackgroundPass sky_background_pass_;
 		CullingPass culling_pass_;
 		MeshPass mesh_pass_;
+		GBufferPass gbuffer_pass_;
+		LightPass light_pass_;
+
+		// gbuffer
+		TextureHandle gbuffer_position_handle_;
+		TextureHandle gbuffer_normal_handle_;
+		TextureHandle gbuffer_albedo_spec_handle_;
+		TextureHandle gbuffer_arm_handle_;
+		TextureHandle gbuffer_emission_handle_;
 
 		ImGuiLayer imgui_layer_;
 		GpuDevice gpu_device_;

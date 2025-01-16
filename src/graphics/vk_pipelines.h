@@ -72,11 +72,12 @@ namespace lincore
 		VkPipelineInputAssemblyStateCreateInfo input_assembly_;
 		VkPipelineRasterizationStateCreateInfo rasterizer_;
 		VkPipelineColorBlendAttachmentState color_blend_attachment_;
+		std::vector<VkPipelineColorBlendAttachmentState> color_blend_attachments_;
 		VkPipelineMultisampleStateCreateInfo multisampling_;
 		VkPipelineLayout pipeline_layout_;
 		VkPipelineDepthStencilStateCreateInfo depth_stencil_;
 		VkPipelineRenderingCreateInfo render_info_;
-		VkFormat color_attachment_format_;
+		std::vector<VkFormat> color_attachment_formats_;
 
 		PipelineBuilder() { Clear(); }
 
@@ -100,6 +101,8 @@ namespace lincore
 		void DisableBlending();
 
 		void SetColorAttachmentFormat(VkFormat format);
+		
+		void SetColorAttachmentFormats(std::vector<VkFormat>& formats);
 
 		void SetDepthFormat(VkFormat format);
 
@@ -110,6 +113,8 @@ namespace lincore
 		void EnableBlendingAdditive();
 
 		void EnableBlendingAlphablend();
+
+		void SetColorBlendAttachments(uint32_t count);
 	};
 
 	class ComputePipelineBuilder

@@ -493,12 +493,12 @@ namespace lincore
 		return shader_manager_.GetShaderEffect(file_names, name);
 	}
 
-	std::vector<VkRenderingAttachmentInfo> GpuDevice::CreateRenderingAttachmentsColor(std::vector<TextureHandle> &color_targets)
+	std::vector<VkRenderingAttachmentInfo> GpuDevice::CreateRenderingAttachmentsColor(std::vector<TextureHandle> &color_targets, VkClearValue *clear_color)
 	{
 		std::vector<VkRenderingAttachmentInfo> attachments;
 		for (auto &color_target : color_targets)
 		{
-			attachments.push_back(vkinit::AttachmentInfo(GetResource<Texture>(color_target.index)->vk_image_view, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
+			attachments.push_back(vkinit::AttachmentInfo(GetResource<Texture>(color_target.index)->vk_image_view, clear_color, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL));
 		}
 		return attachments;
 	}
@@ -721,7 +721,7 @@ namespace lincore
 			.SetName("draw image")
 			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Texture2D)
 			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth, false)
-			.SetFlags(TextureFlags::Compute_mask | TextureFlags::RenderTarget_mask);
+			.SetFlags(TextureFlags::Compute_mask | TextureFlags::RenderTarget_mask | TextureFlags::Default_mask);
 		draw_image_handle_ = CreateResource(image_info);
 
 		image_info.Reset()
@@ -729,7 +729,7 @@ namespace lincore
 			.SetName("depth image")
 			.SetFormatType(VK_FORMAT_D32_SFLOAT, TextureType::Texture2D)
 			.SetSize(draw_image_extent.width, draw_image_extent.height, draw_image_extent.depth)
-			.SetFlags(TextureFlags::Compute_mask);
+			.SetFlags(TextureFlags::Compute_mask | TextureFlags::RenderTarget_mask | TextureFlags::Default_mask);
 		depth_image_handle_ = CreateResource(image_info);
 
 		return true;
@@ -746,7 +746,7 @@ namespace lincore
 			.SetData((void *)&white)
 			.SetSize(1, 1, 1)
 			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
-			.SetFlags(TextureFlags::Default);
+			.SetFlags(TextureFlags::Default | TextureFlags::RenderTarget);
 		default_resources_.images.white_image = CreateResource(image_info);
 
 		uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66, 0.66, 0.66, 1));
@@ -783,7 +783,7 @@ namespace lincore
 			.SetMip(VK_SAMPLER_MIPMAP_MODE_LINEAR);
 		default_resources_.samplers.linear = CreateResource(sampler_info);
 
-		AddBindlessSampledImage(default_resources_.images.error_checker_board_image, default_resources_.samplers.linear);
+		AddBindlessSampledImage(default_resources_.images.black_image, default_resources_.samplers.linear);
 
 		BufferCreation buffer_info{};
 		buffer_info.Reset()

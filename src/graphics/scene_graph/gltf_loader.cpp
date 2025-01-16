@@ -382,7 +382,7 @@ namespace lincore::scene
             }
             //material->parameters.material_flags = flags;
 
-            TextureHandle &dummy_texture_handle = ctx.device->default_resources_.images.error_checker_board_image;
+            TextureHandle &dummy_texture_handle = ctx.device->default_resources_.images.black_image;
             SamplerHandle &dummy_sampler = ctx.device->default_resources_.samplers.linear;
 
             material->base_color_index = ctx.device->AddBindlessSampledImage(dummy_texture_handle, dummy_sampler);
@@ -533,13 +533,15 @@ namespace lincore::scene
             return false;
         }
 
+        std::string name = image.name.empty() ? ctx.base_path.string() + "/" + std::string(image.name.c_str()) : std::string(image.name.c_str());
+
         // 创建纹理
         TextureCreation creation;
         creation.SetSize(width, height, 1, true)
             .SetFormat(VK_FORMAT_R8G8B8A8_UNORM)
-            .SetFlags(TextureFlags::Default)
+            .SetFlags(TextureFlags::Default_mask)
             .SetData(pixels)
-            .SetName(image.name.c_str());
+            .SetName(name.c_str());
 
         TextureHandle texture = ctx.device->CreateResource(creation);
         if (!texture.IsValid())
