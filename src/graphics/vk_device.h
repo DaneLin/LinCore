@@ -49,6 +49,13 @@ namespace lincore
 		VkExtent2D draw_extent{};
 		CommandBuffer *cmd{nullptr};
 		VkResult result{VK_SUCCESS};
+
+		// 场景GPU资源
+		struct SceneGPUData {
+			BufferHandle draw_indirect_buffer;  // 间接绘制命令缓冲区
+			BufferHandle index_buffer;          // 索引缓冲区
+			uint32_t draw_count{0};             // 绘制命令数量
+		} scene_gpu_data;
 	}; // struct FrameData
 
 	/**

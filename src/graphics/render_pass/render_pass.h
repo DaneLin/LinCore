@@ -10,10 +10,7 @@ namespace lincore
 	class CommandBuffer;
 	class ShaderEffect;
 	struct FrameData;
-	namespace scene
-	{
-		class SceneGraph;
-	}
+
 	/**
 	 * @brief 渲染Pass输入
 	 * 包含需要传递给Pass的资源
@@ -48,7 +45,6 @@ namespace lincore
 	 * @brief RenderPass基类
 	 * 所有渲染Pass的基类
 	 */
-
 	class RenderPassBase
 	{
 	public:
@@ -60,8 +56,6 @@ namespace lincore
 		// Pass配置API
 		RenderPassBase &BindInputs(std::initializer_list<PassInput::Resource> resources);
 		RenderPassBase &BindRenderTargets(std::initializer_list<PassOutput::Resource> color_resources, std::initializer_list<PassOutput::Resource> depth_resources = {});
-		RenderPassBase& SetSceneGraph(scene::SceneGraph* graph);
-		// 完成Pass配置并初始化
 		virtual void Finalize();
 
 		virtual void Execute(CommandBuffer *cmd, FrameData *frame = nullptr);
@@ -99,8 +93,6 @@ namespace lincore
 		TextureHandle depth_target_;
 
 		QueueType::Enum queue_type_{QueueType::Graphics};
-
-		scene::SceneGraph* scene_graph_{ nullptr };
 
 		bool is_finalized_{false};
 	};

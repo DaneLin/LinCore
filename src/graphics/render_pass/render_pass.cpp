@@ -2,8 +2,6 @@
 #include "graphics/vk_device.h"
 #include "foundation/resources.h"
 #include "foundation/logging.h"
-#include "graphics/scene_graph/scene_graph.h"
-#include "render_pass.h"
 
 namespace lincore
 {
@@ -45,12 +43,6 @@ namespace lincore
 			depth_target_ = depth_resources.begin()->handle;
 		}
 
-		return *this;
-	}
-
-	RenderPassBase &RenderPassBase::SetSceneGraph(scene::SceneGraph *graph)
-	{
-		scene_graph_ = graph;
 		return *this;
 	}
 

@@ -105,7 +105,7 @@ namespace lincore
 						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
 			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}},
 							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
-			.SetSceneGraph(scene_graph_.get())
+//			.SetSceneGraph(scene_graph_.get())
 			.Finalize();
 
 		TextureCreation gbuffer_creation{};
@@ -147,7 +147,7 @@ namespace lincore
 								{"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
 								{"g_emission", gbuffer_emission_handle_.index}},
 							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
-			.SetSceneGraph(scene_graph_.get())
+//			.SetSceneGraph(scene_graph_.get())
 			.Finalize();
 
 		light_pass_.Init(&gpu_device_)
@@ -220,6 +220,11 @@ namespace lincore
 
 			culling_pass_.SetCullData(draw_cull_data);
 			culling_pass_.Execute(cmd, &current_frame_data);
+
+			// 更新FrameData中的场景GPU资源
+			current_frame_data.scene_gpu_data.draw_indirect_buffer = gpu_resource_pool.draw_indirect_buffer;
+			current_frame_data.scene_gpu_data.index_buffer = gpu_resource_pool.index_buffer;
+			current_frame_data.scene_gpu_data.draw_count = gpu_resource_pool.draw_count;
 
 			// mesh_pass_.Execute(cmd, &current_frame_data);
 			gbuffer_pass_.Execute(cmd, &current_frame_data);

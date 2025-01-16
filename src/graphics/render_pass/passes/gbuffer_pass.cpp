@@ -3,8 +3,7 @@
 #include "graphics/vk_pipelines.h"
 #include "graphics/vk_device.h"
 #include "graphics/vk_command_buffer.h"
-#include "graphics/scene_graph/scene_view.h"
-#include "graphics/scene_graph/scene_graph.h"
+
 namespace lincore
 {
 
@@ -89,15 +88,14 @@ namespace lincore
         // 绑定描述符集
         shader_->ApplyBinds(cmd->vk_command_buffer_);
 
-        // 从scene_graph_中获取顶点缓冲区
-        scene::GPUResourcePool &gpu_resource_pool = scene_graph_->GetGPUResourcePool();
-        cmd->BindIndexBuffer(gpu_device_->GetResource<Buffer>(gpu_resource_pool.index_buffer.index)->vk_buffer, 0, VK_INDEX_TYPE_UINT32);
+        // 从FrameData中获取场景GPU资源
+        cmd->BindIndexBuffer(gpu_device_->GetResource<Buffer>(frame->scene_gpu_data.index_buffer.index)->vk_buffer, 0, VK_INDEX_TYPE_UINT32);
         // 使用间接绘制命令进行渲染
         cmd->DrawIndexedIndirect(
-            gpu_device_->GetResource<Buffer>(gpu_resource_pool.draw_indirect_buffer.index)->vk_buffer,
+            gpu_device_->GetResource<Buffer>(frame->scene_gpu_data.draw_indirect_buffer.index)->vk_buffer,
             0,                 
             sizeof(scene::DrawCommand),  
-            gpu_resource_pool.draw_count);
+            frame->scene_gpu_data.draw_count);
 
         cmd->EndRendering();
     }
