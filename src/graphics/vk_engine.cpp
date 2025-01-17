@@ -443,11 +443,13 @@ namespace lincore
 	void VulkanEngine::InitPasses()
 	{
 		sky_background_pass_.Init(&gpu_device_)
+			.SetPassName("sky_pass")
 			.BindInputs({{"image", gpu_device_.draw_image_handle_.index}})
 			.Finalize();
 
 		scene::GPUResourcePool gpu_resource_pool = scene_graph_->GetGPUResourcePool();
 		culling_pass_.Init(&gpu_device_)
+			.SetPassName("culling_pass")
 			.BindInputs({
 				{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
 				{"draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
@@ -455,6 +457,7 @@ namespace lincore
 			.Finalize();
 
 		mesh_pass_.Init(&gpu_device_)
+			.SetPassName("mesh_pass")
 			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
 						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
 						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
@@ -465,6 +468,7 @@ namespace lincore
 			.Finalize();
 
 		gbuffer_pass_.Init(&gpu_device_)
+			.SetPassName("gbuffer_pass")
 			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
 						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
 						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
@@ -477,6 +481,7 @@ namespace lincore
 			.Finalize();
 
 		light_pass_.Init(&gpu_device_)
+			.SetPassName("light_pass")
 			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
 						 {"g_normal_rough", gbuffer_normal_rough_handle_.index},
 						 {"g_albedo_spec", gbuffer_albedo_spec_handle_.index},

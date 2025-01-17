@@ -59,3 +59,4 @@ namespace lincore
 		queue_type_ = QueueType::Compute;
 	}
 }
+

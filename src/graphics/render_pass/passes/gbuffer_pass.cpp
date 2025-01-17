@@ -23,7 +23,6 @@ namespace lincore
 
     void GBufferPass::PrepareShader()
     {
-        pass_name_ = "GBuffer Pass";  // 设置pass名称
         shader_ = gpu_device_->CreateShaderEffect({"shaders/mrt.vert.spv", "shaders/mrt.frag.spv"}, "GBufferPass");
         shader_->ReflectLayout();
     }

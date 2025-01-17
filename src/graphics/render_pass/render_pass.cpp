@@ -2,6 +2,7 @@
 #include "graphics/backend/vk_device.h"
 #include "foundation/resources.h"
 #include "foundation/logging.h"
+#include "render_pass.h"
 
 namespace lincore
 {
@@ -46,8 +47,14 @@ namespace lincore
 		return *this;
 	}
 
-	void RenderPassBase::Finalize()
+	RenderPassBase &RenderPassBase::SetPassName(std::string name)
 	{
+		pass_name_ = name;
+		return *this;
+	}
+
+    void RenderPassBase::Finalize()
+    {
 		if (is_finalized_)
 		{
 			LOGE("RenderPassBase::Finalize() called multiple times");

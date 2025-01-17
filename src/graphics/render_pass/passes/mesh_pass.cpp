@@ -29,7 +29,6 @@ namespace lincore
 
     void MeshPass::PrepareShader()
     {
-        pass_name_ = "Mesh Pass";
         shader_ = gpu_device_->CreateShaderEffect({"shaders/mesh.vert.spv", "shaders/mesh.frag.spv"}, "MeshPass");
         shader_->ReflectLayout();
     }

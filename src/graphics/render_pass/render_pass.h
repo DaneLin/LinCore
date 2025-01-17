@@ -56,6 +56,7 @@ namespace lincore
 		// Pass配置API
 		RenderPassBase &BindInputs(std::initializer_list<PassInput::Resource> resources);
 		RenderPassBase &BindRenderTargets(std::initializer_list<PassOutput::Resource> color_resources, std::initializer_list<PassOutput::Resource> depth_resources = {});
+		RenderPassBase &SetPassName(std::string name);
 		virtual void Finalize();
 
 		virtual void Execute(CommandBuffer *cmd, FrameData *frame = nullptr);

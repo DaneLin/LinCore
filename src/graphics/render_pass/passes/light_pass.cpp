@@ -25,7 +25,6 @@ namespace lincore
 
     void LightPass::PrepareShader()
     {
-        pass_name_ = "Light Pass";
         shader_ = gpu_device_->CreateShaderEffect({"shaders/light.vert.spv", "shaders/light.frag.spv"}, "LightPass");
         shader_->ReflectLayout();
     }
