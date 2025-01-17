@@ -1,4 +1,4 @@
-#include "light_pass.h"
+#include "graphics/render_pass/passes/ssao_pass.h"
 #include "graphics/backend/vk_pipelines.h"
 #include "graphics/backend/vk_device.h"
 #include "graphics/backend/vk_command_buffer.h"
@@ -9,27 +9,27 @@
 namespace lincore
 {
 
-    LightPass::~LightPass()
+    SSAOPass::~SSAOPass()
     {
         Shutdown();
     }
 
-    void LightPass::Shutdown()
+    void SSAOPass::Shutdown()
     {
-        if (light_pipeline_ != VK_NULL_HANDLE)
+        if (ssao_pipeline_ != VK_NULL_HANDLE)
         {
-            vkDestroyPipeline(gpu_device_->device_, light_pipeline_, nullptr);
-            light_pipeline_ = VK_NULL_HANDLE;
+            vkDestroyPipeline(gpu_device_->device_, ssao_pipeline_, nullptr);
+            ssao_pipeline_ = VK_NULL_HANDLE;
         }
     }
 
-    void LightPass::PrepareShader()
+    void SSAOPass::PrepareShader()
     {
-        shader_ = gpu_device_->CreateShaderEffect({"shaders/light.vert.spv", "shaders/light.frag.spv"}, "LightPass");
+        shader_ = gpu_device_->CreateShaderEffect({"shaders/ssao.vert.spv", "shaders/ssao.frag.spv"}, "SSAO_Pass");
         shader_->ReflectLayout();
     }
 
-    void LightPass::PreparePipeline()
+    void SSAOPass::PreparePipeline()
     {
         // 验证 shader_ 是否正确设置
         if (!shader_ || shader_->built_layout_ == VK_NULL_HANDLE)
@@ -49,24 +49,29 @@ namespace lincore
 
         // render format
         std::vector<VkFormat> color_formats;
-        color_formats.emplace_back(gpu_device_->GetDrawImage()->vk_format);
+        color_formats.emplace_back(VK_FORMAT_R8_SNORM);
         pipelineBuilder.SetColorAttachmentFormats(color_formats);
-        pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
 
-        light_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
-        gpu_device_->SetDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)light_pipeline_, "light_pipeline");
+        ssao_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
+        gpu_device_->SetDebugName(VK_OBJECT_TYPE_PIPELINE, (uint64_t)ssao_pipeline_, "ssao_pipeline");
     }
 
-    void LightPass::ExecutePass(CommandBuffer *cmd, FrameData *frame)
+    void SSAOPass::ExecutePass(CommandBuffer *cmd, FrameData *frame)
     {
-        VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "light_pass");
+        VulkanScopeTimer timer(cmd->vk_command_buffer_, &gpu_device_->profiler_, "ssao_pass");
 
         std::vector<VkRenderingAttachmentInfo> color_attachments = gpu_device_->CreateRenderingAttachmentsColor(color_targets_);
 
         VkRenderingInfo render_info = vkinit::RenderingInfo(gpu_device_->draw_extent_, color_attachments);
         cmd->BeginRendering(render_info);
 
-        cmd->BindPipeline(light_pipeline_);
+        push_constants_.bias = 0.025f;
+        push_constants_.radius = 0.5f;
+        push_constants_.power = 2.0f;
+
+        cmd->PushConstants(shader_->built_layout_, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants_), &push_constants_);
+
+        cmd->BindPipeline(ssao_pipeline_);
         cmd->SetViewport(0, 0, static_cast<float>(gpu_device_->draw_extent_.width), static_cast<float>(gpu_device_->draw_extent_.height), 0.f, 1.f);
         cmd->SetScissor(0, 0, gpu_device_->draw_extent_.width, gpu_device_->draw_extent_.height);
 
@@ -77,7 +82,7 @@ namespace lincore
         cmd->EndRendering();
     }
 
-	void LightPass::SetupQueueType()
+	void SSAOPass::SetupQueueType()
 	{   
 		queue_type_ = QueueType::Graphics;
 	}

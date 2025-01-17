@@ -94,7 +94,6 @@ namespace lincore
 
 			scene_graph_.reset();
 			imgui_layer_.Shutdown();
-			main_deletion_queue_.Flush();
 
 			gpu_device_.Shutdown();
 

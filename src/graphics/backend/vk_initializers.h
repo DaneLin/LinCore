@@ -26,9 +26,9 @@ namespace vkinit
 
 	VkRenderingAttachmentInfo DepthAttachmentInfo(VkImageView view, VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/);
 
-	VkRenderingInfo RenderingInfo(VkExtent2D render_extent, VkRenderingAttachmentInfo* color_attachment, VkRenderingAttachmentInfo* depth_attachment);
+	VkRenderingInfo RenderingInfo(VkExtent2D render_extent, VkRenderingAttachmentInfo* color_attachment, VkRenderingAttachmentInfo* depth_attachment = nullptr);
 
-	VkRenderingInfo RenderingInfo(VkExtent2D render_extent, std::vector<VkRenderingAttachmentInfo>& color_attachments, VkRenderingAttachmentInfo* depth_attachment);
+	VkRenderingInfo RenderingInfo(VkExtent2D render_extent, std::vector<VkRenderingAttachmentInfo>& color_attachments, VkRenderingAttachmentInfo* depth_attachment = nullptr);
 
 	VkImageSubresourceRange ImageSubresourceRange(VkImageAspectFlags aspect_mask);
 

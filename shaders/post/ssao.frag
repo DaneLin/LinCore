@@ -10,17 +10,17 @@ layout (location = 0) in vec2 in_uv;
 
 layout (location = 0) out vec4 frag_color;
 
-layout(set = 0, binding = 0) uniform sampler2D g_depth; // we will use the depth buffer to get position
+layout(set = 0, binding = 1) uniform sampler2D g_depth; // we will use the depth buffer to get position
 
 const int MAX_KERNEL_SIZE = 128;
-layout(set = 0, binding = 1) buffer g_kernels {
+layout(set = 0, binding = 2) buffer g_kernels {
     vec3 g_kernels[MAX_KERNEL_SIZE];
 } g_kernel_buffer;
 
 layout (push_constant) uniform PushConstants {
-    mat4 viewproj;
     float radius;
     float power;
+    float bias;
 } push_constants;
 
 void main()
@@ -36,7 +36,7 @@ void main()
         vec3 sample_pos = position + g_kernel_buffer.g_kernels[i]; 
         vec4 offset = vec4(sample_pos, 1.0);
 
-        offset = push_constants.viewproj * offset;
+        offset = scene_data.viewproj * offset;
         offset.xy /= offset.w;
         offset.xy = offset.xy * 0.5 + vec2(0.5);
 

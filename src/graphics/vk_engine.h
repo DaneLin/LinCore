@@ -53,11 +53,7 @@ namespace lincore
 
 		struct SDL_Window* window_{ nullptr };
 
-		DeletionQueue main_deletion_queue_;
-
-		int current_background_effect_{ 0 };
 		int current_scene_{ 0 };
-
 
 		Camera main_camera_;
 
@@ -75,6 +71,9 @@ namespace lincore
 		TextureHandle gbuffer_normal_rough_handle_;
 		TextureHandle gbuffer_albedo_spec_handle_;
 		TextureHandle gbuffer_emission_handle_;
+
+		// ssao
+		BufferHandle ssao_kernel_handle_;
 
 		ImGuiLayer imgui_layer_;
 		GpuDevice gpu_device_;
