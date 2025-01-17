@@ -4,7 +4,7 @@
 #extension GL_EXT_nonuniform_qualifier : require
 #extension GL_EXT_buffer_reference : require
 
-#include "mesh_structures.glsl"
+#include "../core/mesh_structures.glsl"
 
 layout (location = 0) out vec3 out_normal;
 layout (location = 1) out vec2 out_uv;

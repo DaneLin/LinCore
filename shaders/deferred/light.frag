@@ -18,8 +18,8 @@ layout (set = 0, binding = 2) uniform sampler2D g_albedo_spec;
 layout (set = 0, binding = 3) uniform sampler2D g_emission;
 layout (set = 0, binding = 4) uniform sampler2D depth_texture;
 
-#include "math.glsl"
-#include "brdf.glsl"
+#include "../core/math.glsl"
+#include "../core/brdf.glsl"
 
 layout (location = 0) in vec2 in_uv;
 layout (location = 0) out vec4 out_color;
