@@ -27,7 +27,8 @@ namespace lincore
 
     void CullingPass::PrepareShader()
     {
-        shader_ = gpu_device_->CreateShaderEffect({"shaders/cull.comp.spv"}, "culling_pass");
+        pass_name_ = "Culling Pass";
+        shader_ = gpu_device_->CreateShaderEffect({"shaders/cull.comp.spv"}, "CullingPass");
         shader_->ReflectLayout();
     }
 

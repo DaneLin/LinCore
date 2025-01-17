@@ -195,23 +195,13 @@ namespace lincore
 		}
 	}
 
-	void PipelineBuilder::SetColorAttachmentFormat(VkFormat format)
-	{
-		color_attachment_formats_.push_back(format);
-
-		render_info_.colorAttachmentCount = color_attachment_formats_.size();
-		render_info_.pColorAttachmentFormats = color_attachment_formats_.data();
-		// 同时设置相同数量的color blend attachments
-		SetColorBlendAttachments(color_attachment_formats_.size());
-	}
-
     void PipelineBuilder::SetColorAttachmentFormats(std::vector<VkFormat>& formats)
     {
         color_attachment_formats_ = formats;
-        render_info_.colorAttachmentCount = formats.size();
+        render_info_.colorAttachmentCount = static_cast<uint32_t>(formats.size());
         render_info_.pColorAttachmentFormats = formats.data();
         // 同时设置相同数量的color blend attachments
-        SetColorBlendAttachments(formats.size());
+        SetColorBlendAttachments(static_cast<uint32_t>(formats.size()));
     }
     void PipelineBuilder::SetDepthFormat(VkFormat format)
     {

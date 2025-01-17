@@ -93,6 +93,7 @@ namespace lincore
 		TextureHandle depth_target_;
 
 		QueueType::Enum queue_type_{QueueType::Graphics};
+		std::string pass_name_{"Unnamed Pass"};
 
 		bool is_finalized_{false};
 	};

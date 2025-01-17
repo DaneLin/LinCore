@@ -78,6 +78,11 @@ namespace lincore
 
 	void ImGuiLayer::Draw(CommandBuffer *cmd, uint32_t swapchain_image_index)
 	{
+
+		VkDebugUtilsLabelEXT label = { VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT };
+		label.pLabelName = "UI Pass";
+		vkCmdBeginDebugUtilsLabelEXT(cmd->vk_command_buffer_, &label);
+
 		// 将绘制图像复制到交换链图像
 		Texture *draw_image = gpu_device_->GetDrawImage();
 		Texture *swapchain_image = gpu_device_->GetSwapchainImage(swapchain_image_index);
@@ -97,6 +102,8 @@ namespace lincore
 		cmd->EndRendering();
 
 		cmd->AddImageBarrier(swapchain_image, ResourceState::RESOURCE_STATE_PRESENT);
+
+		vkCmdEndDebugUtilsLabelEXT(cmd->vk_command_buffer_);
 	}
 
 	void ImGuiLayer::InitImGui()

@@ -24,6 +24,7 @@ namespace lincore
 
     void LightPass::PrepareShader()
     {
+        pass_name_ = "Light Pass";
         shader_ = gpu_device_->CreateShaderEffect({"shaders/light.vert.spv", "shaders/light.frag.spv"}, "LightPass");
         shader_->ReflectLayout();
     }
@@ -47,7 +48,9 @@ namespace lincore
         pipelineBuilder.DisableBlending();
 
         // render format
-        pipelineBuilder.SetColorAttachmentFormat(gpu_device_->GetDrawImage()->vk_format);
+        std::vector<VkFormat> color_formats;
+        color_formats.emplace_back(gpu_device_->GetDrawImage()->vk_format);
+        pipelineBuilder.SetColorAttachmentFormats(color_formats);
         pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
 
         light_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());

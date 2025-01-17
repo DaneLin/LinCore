@@ -28,6 +28,7 @@ namespace lincore
 
     void MeshPass::PrepareShader()
     {
+        pass_name_ = "Mesh Pass";
         shader_ = gpu_device_->CreateShaderEffect({"shaders/mesh.vert.spv", "shaders/mesh.frag.spv"}, "MeshPass");
         shader_->ReflectLayout();
     }
@@ -52,7 +53,9 @@ namespace lincore
         pipelineBuilder.EnableDepthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 
         // render format
-        pipelineBuilder.SetColorAttachmentFormat(gpu_device_->GetDrawImage()->vk_format);
+        std::vector<VkFormat> color_formats;
+        color_formats.emplace_back(gpu_device_->GetDrawImage()->vk_format);
+        pipelineBuilder.SetColorAttachmentFormats(color_formats);
         pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
 
         opaque_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
@@ -73,7 +76,7 @@ namespace lincore
 
         std::vector<VkRenderingAttachmentInfo> color_attachments = gpu_device_->CreateRenderingAttachmentsColor(color_targets_);
         VkRenderingAttachmentInfo depth_attachment = gpu_device_->CreateRenderingAttachmentsDepth(depth_target_);
-
+        
         VkRenderingInfo render_info = vkinit::RenderingInfo(gpu_device_->draw_extent_, color_attachments.data(), &depth_attachment);
         cmd->BeginRendering(render_info);
 
@@ -93,6 +96,8 @@ namespace lincore
             frame->scene_gpu_data.draw_count);
 
         cmd->EndRendering();
+
+        
     }
 
 	void MeshPass::SetupQueueType()

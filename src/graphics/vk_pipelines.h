@@ -99,9 +99,6 @@ namespace lincore
 		void SetMultisamplingNone();
 
 		void DisableBlending();
-
-		void SetColorAttachmentFormat(VkFormat format);
-		
 		void SetColorAttachmentFormats(std::vector<VkFormat>& formats);
 
 		void SetDepthFormat(VkFormat format);

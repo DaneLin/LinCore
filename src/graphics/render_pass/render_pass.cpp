@@ -66,7 +66,19 @@ namespace lincore
 	{
 		UpdateInputResources(cmd, frame);
 		UpdateRenderTargets(cmd);
+
+		// 添加调试标签
+		VkDebugUtilsLabelEXT label_info = {
+			VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+			nullptr,
+			pass_name_.c_str(),
+			{1.0f, 1.0f, 1.0f, 1.0f}
+		};
+		vkCmdBeginDebugUtilsLabelEXT(cmd->GetVkCommandBuffer(), &label_info);
+
 		ExecutePass(cmd, frame);
+
+		vkCmdEndDebugUtilsLabelEXT(cmd->GetVkCommandBuffer());
 	}
 
 	void RenderPassBase::ValidateInput()

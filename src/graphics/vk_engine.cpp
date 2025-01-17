@@ -207,7 +207,7 @@ namespace lincore
 		{
 			gpu_device_.profiler_.GrabQueries(cmd->GetVkCommandBuffer());
 
-			sky_background_pass_.Execute(cmd, &current_frame_data);
+			// sky_background_pass_.Execute(cmd, &current_frame_data);
 
 			scene::SceneView scene_view;
 			scene_view.SetViewType(scene::SceneView::ViewType::Main);
