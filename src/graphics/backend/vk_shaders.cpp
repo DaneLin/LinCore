@@ -8,8 +8,8 @@
 #include <vulkan/vulkan.h>
 // foundation
 #include "foundation/logging.h"
-#include "graphics/vk_initializers.h"
-#include "graphics/vk_device.h"
+#include "graphics/backend/vk_initializers.h"
+#include "graphics/backend/vk_device.h"
 
 namespace lincore
 {

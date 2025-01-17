@@ -4,13 +4,13 @@
 #include "TaskScheduler.h"
 // lincore
 #include "foundation/config.h"
-#include "graphics/vk_descriptors.h"
-#include "graphics/vk_device.h"
-#include "graphics/camera.h"
-#include "graphics/vk_shaders.h"
-#include "graphics/vk_types.h"
-#include "graphics/vk_initializers.h"
-#include "graphics/imgui_layer.h"
+#include "graphics/backend/vk_descriptors.h"
+#include "graphics/backend/vk_device.h"
+#include "graphics/backend/camera.h"
+#include "graphics/backend/vk_shaders.h"
+#include "graphics/backend/vk_types.h"
+#include "graphics/backend/vk_initializers.h"
+#include "graphics/backend/imgui_layer.h"
 
 
 #include "graphics/scene_graph/scene_graph.h"
@@ -93,6 +93,11 @@ namespace lincore
 		void UpdateScene();
 
 		void DrawImGui();
+
+	private:
+		void OnResize();
+		void InitResources();
+		void InitPasses();
 	};
 
 }

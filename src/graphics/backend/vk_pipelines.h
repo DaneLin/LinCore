@@ -1,7 +1,7 @@
 ﻿#pragma once
 // lincore
-#include "graphics/vk_types.h"
-#include "graphics/vk_shaders.h"
+#include "graphics/backend/vk_types.h"
+#include "graphics/backend/vk_shaders.h"
 
 namespace lincore
 {

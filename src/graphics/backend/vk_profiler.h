@@ -4,7 +4,7 @@
 #include <array>
 #include <unordered_map>
 // lincore
-#include "graphics/vk_types.h"
+#include "graphics/backend/vk_types.h"
 
 namespace lincore
 {

@@ -16,11 +16,11 @@
 // lincore
 #include "foundation/cvars.h"
 #include "foundation/logging.h"
-#include "graphics/vk_initializers.h"
+#include "graphics/backend/vk_initializers.h"
 #include "graphics/scene_graph/scene_types.h"
-#include "graphics/vk_pipelines.h"
-#include "graphics/vk_profiler.h"
-#include "graphics/vk_device.h"
+#include "graphics/backend/vk_pipelines.h"
+#include "graphics/backend/vk_profiler.h"
+#include "graphics/backend/vk_device.h"
 #include "graphics/scene_graph/gltf_loader.h"
 #include "graphics/scene_graph/scene_view.h"
 #include "graphics/render_pass/passes/mesh_pass.h"
@@ -72,92 +72,9 @@ namespace lincore
 		gpu_device_.scene_data_.sunlight_direction = glm::vec4(-0.5f, -1.0f, -0.5f, 5.0f); // w component is sun power
 		gpu_device_.scene_data_.sunlight_color = glm::vec4(1.0f, 0.95f, 0.8f, 1.0f);	   // Warm sunlight color
 
-		scene::LoadConfig load_config;
-		load_config.debug_name = "Main Scene";
+		InitResources();
+		InitPasses();
 
-		sky_background_pass_.Init(&gpu_device_)
-			.BindInputs({{"image", gpu_device_.draw_image_handle_.index}})
-			.Finalize();
-
-		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
-		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
-		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/FlightHelmet/glTF/FlightHelmet.gltf"), load_config);
-		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
-		scene_graph_ = std::make_unique<scene::SceneGraph>(&gpu_device_);
-		scene_graph_->Init();
-		scene_graph_->BeginSceneUpdate();
-		scene_graph_->AddGLTFScene(test);
-		scene_graph_->EndSceneUpdate();
-
-		scene::GPUResourcePool gpu_resource_pool = scene_graph_->GetGPUResourcePool();
-		culling_pass_.Init(&gpu_device_)
-			.BindInputs({
-				{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
-				{"draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
-			})
-			.Finalize();
-
-		mesh_pass_.Init(&gpu_device_)
-			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
-						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
-						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
-						 {"scene_data", gpu_device_.global_scene_data_buffer_.index},
-						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
-			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}},
-							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
-//			.SetSceneGraph(scene_graph_.get())
-			.Finalize();
-
-		TextureCreation gbuffer_creation{};
-		gbuffer_creation.SetName("gbuffer_normal_rough")
-			.SetSize(window_extent_.width, window_extent_.height, 1, false)
-			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Enum::Texture2D)
-			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
-		gbuffer_normal_rough_handle_ = gpu_device_.CreateResource(gbuffer_creation);
-			Texture *gbuffer_normal_rough_texture = gpu_device_.GetResource<Texture>(gbuffer_normal_rough_handle_.index);
-		gbuffer_normal_rough_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
-
-		gbuffer_creation.SetName("gbuffer_albedo_spec")
-			.SetSize(window_extent_.width, window_extent_.height, 1, false)
-			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
-			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
-		gbuffer_albedo_spec_handle_ = gpu_device_.CreateResource(gbuffer_creation);
-		Texture *gbuffer_albedo_spec_texture = gpu_device_.GetResource<Texture>(gbuffer_albedo_spec_handle_.index);
-		gbuffer_albedo_spec_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
-
-		gbuffer_creation.SetName("gbuffer_emission")
-			.SetSize(window_extent_.width, window_extent_.height, 1, false)
-			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
-			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
-		gbuffer_emission_handle_ = gpu_device_.CreateResource(gbuffer_creation);
-		Texture *gbuffer_emission_texture = gpu_device_.GetResource<Texture>(gbuffer_emission_handle_.index);
-		gbuffer_emission_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
-
-
-		Texture *depth_image = gpu_device_.GetResource<Texture>(gpu_device_.depth_image_handle_.index);
-		depth_image->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
-
-		gbuffer_pass_.Init(&gpu_device_)
-			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
-						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
-						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
-						 {"scene_data", gpu_device_.global_scene_data_buffer_.index},
-						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
-			.BindRenderTargets({{"g_normal_rough", gbuffer_normal_rough_handle_.index},
-								{"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
-								{"g_emission", gbuffer_emission_handle_.index}},
-							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
-//			.SetSceneGraph(scene_graph_.get())
-			.Finalize();
-
-		light_pass_.Init(&gpu_device_)
-			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
-						 {"g_normal_rough", gbuffer_normal_rough_handle_.index},
-						 {"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
-						 {"g_emission", gbuffer_emission_handle_.index},
-						 {"depth_texture", gpu_device_.depth_image_handle_.index}})
-			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}})
-			.Finalize();
 		// everything went fine
 		is_initialized_ = true;
 	}
@@ -216,7 +133,6 @@ namespace lincore
 			scene::DrawCullData draw_cull_data = scene_view.GetCullData();
 			scene::GPUResourcePool gpu_resource_pool = scene_graph_->GetGPUResourcePool();
 			draw_cull_data.draw_count = gpu_resource_pool.draw_count;
-			scene_graph_->ReadyCullingData(cmd);
 
 			culling_pass_.SetCullData(draw_cull_data);
 			culling_pass_.Execute(cmd, &current_frame_data);
@@ -229,17 +145,17 @@ namespace lincore
 			// mesh_pass_.Execute(cmd, &current_frame_data);
 			gbuffer_pass_.Execute(cmd, &current_frame_data);
 			light_pass_.Execute(cmd, &current_frame_data);
-
-			// Update mesh draw time from GPU profiler
-			if (gpu_device_.profiler_.timing_.contains("mesh_pass"))
-			{
-				engine_stats_.mesh_draw_time = gpu_device_.profiler_.timing_["mesh_pass"];
-			}
 		}
 
 		{
 			VulkanScopeTimer timer(cmd->GetVkCommandBuffer(), &gpu_device_.profiler_, "imgui_pass");
 			imgui_layer_.Draw(cmd, swapchain_image_index);
+		}
+
+		// Update mesh draw time from GPU profiler
+		if (gpu_device_.profiler_.timing_.contains("mesh_pass"))
+		{
+			engine_stats_.mesh_draw_time = gpu_device_.profiler_.timing_["mesh_pass"];
 		}
 
 		gpu_device_.EndFrame();
@@ -291,13 +207,7 @@ namespace lincore
 			}
 			if (resize_requested_)
 			{
-				int w, h;
-				SDL_GetWindowSize(window_, &w, &h);
-				window_extent_.width = w;
-				window_extent_.height = h;
-
-				gpu_device_.ResizeSwapchain(w, h);
-				resize_requested_ = false;
+				OnResize();
 			}
 
 			DrawImGui();
@@ -476,4 +386,103 @@ namespace lincore
 		imgui_layer_.EndFrame();
 	}
 
+	void VulkanEngine::OnResize()
+	{
+		int w, h;
+		SDL_GetWindowSize(window_, &w, &h);
+		window_extent_.width = w;
+		window_extent_.height = h;
+
+		gpu_device_.ResizeSwapchain(w, h);
+
+		resize_requested_ = false;
+	}
+	void VulkanEngine::InitResources()
+	{
+
+		scene::LoadConfig load_config;
+		load_config.debug_name = "Main Scene";
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
+		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/FlightHelmet/glTF/FlightHelmet.gltf"), load_config);
+		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
+		scene_graph_ = std::make_unique<scene::SceneGraph>(&gpu_device_);
+		scene_graph_->Init();
+		scene_graph_->BeginSceneUpdate();
+		scene_graph_->AddGLTFScene(test);
+		scene_graph_->EndSceneUpdate();
+
+		TextureCreation gbuffer_creation{};
+		gbuffer_creation.SetName("gbuffer_normal_rough")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R16G16B16A16_SFLOAT, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_normal_rough_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_normal_rough_texture = gpu_device_.GetResource<Texture>(gbuffer_normal_rough_handle_.index);
+		gbuffer_normal_rough_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		gbuffer_creation.SetName("gbuffer_albedo_spec")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_albedo_spec_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_albedo_spec_texture = gpu_device_.GetResource<Texture>(gbuffer_albedo_spec_handle_.index);
+		gbuffer_albedo_spec_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		gbuffer_creation.SetName("gbuffer_emission")
+			.SetSize(window_extent_.width, window_extent_.height, 1, false)
+			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
+			.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask);
+		gbuffer_emission_handle_ = gpu_device_.CreateResource(gbuffer_creation);
+		Texture *gbuffer_emission_texture = gpu_device_.GetResource<Texture>(gbuffer_emission_handle_.index);
+		gbuffer_emission_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+		Texture *depth_image = gpu_device_.GetResource<Texture>(gpu_device_.depth_image_handle_.index);
+		depth_image->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+	}
+	void VulkanEngine::InitPasses()
+	{
+		sky_background_pass_.Init(&gpu_device_)
+			.BindInputs({{"image", gpu_device_.draw_image_handle_.index}})
+			.Finalize();
+
+		scene::GPUResourcePool gpu_resource_pool = scene_graph_->GetGPUResourcePool();
+		culling_pass_.Init(&gpu_device_)
+			.BindInputs({
+				{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
+				{"draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
+			})
+			.Finalize();
+
+		mesh_pass_.Init(&gpu_device_)
+			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
+						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
+						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
+						 {"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
+			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}},
+							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
+			.Finalize();
+
+		gbuffer_pass_.Init(&gpu_device_)
+			.BindInputs({{"object_buffer", gpu_resource_pool.instance_data_buffer.index},
+						 {"vertex_buffer", gpu_resource_pool.vertex_buffer.index},
+						 {"visible_draw_buffer", gpu_resource_pool.draw_indirect_buffer.index},
+						 {"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"material_data_buffer", gpu_resource_pool.material_buffer.index}})
+			.BindRenderTargets({{"g_normal_rough", gbuffer_normal_rough_handle_.index},
+								{"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
+								{"g_emission", gbuffer_emission_handle_.index}},
+							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
+			.Finalize();
+
+		light_pass_.Init(&gpu_device_)
+			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"g_normal_rough", gbuffer_normal_rough_handle_.index},
+						 {"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
+						 {"g_emission", gbuffer_emission_handle_.index},
+						 {"depth_texture", gpu_device_.depth_image_handle_.index}})
+			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}})
+			.Finalize();
+	}
 }

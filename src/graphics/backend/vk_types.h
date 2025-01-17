@@ -17,7 +17,7 @@
 #include <glm/vec4.hpp>
 // lincore
 #include "foundation/resources.h"
-#include "graphics/vk_resources.h"
+#include "graphics/backend/vk_resources.h"
 
 namespace lincore
 {

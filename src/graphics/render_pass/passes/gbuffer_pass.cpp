@@ -1,8 +1,8 @@
 #include "gbuffer_pass.h"
 
-#include "graphics/vk_pipelines.h"
-#include "graphics/vk_device.h"
-#include "graphics/vk_command_buffer.h"
+#include "graphics/backend/vk_pipelines.h"
+#include "graphics/backend/vk_device.h"
+#include "graphics/backend/vk_command_buffer.h"
 
 namespace lincore
 {

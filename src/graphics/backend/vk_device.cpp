@@ -11,7 +11,7 @@
 #include <glm/packing.hpp>
 // lincore
 #include "foundation/logging.h"
-#include "graphics/vk_pipelines.h"
+#include "graphics/backend/vk_pipelines.h"
 
 namespace lincore
 {

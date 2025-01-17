@@ -1,5 +1,5 @@
-#include "vk_resources.h"
-#include "vk_device.h"
+#include "graphics/backend/vk_resources.h"
+#include "graphics/backend/vk_device.h"
 
 namespace lincore
 {

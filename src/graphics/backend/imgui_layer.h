@@ -2,8 +2,8 @@
 
 // lincore
 #include "foundation/layer.h"
-#include "graphics/vk_types.h"
-#include "graphics/vk_resources.h"
+#include "graphics/backend/vk_types.h"
+#include "graphics/backend/vk_resources.h"
 
 struct SDL_Window;
 

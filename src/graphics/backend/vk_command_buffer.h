@@ -1,6 +1,6 @@
 #pragma once
 // lincore
-#include "graphics/vk_types.h"
+#include "graphics/backend/vk_types.h"
 #include "foundation/config.h"
 
 namespace lincore

@@ -3,7 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
 
-#include "../core/mesh_structures.glsl"
+#include "../core/global.glsl"
 #include "../core/math.glsl"
 
 layout (location = 0) in vec2 in_uv;

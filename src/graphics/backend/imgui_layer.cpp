@@ -1,4 +1,4 @@
-#include "graphics/imgui_layer.h"
+#include "graphics/backend/imgui_layer.h"
 
 // external
 #include <SDL.h>
@@ -10,7 +10,7 @@
 #include "foundation/events/event.h"
 #include "foundation/events/key_event.h"
 #include "foundation/events/mouse_event.h"
-#include "graphics/vk_device.h"
+#include "graphics/backend/vk_device.h"
 
 namespace lincore
 {

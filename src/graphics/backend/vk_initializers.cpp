@@ -1,5 +1,4 @@
-﻿#include "graphics/vk_initializers.h"
-#include "vk_initializers.h"
+﻿#include "graphics/backend/vk_initializers.h"
 
 //> init_cmd
 VkCommandPoolCreateInfo vkinit::CommandPoolCreateInfo(uint32_t queue_family_index,
@@ -191,7 +190,7 @@ VkRenderingInfo vkinit::RenderingInfo(VkExtent2D render_extent, std::vector<VkRe
 
 	render_info.renderArea = VkRect2D{ VkOffset2D{0, 0}, render_extent };
 	render_info.layerCount = 1;
-	render_info.colorAttachmentCount = color_attachments.size();
+	render_info.colorAttachmentCount = static_cast<uint32_t>(color_attachments.size());
 	render_info.pColorAttachments = color_attachments.data();
 	render_info.pDepthAttachment = depth_attachment;
 	return render_info;

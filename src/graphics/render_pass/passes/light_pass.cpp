@@ -1,9 +1,10 @@
 #include "light_pass.h"
-#include "graphics/vk_pipelines.h"
-#include "graphics/vk_device.h"
-#include "graphics/vk_command_buffer.h"
+#include "graphics/backend/vk_pipelines.h"
+#include "graphics/backend/vk_device.h"
+#include "graphics/backend/vk_command_buffer.h"
 #include "graphics/scene_graph/scene_view.h"
 #include "graphics/scene_graph/scene_graph.h"
+#include "graphics/backend/vk_profiler.h"
 
 namespace lincore
 {
@@ -25,7 +26,7 @@ namespace lincore
     void LightPass::PrepareShader()
     {
         pass_name_ = "Light Pass";
-        shader_ = gpu_device_->CreateShaderEffect({"shaders/full_screen.vert.spv", "shaders/light.frag.spv"}, "LightPass");
+        shader_ = gpu_device_->CreateShaderEffect({"shaders/light.vert.spv", "shaders/light.frag.spv"}, "LightPass");
         shader_->ReflectLayout();
     }
 

@@ -9,7 +9,7 @@
 #include <fastgltf/types.hpp>
 // lincore
 #include "graphics/scene_graph/scene_types.h"
-#include "graphics/vk_resources.h"
+#include "graphics/backend/vk_resources.h"
 
 namespace lincore
 {

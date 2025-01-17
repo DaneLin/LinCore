@@ -7,8 +7,8 @@
 #include <glm/vec4.hpp>
 #include <glm/gtx/quaternion.hpp>
 // lincore
-#include "graphics/vk_resources.h"
-#include "graphics/vk_descriptors.h"
+#include "graphics/backend/vk_resources.h"
+#include "graphics/backend/vk_descriptors.h"
 namespace lincore
 {
     class GpuDevice;

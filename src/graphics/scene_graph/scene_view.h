@@ -3,7 +3,7 @@
 #include <vector>
 // lincore
 #include "graphics/scene_graph/scene_types.h"
-#include "graphics/camera.h"
+#include "graphics/backend/camera.h"
 
 namespace lincore
 {

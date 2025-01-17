@@ -7,7 +7,7 @@
 // lincore
 #include "foundation/layer.h"
 #include "foundation/window.h"
-#include "graphics/imgui_layer.h"
+#include "graphics/backend/imgui_layer.h"
 
 namespace lincore
 {

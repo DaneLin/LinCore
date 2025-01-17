@@ -1,5 +1,5 @@
 #include "graphics/render_pass/render_pass.h"
-#include "graphics/vk_device.h"
+#include "graphics/backend/vk_device.h"
 #include "foundation/resources.h"
 #include "foundation/logging.h"
 

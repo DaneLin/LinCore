@@ -1,7 +1,7 @@
 #include "graphics/scene_graph/scene_types.h"
 #include <memory>
 #include <glm/gtx/matrix_decompose.hpp>
-#include "graphics/vk_device.h"
+#include "graphics/backend/vk_device.h"
 namespace lincore
 {
     namespace scene

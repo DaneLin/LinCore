@@ -16,7 +16,7 @@
 #include "graphics/scene_graph/scene_types.h"
 #include "foundation/resources.h"
 #include "foundation/logging.h"
-#include "graphics/vk_device.h"
+#include "graphics/backend/vk_device.h"
 #include "graphics/scene_graph/scene_node.h"
 
 

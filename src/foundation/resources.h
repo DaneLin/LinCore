@@ -274,10 +274,10 @@ namespace lincore
 
 	struct TextureSubResource
 	{
-		uint16_t mip_base_level = 0;
-		uint16_t mip_level_count = 1;
-		uint16_t array_base_layer = 0;
-		uint16_t array_layer_count = 1;
+		uint8_t mip_base_level = 0;
+		uint8_t mip_level_count = 1;
+		uint8_t array_base_layer = 0;
+		uint8_t array_layer_count = 1;
 	}; // struct TextureSubResource
 
 	struct TextureViewCreation

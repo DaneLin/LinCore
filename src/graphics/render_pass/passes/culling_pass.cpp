@@ -1,8 +1,7 @@
 #include "graphics/render_pass/passes/culling_pass.h"
 // lincore
-#include "graphics/vk_device.h"
-#include "graphics/vk_command_buffer.h"
-#include "culling_pass.h"
+#include "graphics/backend/vk_device.h"
+#include "graphics/backend/vk_command_buffer.h"
 
 namespace lincore
 {

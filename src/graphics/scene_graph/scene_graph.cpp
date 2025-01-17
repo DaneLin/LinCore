@@ -1,6 +1,6 @@
 #include "graphics/scene_graph/scene_graph.h"
 #include "foundation/logging.h"
-#include "graphics/vk_device.h"
+#include "graphics/backend/vk_device.h"
 #include "graphics/scene_graph/gltf_loader.h"
 
 namespace lincore
