@@ -12,7 +12,7 @@
 - [x] Microfacet BRDF (Cook-Torrance)
 - [x] GPU驱动渲染
 - [x] 延迟渲染
-
+- [x] 屏幕空间环境光遮蔽
 # 待实现特性
 - [ ] 异步计算
 - [ ] IBL

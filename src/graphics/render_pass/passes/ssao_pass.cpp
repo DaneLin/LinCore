@@ -49,7 +49,11 @@ namespace lincore
 
         // render format
         std::vector<VkFormat> color_formats;
-        color_formats.emplace_back(VK_FORMAT_R8_SNORM);
+        for (auto &color_target : color_targets_)
+        {
+            Texture *texture = gpu_device_->GetResource<Texture>(color_target.index);
+            color_formats.emplace_back(texture->vk_format);
+        }
         pipelineBuilder.SetColorAttachmentFormats(color_formats);
 
         ssao_pipeline_ = pipelineBuilder.BuildPipeline(gpu_device_->device_, gpu_device_->pipeline_cache_.GetCache());
@@ -82,9 +86,9 @@ namespace lincore
         cmd->EndRendering();
     }
 
-	void SSAOPass::SetupQueueType()
-	{   
-		queue_type_ = QueueType::Graphics;
-	}
+    void SSAOPass::SetupQueueType()
+    {
+        queue_type_ = QueueType::Graphics;
+    }
 
 }

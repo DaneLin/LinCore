@@ -43,4 +43,7 @@ constexpr uint32_t kNUM_RENDER_THREADS = 4;
 
 #define LC_DRAW_INDIRECT 0
 
+constexpr uint32_t kMAX_KERNEL_SIZE = 32;
+constexpr uint32_t kSSAO_NOISE_DIM = 8;
+
 #endif

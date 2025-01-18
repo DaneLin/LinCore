@@ -743,18 +743,20 @@ namespace lincore
 		image_info.Reset()
 			.SetImmediate()
 			.SetName("default white image")
-			.SetData((void *)&white)
+			.SetData((void *)&white, sizeof(uint32_t))
 			.SetSize(1, 1, 1)
 			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, TextureType::Enum::Texture2D)
 			.SetFlags(TextureFlags::Default | TextureFlags::RenderTarget);
 		default_resources_.images.white_image = CreateResource(image_info);
 
 		uint32_t grey = glm::packUnorm4x8(glm::vec4(0.66, 0.66, 0.66, 1));
-		image_info.SetName("default grey image").SetData((void *)&grey);
+		image_info.SetName("default grey image")
+			.SetData((void *)&grey, sizeof(uint32_t));
 		default_resources_.images.grey_image = CreateResource(image_info);
 
 		uint32_t black = glm::packUnorm4x8(glm::vec4(0, 0, 0, 0));
-		image_info.SetName("default black image").SetData((void *)&black);
+		image_info.SetName("default black image")
+			.SetData((void *)&black, sizeof(uint32_t));
 		default_resources_.images.black_image = CreateResource(image_info);
 
 		// checkerboard image
@@ -768,7 +770,7 @@ namespace lincore
 			}
 		}
 		image_info.SetName("default checkerboard image")
-			.SetData(pixels.data())
+			.SetData(pixels.data(), 16 * 16 * sizeof(uint32_t))
 			.SetSize(16, 16, 1);
 		default_resources_.images.error_checker_board_image = CreateResource(image_info);
 
@@ -785,9 +787,13 @@ namespace lincore
 
 		AddBindlessSampledImage(default_resources_.images.black_image, default_resources_.samplers.linear);
 
+		Texture *depth_image = GetResource<Texture>(depth_image_handle_.index);
+		depth_image->sampler = GetResource<Sampler>(default_resources_.samplers.linear.index);
+
 		BufferCreation buffer_info{};
 		buffer_info.Reset()
-			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable, sizeof(scene::GPUSceneData))
+			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable)
+			.SetData(nullptr, sizeof(scene::GPUSceneData))
 			.SetPersistent();
 		global_scene_data_buffer_ = CreateResource(buffer_info);
 

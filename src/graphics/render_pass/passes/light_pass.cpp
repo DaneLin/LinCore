@@ -49,7 +49,11 @@ namespace lincore
 
         // render format
         std::vector<VkFormat> color_formats;
-        color_formats.emplace_back(gpu_device_->GetDrawImage()->vk_format);
+        for (auto &color_target : color_targets_)
+        {
+            Texture *texture = gpu_device_->GetResource<Texture>(color_target.index);
+            color_formats.emplace_back(texture->vk_format);
+        }
         pipelineBuilder.SetColorAttachmentFormats(color_formats);
         pipelineBuilder.SetDepthFormat(gpu_device_->GetDepthImage()->vk_format);
 

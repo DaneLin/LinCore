@@ -15,9 +15,9 @@ namespace lincore
             BufferCreation buffer_creation{};
             buffer_creation.Reset()
                 .Set(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                     ResourceUsageType::Immutable,
-                     config.max_vertices * sizeof(Vertex))
+                     ResourceUsageType::Immutable)
                 .SetName("Scene_VertexBuffer")
+                .SetData(nullptr, config.max_vertices * sizeof(Vertex))
                 .SetDeviceOnly();
             vertex_buffer = device->CreateResource(buffer_creation);
             vertex_capacity = config.max_vertices;
@@ -26,9 +26,9 @@ namespace lincore
             // 创建索引缓冲
             buffer_creation.Reset()
                 .Set(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                     ResourceUsageType::Immutable,
-                     config.max_indices * sizeof(uint32_t))
+                    ResourceUsageType::Immutable)
                 .SetName("Scene_IndexBuffer")
+                .SetData(nullptr, config.max_indices * sizeof(uint32_t))
                 .SetDeviceOnly();
             index_buffer = device->CreateResource(buffer_creation);
             index_capacity = config.max_indices;
@@ -36,9 +36,9 @@ namespace lincore
             // 创建实例数据缓冲
             buffer_creation.Reset()
                 .Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                     ResourceUsageType::Immutable,
-                     config.max_objects * sizeof(ObjectData))
+                     ResourceUsageType::Immutable)
                 .SetName("Scene_InstanceBuffer")
+                .SetData(nullptr, config.max_objects * sizeof(ObjectData))
                 .SetDeviceOnly();
             instance_data_buffer = device->CreateResource(buffer_creation);
             instance_capacity = config.max_objects;
@@ -46,9 +46,9 @@ namespace lincore
             // 创建绘制间接缓冲
             buffer_creation.Reset()
                 .Set(VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                     ResourceUsageType::Immutable,
-                     config.max_objects * sizeof(DrawCommand))
+                     ResourceUsageType::Immutable)
                 .SetName("Scene_DrawIndirectBuffer")
+				.SetData(nullptr, config.max_objects * sizeof(DrawCommand))
                 .SetDeviceOnly();
             draw_indirect_buffer = device->CreateResource(buffer_creation);
             device->SetDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)device->GetResource<Buffer>(draw_indirect_buffer.index)->vk_buffer, "Scene_DrawIndirectBuffer");
@@ -56,9 +56,9 @@ namespace lincore
             // 创建材质缓冲区
             buffer_creation.Reset()
                 .Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                     ResourceUsageType::Immutable,
-                     config.max_materials * sizeof(MaterialInstance))
+                     ResourceUsageType::Immutable)
                 .SetName("Scene_MaterialBuffer")
+                .SetData(nullptr, config.max_materials * sizeof(MaterialInstance))
                 .SetDeviceOnly();
             material_buffer = device->CreateResource(buffer_creation);
             material_capacity = config.max_materials;
@@ -66,9 +66,9 @@ namespace lincore
             // 创建暂存缓冲
             buffer_creation.Reset()
                 .Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                     ResourceUsageType::Dynamic,
-                     static_cast<uint32_t>(std::max({vertex_capacity * sizeof(Vertex), index_capacity * sizeof(uint32_t), instance_capacity * sizeof(ObjectData)})))
+                     ResourceUsageType::Dynamic)
                 .SetName("Scene_StagingBuffer")
+                .SetData(nullptr, static_cast<uint32_t>(std::max({ vertex_capacity * sizeof(Vertex), index_capacity * sizeof(uint32_t), instance_capacity * sizeof(ObjectData) })))
                 .SetPersistent();
             staging_buffer = device->CreateResource(buffer_creation);
             device->SetDebugName(VK_OBJECT_TYPE_BUFFER, (uint64_t)device->GetResource<Buffer>(staging_buffer.index)->vk_buffer, "Scene_StagingBuffer");

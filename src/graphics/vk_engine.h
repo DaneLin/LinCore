@@ -19,7 +19,8 @@
 #include "graphics/render_pass/passes/mesh_pass.h"
 #include "graphics/render_pass/passes/gbuffer_pass.h"
 #include "graphics/render_pass/passes/light_pass.h"
-
+#include "graphics/render_pass/passes/ssao_pass.h"
+#include "graphics/render_pass/passes/blur_pass.h"
 
 namespace lincore
 {
@@ -66,6 +67,8 @@ namespace lincore
 		MeshPass mesh_pass_;
 		GBufferPass gbuffer_pass_;
 		LightPass light_pass_;
+		SSAOPass ssao_pass_;
+		BlurPass blur_pass_;
 
 		// gbuffer
 		TextureHandle gbuffer_normal_rough_handle_;
@@ -73,7 +76,10 @@ namespace lincore
 		TextureHandle gbuffer_emission_handle_;
 
 		// ssao
-		BufferHandle ssao_kernel_handle_;
+		BufferHandle ssao_kernel_buffer_handle_;
+		TextureHandle ssao_noise_handle_;
+		TextureHandle ssao_color_handle_;
+		TextureHandle ssao_blur_handle_;
 
 		ImGuiLayer imgui_layer_;
 		GpuDevice gpu_device_;

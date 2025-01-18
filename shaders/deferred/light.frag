@@ -17,6 +17,7 @@ layout (set = 0, binding = 1) uniform sampler2D g_normal_rough;
 layout (set = 0, binding = 2) uniform sampler2D g_albedo_spec;
 layout (set = 0, binding = 3) uniform sampler2D g_emission;
 layout (set = 0, binding = 4) uniform sampler2D depth_texture;
+layout (set = 0, binding = 5) uniform sampler2D ssao_blur;
 
 #include "../core/math.glsl"
 #include "../core/brdf.glsl"
@@ -39,6 +40,7 @@ void main()
     float reflectance = albedo_spec.a;
     
     vec3 emission = texture(g_emission, in_uv).rgb;
+    float ao = texture(ssao_blur, in_uv).r;
 
     vec3 light_dir = normalize(-scene_data.sunlight_direction.xyz);
     vec3 view_dir = normalize(scene_data.camera_position - position);
@@ -46,7 +48,9 @@ void main()
     float light_intensity = scene_data.sunlight_direction.w;
     float irradiance = max(dot(light_dir, normal), 0.0) * light_intensity;
 
-    vec3 radiance = rgb2lin(emission);
+    vec3 ambient = base_color * 0.25 * ao;
+
+    vec3 radiance = rgb2lin(emission) + ambient;
     if (irradiance > 0.0)
     {
         vec3 brdf = brdfMicrofacet(light_dir, view_dir, normal, metallic, roughness, base_color, reflectance);

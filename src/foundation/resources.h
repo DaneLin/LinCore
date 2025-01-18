@@ -224,8 +224,8 @@ namespace lincore
 		bool immediate_creation = false;
 
 		BufferCreation& Reset();
-		BufferCreation& Set(VkBufferUsageFlags flags, ResourceUsageType::Enum usage, uint32_t size);
-		BufferCreation& SetData(void* data);
+		BufferCreation& Set(VkBufferUsageFlags flags, ResourceUsageType::Enum usage);
+		BufferCreation& SetData(void* data, uint32_t size);
 		BufferCreation& SetName(const char* name);
 		BufferCreation& SetPersistent();
 		BufferCreation& SetDeviceOnly();
@@ -237,6 +237,7 @@ namespace lincore
 	struct TextureCreation
 	{
 		void* initial_data = nullptr;
+		uint32_t initial_data_size = 0;
 		uint16_t width = 1;
 		uint16_t height = 1;
 		uint16_t depth = 1;
@@ -266,7 +267,7 @@ namespace lincore
 		TextureCreation& SetFormat(VkFormat format);
 		TextureCreation& SetFormatType(VkFormat format, TextureType::Enum type);
 		TextureCreation& SetName(const char* name);
-		TextureCreation& SetData(void* data);
+		TextureCreation& SetData(void* data, uint32_t size);
 		TextureCreation& SetAlias(TextureHandle alias);
 		TextureCreation& SetQueueType(QueueType::Enum queue_type);
 		TextureCreation& SetQueueFamily(uint32_t queue_family);

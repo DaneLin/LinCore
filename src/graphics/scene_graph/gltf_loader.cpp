@@ -11,14 +11,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 // Add this with other GLM includes
-#include <glm/gtc/type_ptr.hpp> 
+#include <glm/gtc/type_ptr.hpp>
 // lincore
 #include "graphics/scene_graph/scene_types.h"
 #include "foundation/resources.h"
 #include "foundation/logging.h"
 #include "graphics/backend/vk_device.h"
 #include "graphics/scene_graph/scene_node.h"
-
 
 namespace lincore::scene
 {
@@ -76,7 +75,7 @@ namespace lincore::scene
             if (!node->GetParent())
             {
                 root_nodes_.push_back(node);
-                node->RefreshTransform(glm::mat4{ 1.f });
+                node->RefreshTransform(glm::mat4{1.f});
             }
         }
     }
@@ -153,7 +152,7 @@ namespace lincore::scene
 
     std::shared_ptr<LoadedGLTF> GLTFLoader::LoadGLTF(GpuDevice *device, const std::string &path, const LoadConfig &config)
     {
-		LOGI("Loading GLTF file: {}", path);
+        LOGI("Loading GLTF file: {}", path);
         // 创建解析器
         fastgltf::Parser parser;
         auto data = fastgltf::GltfDataBuffer::FromPath(std::filesystem::path(path));
@@ -223,7 +222,7 @@ namespace lincore::scene
             LOGW("Failed to load nodes");
         }
 
-		LOGI("GLTF file loaded: {}", path);
+        LOGI("GLTF file loaded: {}", path);
         return ctx.output;
     }
 
@@ -322,15 +321,13 @@ namespace lincore::scene
 
         BufferCreation buffer_info{};
         buffer_info.Reset()
-            .Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                 ResourceUsageType::Immutable,
-                 static_cast<uint32_t>(sizeof(MaterialInstance) * ctx.asset.materials.size()))
+            .Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable)
+            .SetData(nullptr, static_cast<uint32_t>(sizeof(MaterialInstance) * ctx.asset.materials.size()))
             .SetPersistent();
-        buffer_info.initial_data = nullptr;
         ctx.material_data_buffer_handle = ctx.device->CreateResource(buffer_info);
 
         Buffer *material_data_buffer = ctx.device->GetResource<Buffer>(ctx.material_data_buffer_handle.index);
-        MaterialInstance *material_data = static_cast<MaterialInstance*>(material_data_buffer->mapped_data);
+        MaterialInstance *material_data = static_cast<MaterialInstance *>(material_data_buffer->mapped_data);
 
         for (size_t i = 0; i < ctx.asset.materials.size(); i++)
         {
@@ -361,7 +358,7 @@ namespace lincore::scene
                 gltf_mat.emissiveFactor[2]);
 
             // Alpha裁剪
-            //material->alpha_cutoff = gltf_mat.alphaCutoff;
+            // material->alpha_cutoff = gltf_mat.alphaCutoff;
 
             // 材质标志, 默认不透明
             uint32_t flags = 0;
@@ -380,7 +377,7 @@ namespace lincore::scene
             {
                 flags |= MATERIAL_FLAG_ALPHA_TEST;
             }
-            //material->parameters.material_flags = flags;
+            // material->parameters.material_flags = flags;
 
             TextureHandle &dummy_texture_handle = ctx.device->default_resources_.images.black_image;
             SamplerHandle &dummy_sampler = ctx.device->default_resources_.samplers.linear;
@@ -540,7 +537,7 @@ namespace lincore::scene
         creation.SetSize(width, height, 1, true)
             .SetFormat(VK_FORMAT_R8G8B8A8_UNORM)
             .SetFlags(TextureFlags::Default_mask)
-            .SetData(pixels)
+            .SetData(pixels, width * height * 4)
             .SetName(name.c_str());
 
         TextureHandle texture = ctx.device->CreateResource(creation);
@@ -770,9 +767,9 @@ namespace lincore::scene
                     [&](const fastgltf::TRS &trs)
                     {
                         // 直接设置Transform组件
-                        transform.position = glm::vec3(trs.translation[0],trs.translation[1],trs.translation[2]);
-                        transform.rotation = glm::quat(trs.rotation[3], trs.rotation[0],trs.rotation[1], trs.rotation[2]);
-                        transform.scale = glm::vec3(trs.scale[0],trs.scale[1],trs.scale[2]);
+                        transform.position = glm::vec3(trs.translation[0], trs.translation[1], trs.translation[2]);
+                        transform.rotation = glm::quat(trs.rotation[3], trs.rotation[0], trs.rotation[1], trs.rotation[2]);
+                        transform.scale = glm::vec3(trs.scale[0], trs.scale[1], trs.scale[2]);
                     },
                     [&](const fastgltf::math::fmat4x4 &matrix)
                     {
@@ -795,10 +792,10 @@ namespace lincore::scene
 
         // 建立节点层级
         for (size_t i = 0; i < ctx.asset.nodes.size(); i++)
-        {                         
+        {
             const auto &gltf_node = ctx.asset.nodes[i];
             auto node = ctx.node_cache[i];
-            
+
             for (auto child_idx : gltf_node.children)
             {
                 node->AddChild(ctx.node_cache[child_idx]);

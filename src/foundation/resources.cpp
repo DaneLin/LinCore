@@ -1,5 +1,6 @@
 #include "foundation/resources.h"
 #include "graphics/backend/vk_device.h"
+#include "resources.h"
 
 namespace lincore
 {
@@ -127,18 +128,18 @@ namespace lincore
 		return *this;
 	}
 
-	BufferCreation &BufferCreation::Set(VkBufferUsageFlags flags, ResourceUsageType::Enum usage, uint32_t size)
+	BufferCreation &BufferCreation::Set(VkBufferUsageFlags flags, ResourceUsageType::Enum usage)
 	{
 		type_flags = flags;
 		this->usage = usage;
-		this->size = size;
 
 		return *this;
 	}
 
-	BufferCreation &BufferCreation::SetData(void *data)
+	BufferCreation &BufferCreation::SetData(void *data, uint32_t size)
 	{
 		initial_data = data;
+		this->size = size;
 
 		return *this;
 	}
@@ -2059,7 +2060,6 @@ namespace lincore
 		this->width = width;
 		this->height = height;
 		this->depth = depth;
-
 		if (generate_mipmaps)
 		{
 			this->mip_level_count = static_cast<uint8_t>(std::floor(std::log2(std::max(width, height)))) + 1;
@@ -2105,14 +2105,15 @@ namespace lincore
 		return *this;
 	}
 
-	TextureCreation &TextureCreation::SetData(void *data)
+	TextureCreation &TextureCreation::SetData(void *data, uint32_t size)
 	{
 		this->initial_data = data;
+		this->initial_data_size = size;
 		return *this;
 	}
 
-	TextureCreation &TextureCreation::SetAlias(TextureHandle alias)
-	{
+    TextureCreation &TextureCreation::SetAlias(TextureHandle alias)
+    {
 		this->alias = alias;
 		return *this;
 	}

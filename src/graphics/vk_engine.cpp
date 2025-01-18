@@ -3,6 +3,8 @@
 // std
 #include <chrono>
 #include <thread>
+#include <random>
+
 // external
 #include <SDL.h>
 #include <SDL_vulkan.h>
@@ -16,6 +18,7 @@
 // lincore
 #include "foundation/cvars.h"
 #include "foundation/logging.h"
+#include "foundation/math_utils.h"
 #include "graphics/backend/vk_initializers.h"
 #include "graphics/scene_graph/scene_types.h"
 #include "graphics/backend/vk_pipelines.h"
@@ -91,6 +94,9 @@ namespace lincore
 			mesh_pass_.Shutdown();
 			gbuffer_pass_.Shutdown();
 			light_pass_.Shutdown();
+			ssao_pass_.Shutdown();
+			blur_pass_.Shutdown();
+
 
 			scene_graph_.reset();
 			imgui_layer_.Shutdown();
@@ -143,6 +149,11 @@ namespace lincore
 
 			// mesh_pass_.Execute(cmd, &current_frame_data);
 			gbuffer_pass_.Execute(cmd, &current_frame_data);
+
+			ssao_pass_.Execute(cmd, &current_frame_data);
+
+			blur_pass_.Execute(cmd, &current_frame_data);
+
 			light_pass_.Execute(cmd, &current_frame_data);
 		}
 
@@ -436,9 +447,74 @@ namespace lincore
 		Texture *gbuffer_emission_texture = gpu_device_.GetResource<Texture>(gbuffer_emission_handle_.index);
 		gbuffer_emission_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
 
-		Texture *depth_image = gpu_device_.GetResource<Texture>(gpu_device_.depth_image_handle_.index);
-		depth_image->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+		// [SSAO]
+		{
+			std::default_random_engine rnd_engine((unsigned int)time(nullptr));
+			std::uniform_real_distribution<float> rnd_dist(0.0f, 1.0f);
+
+			// Sample kernel
+			std::vector<glm::vec4> ssao_kernel(kMAX_KERNEL_SIZE);
+			for (uint32_t i = 0; i < kMAX_KERNEL_SIZE; ++i)
+			{
+				glm::vec3 sample(rnd_dist(rnd_engine) * 2.0f - 1.0f, rnd_dist(rnd_engine) * 2.0f - 1.0f, rnd_dist(rnd_engine));
+				sample = glm::normalize(sample);
+				sample *= rnd_dist(rnd_engine);
+				float scale = float(i) / float(kMAX_KERNEL_SIZE);
+				scale = math_utils::Lerp(0.1f, 1.0f, scale * scale);
+				ssao_kernel[i] = glm::vec4(sample * scale, 0.0f);
+			}
+
+			BufferCreation buffer_creation{};
+			buffer_creation.Reset()
+				.SetName("ssao_kernel")
+				.SetData(ssao_kernel.data(), kMAX_KERNEL_SIZE * sizeof(glm::vec4))
+				.Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, ResourceUsageType::Immutable)
+				.SetDeviceOnly();
+			ssao_kernel_buffer_handle_ = gpu_device_.CreateResource(buffer_creation);
+
+			// Random noise
+			std::vector<glm::vec4> noise_value(kSSAO_NOISE_DIM * kSSAO_NOISE_DIM);
+			for (uint32_t i = 0; i < kSSAO_NOISE_DIM * kSSAO_NOISE_DIM; i++)
+			{
+				noise_value[i] = glm::vec4(rnd_dist(rnd_engine) * 2.0f - 1.0f, rnd_dist(rnd_engine) * 2.0f - 1.0f, 0.0f, 0.0f);
+			}
+
+			TextureCreation noise_creation{};
+			noise_creation.SetName("ssao_noise")
+				.SetSize(kSSAO_NOISE_DIM, kSSAO_NOISE_DIM, 1, false)
+				.SetFormatType(VK_FORMAT_R32G32B32A32_SFLOAT, TextureType::Enum::Texture2D)
+				.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask)
+				.SetData(noise_value.data(), kSSAO_NOISE_DIM * kSSAO_NOISE_DIM * sizeof(glm::vec4));
+			ssao_noise_handle_ = gpu_device_.CreateResource(noise_creation);
+
+			Texture *ssao_noise_texture = gpu_device_.GetResource<Texture>(ssao_noise_handle_.index);
+			ssao_noise_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+			TextureCreation ssao_creation{};
+			ssao_creation.SetName("ssao_color")
+				.SetSize(window_extent_.width, window_extent_.height, 1, false)
+				.SetFormatType(VK_FORMAT_R8_UNORM, TextureType::Enum::Texture2D)
+				.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask)
+				.SetData(nullptr, window_extent_.width * window_extent_.height * sizeof(glm::vec4));
+			ssao_color_handle_ = gpu_device_.CreateResource(ssao_creation);
+
+			Texture *ssao_color_texture = gpu_device_.GetResource<Texture>(ssao_color_handle_.index);
+			ssao_color_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+
+
+			TextureCreation ssao_blur_creation{};
+			ssao_blur_creation.SetName("ssao_blur")
+				.SetSize(window_extent_.width, window_extent_.height, 1, false)
+				.SetFormatType(VK_FORMAT_R8_UNORM, TextureType::Enum::Texture2D)
+				.SetFlags(TextureFlags::Default_mask | TextureFlags::RenderTarget_mask)
+				.SetData(nullptr, window_extent_.width * window_extent_.height * sizeof(glm::vec4));
+			ssao_blur_handle_ = gpu_device_.CreateResource(ssao_blur_creation);
+
+			Texture *ssao_blur_texture = gpu_device_.GetResource<Texture>(ssao_blur_handle_.index);
+			ssao_blur_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+		}
 	}
+
 	void VulkanEngine::InitPasses()
 	{
 		sky_background_pass_.Init(&gpu_device_)
@@ -479,13 +555,31 @@ namespace lincore
 							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
 			.Finalize();
 
+		ssao_pass_.Init(&gpu_device_)
+			.SetPassName("ssao_pass")
+			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"g_normal", gbuffer_normal_rough_handle_.index},
+						 {"g_depth", gpu_device_.depth_image_handle_.index},
+						 {"ssao_noise", ssao_noise_handle_.index},
+						 {"ssao_kernel_buffer", ssao_kernel_buffer_handle_.index}})
+			.BindRenderTargets({{"ssao_color", ssao_color_handle_.index}})
+			.Finalize();
+
+		blur_pass_.Init(&gpu_device_)
+			.SetPassName("blur_pass")
+			.BindInputs({{"ao_texture", ssao_color_handle_.index}})
+			.BindRenderTargets({{"ssao_blur", ssao_blur_handle_.index}})
+			.Finalize();
+
+			
 		light_pass_.Init(&gpu_device_)
 			.SetPassName("light_pass")
 			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
 						 {"g_normal_rough", gbuffer_normal_rough_handle_.index},
 						 {"g_albedo_spec", gbuffer_albedo_spec_handle_.index},
 						 {"g_emission", gbuffer_emission_handle_.index},
-						 {"depth_texture", gpu_device_.depth_image_handle_.index}})
+						 {"depth_texture", gpu_device_.depth_image_handle_.index},
+						 {"ssao_blur", ssao_blur_handle_.index}})
 			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}})
 			.Finalize();
 	}

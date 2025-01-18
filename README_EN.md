@@ -12,7 +12,7 @@ A Vulkan code experimentation platform based on the vkguide tutorial, leveraging
 - [x] Microfacet BRDF (Cook-Torrance)
 - [x] GPU Driven Rendering
 - [x] Deferred Rendering
-
+- [x] SSAO (Screen Space Ambient Occlusion)
 # To-Do Features
 - [ ] Async Compute
 - [ ] IBL
