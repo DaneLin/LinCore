@@ -74,10 +74,13 @@ namespace lincore
 
         VkClearValue clear_values;
         clear_values.color = {0.0f, 0.0f, 0.0f, 1.0f};
+        VkClearValue depth_clear_values;
+        depth_clear_values.depthStencil = {1.0f, 0};
         std::vector<VkRenderingAttachmentInfo> color_attachments = gpu_device_->CreateRenderingAttachmentsColor(color_targets_, &clear_values);
         VkRenderingAttachmentInfo depth_attachment = vkinit::DepthAttachmentInfo(
             depth_texture->vk_image_view,
-            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            &depth_clear_values);
 
         VkRenderingInfo render_info = vkinit::RenderingInfo(gpu_device_->draw_extent_, color_attachments, &depth_attachment);
         cmd->BeginRendering(render_info);

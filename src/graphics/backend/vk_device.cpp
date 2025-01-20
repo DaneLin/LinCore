@@ -9,6 +9,7 @@
 #include <volk/volk.h>
 #include <SDL.h>
 #include <glm/packing.hpp>
+#include <stb_image.h>
 // lincore
 #include "foundation/logging.h"
 #include "graphics/backend/vk_pipelines.h"
@@ -486,6 +487,73 @@ namespace lincore
 		vkCmdCopyBuffer(cmd->GetVkCommandBuffer(), src->vk_buffer, dst->vk_buffer, 1, &copy_region);
 
 		cmd->AddBufferBarrier(dst, ResourceState::RESOURCE_STATE_UNORDERED_ACCESS);
+	}
+
+	bool GpuDevice::CreateTextureFromPaths(const std::vector<std::string> &paths, TextureHandle &out_texture_handle, const std::string& name, TextureType::Enum type)
+	{
+		if (paths.empty()) {
+			LOGE("No paths provided for texture creation");
+			return false;
+		}
+
+		// 首先加载第一张图片来获取尺寸信息
+		int width = 0, height = 0, channels = 0;
+		stbi_uc* pixels = stbi_load(paths[0].c_str(), &width, &height, &channels, STBI_rgb_alpha);
+		if (!pixels) {
+			LOGE("Failed to load first image from path: {}", paths[0]);
+			return false;
+		}
+
+
+		// 计算所有图片数据的总大小
+		size_t image_size = width * height * 4;
+		size_t total_size = image_size * paths.size();
+		std::vector<stbi_uc> total_data(total_size);
+		
+		// 复制第一张图片的数据
+		memcpy(total_data.data(), pixels, image_size);
+		stbi_image_free(pixels);
+
+		// 加载并拼接其余图片
+		for (size_t i = 1; i < paths.size(); i++) {
+			int curr_width = 0, curr_height = 0, curr_channels = 0;
+			pixels = stbi_load(paths[i].c_str(), &curr_width, &curr_height, &curr_channels, STBI_rgb_alpha);
+			
+			if (!pixels) {
+				LOGE("Failed to load image from path: {}", paths[i]);
+				return false;
+			}
+
+			// 检查尺寸是否一致
+			if (curr_width != width || curr_height != height) {
+				LOGE("Image dimensions mismatch. Expected {}x{}, got {}x{} for {}", 
+					width, height, curr_width, curr_height, paths[i]);
+				stbi_image_free(pixels);
+				return false;
+			}
+
+			// 复制当前图片数据到总数据中
+			memcpy(total_data.data() + i * image_size, pixels, image_size);
+			stbi_image_free(pixels);
+		}
+
+		// 创建纹理
+		TextureCreation creation;
+		creation.SetSize(width, height, 1, false)
+			.SetLayers(paths.size())
+			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, type)
+			.SetFlags(TextureFlags::Default_mask)
+			.SetData(total_data.data(), total_size)
+			.SetName(name.c_str());
+
+		TextureHandle texture = CreateResource(creation);
+		if (!texture.IsValid()) {
+			LOGE("Failed to create texture from images: {}", name);
+			return false;
+		}
+
+		out_texture_handle = texture;
+		return true;
 	}
 
 	ShaderEffect *GpuDevice::CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string &name)

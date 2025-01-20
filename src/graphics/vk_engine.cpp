@@ -96,7 +96,7 @@ namespace lincore
 			light_pass_.Shutdown();
 			ssao_pass_.Shutdown();
 			blur_pass_.Shutdown();
-
+			sky_box_pass_.Shutdown();
 
 			scene_graph_.reset();
 			imgui_layer_.Shutdown();
@@ -155,6 +155,7 @@ namespace lincore
 			blur_pass_.Execute(cmd, &current_frame_data);
 
 			light_pass_.Execute(cmd, &current_frame_data);
+			sky_box_pass_.Execute(cmd, &current_frame_data);
 		}
 
 		{
@@ -501,7 +502,6 @@ namespace lincore
 			Texture *ssao_color_texture = gpu_device_.GetResource<Texture>(ssao_color_handle_.index);
 			ssao_color_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
 
-
 			TextureCreation ssao_blur_creation{};
 			ssao_blur_creation.SetName("ssao_blur")
 				.SetSize(window_extent_.width, window_extent_.height, 1, false)
@@ -512,6 +512,21 @@ namespace lincore
 
 			Texture *ssao_blur_texture = gpu_device_.GetResource<Texture>(ssao_blur_handle_.index);
 			ssao_blur_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
+		}
+
+		// cubemap
+		{
+			std::vector<std::string> paths = {
+				GetAssetPath("assets/skybox/right.jpg"),
+				GetAssetPath("assets/skybox/left.jpg"),
+				GetAssetPath("assets/skybox/top.jpg"),
+				GetAssetPath("assets/skybox/bottom.jpg"),
+				GetAssetPath("assets/skybox/front.jpg"),
+				GetAssetPath("assets/skybox/back.jpg")};
+			gpu_device_.CreateTextureFromPaths(paths, cubemap_handle_, "cubemap", TextureType::Enum::TextureCube);
+
+			Texture *cubemap_texture = gpu_device_.GetResource<Texture>(cubemap_handle_.index);
+			cubemap_texture->sampler = gpu_device_.GetResource<Sampler>(gpu_device_.default_resources_.samplers.linear.index);
 		}
 	}
 
@@ -571,7 +586,6 @@ namespace lincore
 			.BindRenderTargets({{"ssao_blur", ssao_blur_handle_.index}})
 			.Finalize();
 
-			
 		light_pass_.Init(&gpu_device_)
 			.SetPassName("light_pass")
 			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
@@ -581,6 +595,14 @@ namespace lincore
 						 {"depth_texture", gpu_device_.depth_image_handle_.index},
 						 {"ssao_blur", ssao_blur_handle_.index}})
 			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}})
+			.Finalize();
+
+		sky_box_pass_.Init(&gpu_device_)
+			.SetPassName("sky_box_pass")
+			.BindInputs({{"scene_data", gpu_device_.global_scene_data_buffer_.index},
+						 {"skybox", cubemap_handle_.index}})
+			.BindRenderTargets({{"color_attachment", gpu_device_.draw_image_handle_}},
+							   {{"depth_attachment", gpu_device_.depth_image_handle_}})
 			.Finalize();
 	}
 }

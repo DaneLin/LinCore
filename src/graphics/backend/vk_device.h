@@ -299,6 +299,7 @@ namespace lincore
 
 		// resource management
 		void CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle);
+		bool CreateTextureFromPaths(const std::vector<std::string> &paths, TextureHandle &out_texture_handle, const std::string& name, TextureType::Enum type = TextureType::Texture2D);
 
 		ShaderEffect *CreateShaderEffect(std::initializer_list<std::string> file_names, const std::string &name = "");
 

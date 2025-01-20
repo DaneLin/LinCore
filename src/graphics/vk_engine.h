@@ -21,7 +21,7 @@
 #include "graphics/render_pass/passes/light_pass.h"
 #include "graphics/render_pass/passes/ssao_pass.h"
 #include "graphics/render_pass/passes/blur_pass.h"
-
+#include "graphics/render_pass/passes/sky_box_pass.h"
 namespace lincore
 {
 	// forward declarations
@@ -69,6 +69,7 @@ namespace lincore
 		LightPass light_pass_;
 		SSAOPass ssao_pass_;
 		BlurPass blur_pass_;
+		SkyBoxPass sky_box_pass_;
 
 		// gbuffer
 		TextureHandle gbuffer_normal_rough_handle_;
@@ -80,6 +81,9 @@ namespace lincore
 		TextureHandle ssao_noise_handle_;
 		TextureHandle ssao_color_handle_;
 		TextureHandle ssao_blur_handle_;
+
+		// cubemap
+		TextureHandle cubemap_handle_;
 
 		ImGuiLayer imgui_layer_;
 		GpuDevice gpu_device_;

@@ -1,4 +1,8 @@
 #include "graphics/backend/vk_resources.h"
+
+// third party
+
+// lincore
 #include "graphics/backend/vk_device.h"
 
 namespace lincore
@@ -77,6 +81,7 @@ namespace lincore
 		if (creation.type == TextureType::TextureCube || creation.type == TextureType::Texture_Cube_Array)
 		{
 			is_cubemap = true;
+			layer_count = 6;
 		}
 
 		const bool is_sparse_texture = (creation.flags & TextureFlags::Sparse_mask) == TextureFlags::Sparse_mask;
@@ -593,7 +598,7 @@ namespace lincore
 				[this, texture, staging_buffer](CommandBuffer *cmd)
 				{
 					// Copy staging buffer to texture
-					cmd->AddImageBarrier(texture, RESOURCE_STATE_COPY_DEST, texture->mip_base_level, texture->mip_level_count);
+					cmd->AddImageBarrier(texture, RESOURCE_STATE_COPY_DEST, texture->mip_base_level, texture->mip_level_count, texture->array_base_layer, texture->array_layer_count);
 
 					VkBufferImageCopy copy_region = {};
 					copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -722,7 +727,7 @@ namespace lincore
 							1, &barrier);
 					}
 					else {
-						cmd->AddImageBarrier(texture, RESOURCE_STATE_SHADER_RESOURCE, texture->mip_base_level, texture->mip_level_count);
+						cmd->AddImageBarrier(texture, RESOURCE_STATE_SHADER_RESOURCE, texture->mip_base_level, texture->mip_level_count, texture->array_base_layer, texture->array_layer_count);
 					} }, submit_queue);
 			// Destroy staging buffer
 			DestroyBuffer(staging_buffer);

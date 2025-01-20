@@ -15,10 +15,14 @@
 - [x] GPU Driven Rendering
 - [x] 延迟渲染 
 - [x] 屏幕空间环境光遮蔽
+- [x] 天空盒
 # 待实现特性
 - [ ] 异步计算
 - [ ] IBL 
 - [ ] 阴影映射
+
+# 运行截图
+![alt text](image.png)
 
 # 参考
 &emsp;&emsp;以下是本项目参考的教程、博客和代码库。
