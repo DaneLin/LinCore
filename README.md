@@ -1,6 +1,6 @@
 # LinCore
 
-[English](README_EN.md) | [中文](README_CN.md)
+[English](README_EN.md) | [中文](README.md)
 
 &emsp;&emsp;一个基于vkguide教程代码框架的Vulkan代码实验平台，使用Vulkan1.3的新特性，并且将会基于《Mastering Graphics Programming with Vulkan》一书进一步拓展该引擎，并实现更多图形学算法。
 
