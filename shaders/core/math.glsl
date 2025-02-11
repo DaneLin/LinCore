@@ -1,3 +1,6 @@
+#ifndef MATH_GLSL
+#define MATH_GLSL
+
 // math head for GLSL
 vec3 rgb2lin(vec3 rgb) { // sRGB to linear approximation
   return pow(rgb, vec3(2.2));
@@ -49,10 +52,4 @@ vec3 DecodeNormal(vec2 encoded) {
     return normalize(n);
 }
 
-vec3 ReconstructWorldPosition(float depth, vec2 uv) {
-    vec4 clipSpacePosition = vec4(uv * 2.0 - 1.0, depth, 1.0);
-    vec4 viewSpacePosition = inverse(scene_data.proj) * clipSpacePosition;
-    viewSpacePosition /= viewSpacePosition.w;
-    vec4 worldSpacePosition = inverse(scene_data.view) * viewSpacePosition;
-    return worldSpacePosition.xyz;
-}
+#endif // MATH_GLSL

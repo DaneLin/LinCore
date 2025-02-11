@@ -1,3 +1,7 @@
+#ifndef BRDF_GLSL
+#define BRDF_GLSL
+
+#include "math.glsl"
 // microfacet brdf
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
@@ -69,3 +73,5 @@ vec3 brdfMicrofacet(in vec3 L, in vec3 V, in vec3 N, in float metallic, in float
   return diff + spec;
  
 }
+
+#endif

@@ -22,30 +22,32 @@ namespace lincore::scene
         glm::vec4 color_intensity;     // rgb: 颜色, a: 强度
         glm::vec4 position_range;      // xyz: 位置/方向, w: 范围/未使用(平行光)
         glm::vec4 direction_angles;    // xyz: 方向(聚光灯)/面光源尺寸(xy)+pad, w: 内角外角(聚光灯,xy分量)
-        uint32_t type_enabled;         // x: 类型, y: 是否启用
+        glm::vec4 attenuation;         // xyz: 常数项/线性项/二次项, w: 类型(低30位)和启用标志(最高位)
 
         // 构造函数
         LightData() : 
             color_intensity(1.0f, 1.0f, 1.0f, 1.0f),
             position_range(0.0f, 0.0f, 0.0f, 10.0f),
             direction_angles(0.0f, -1.0f, 0.0f, 0.0f),
-            type_enabled(static_cast<uint32_t>(LightType::Point) | (1u << 31)) {}
+            attenuation(1.0f, 0.09f, 0.032f, BitwiseFloat(static_cast<uint32_t>(LightType::Point) | (1u << 31))) {}
 
         // 辅助函数
         void SetType(LightType t) { 
-            type_enabled = (type_enabled & 0x80000000u) | static_cast<uint32_t>(t);
+            uint32_t current = FloatBitwise(attenuation.w);
+            attenuation.w = BitwiseFloat((current & 0x80000000u) | static_cast<uint32_t>(t));
         }
         
         void SetEnabled(bool enabled) {
-            type_enabled = (type_enabled & 0x7FFFFFFFu) | (enabled ? 0x80000000u : 0u);
+            uint32_t current = FloatBitwise(attenuation.w);
+            attenuation.w = BitwiseFloat((current & 0x7FFFFFFFu) | (enabled ? 0x80000000u : 0u));
         }
         
         LightType GetType() const { 
-            return static_cast<LightType>(type_enabled & 0x7FFFFFFFu);
+            return static_cast<LightType>(FloatBitwise(attenuation.w) & 0x7FFFFFFFu);
         }
         
         bool IsEnabled() const { 
-            return (type_enabled & 0x80000000u) != 0;
+            return (FloatBitwise(attenuation.w) & 0x80000000u) != 0;
         }
 
         // 设置颜色和强度
@@ -73,6 +75,11 @@ namespace lincore::scene
             direction_angles.y = size.y;
         }
 
+        // 设置衰减参数
+        void SetAttenuation(float constant, float linear, float quadratic) {
+            attenuation = glm::vec4(constant, linear, quadratic, 0.0f);
+        }
+
         // 获取参数
         glm::vec3 GetColor() const { return glm::vec3(color_intensity); }
         float GetIntensity() const { return color_intensity.w; }
@@ -88,6 +95,21 @@ namespace lincore::scene
         }
         glm::vec2 GetAreaSize() const { 
             return glm::vec2(direction_angles.x, direction_angles.y);
+        }
+
+        // 获取衰减参数
+        glm::vec3 GetAttenuation() const {
+            return glm::vec3(attenuation);
+        }
+
+    private:
+        // 辅助函数：在float和uint32_t之间安全转换
+        static float BitwiseFloat(uint32_t v) {
+            return *reinterpret_cast<float*>(&v);
+        }
+        
+        static uint32_t FloatBitwise(float v) {
+            return *reinterpret_cast<const uint32_t*>(&v);
         }
     };
 

@@ -1,4 +1,6 @@
-// mesh_structures.glsl
+#ifndef MESH_STRUCTURES_GLSL
+#define MESH_STRUCTURES_GLSL
+
 layout(std140, set = 0, binding = 0) uniform SceneData {
     mat4 view;
     mat4 proj;  
@@ -72,3 +74,5 @@ layout(set = 0, binding = 4) readonly buffer MaterialDataBuffer {
 
 // bindless texture
 layout(set = 1, binding = 0) uniform sampler2D textures[];
+
+#endif // MESH_STRUCTURES_GLSL

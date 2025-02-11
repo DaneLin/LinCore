@@ -35,7 +35,7 @@ namespace lincore::scene
         std::vector<uint32_t> result;
         for (size_t i = 0; i < lights_.size(); ++i)
         {
-            if (lights_[i].type == type && lights_[i].enabled)
+            if (lights_[i].GetType() == type && lights_[i].IsEnabled())
             {
                 result.push_back(static_cast<uint32_t>(i));
             }
@@ -51,6 +51,6 @@ namespace lincore::scene
     size_t LightSystem::GetEnabledLightCount() const
     {
         return std::count_if(lights_.begin(), lights_.end(),
-            [](const LightData& light) { return light.enabled != 0; });
+            [](const LightData& light) { return light.IsEnabled(); });
     }
 } 
