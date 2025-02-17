@@ -585,7 +585,7 @@ namespace lincore
 			BufferCreation staging_buffer_creation{};
 			staging_buffer_creation.Reset()
 				.SetName("Texture upload staging buffer")
-				.Set(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, ResourceUsageType::Immutable)
+				.SetUsage(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, ResourceUsageType::Immutable)
 				.SetData(creation.initial_data, creation.initial_data_size)
 				.SetPersistent();
 

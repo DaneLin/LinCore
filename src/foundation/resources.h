@@ -224,7 +224,7 @@ namespace lincore
 		bool immediate_creation = false;
 
 		BufferCreation& Reset();
-		BufferCreation& Set(VkBufferUsageFlags flags, ResourceUsageType::Enum usage);
+		BufferCreation& SetUsage(VkBufferUsageFlags flags, ResourceUsageType::Enum usage);
 		BufferCreation& SetData(void* data, uint32_t size);
 		BufferCreation& SetName(const char* name);
 		BufferCreation& SetPersistent();

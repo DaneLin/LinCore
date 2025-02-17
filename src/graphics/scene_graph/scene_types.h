@@ -142,6 +142,15 @@ namespace lincore
             Bounds bounds;                              // 局部空间包围盒
         };
 
+        struct Meshlet
+        {
+            glm::vec4 cone;
+            uint32_t vertices[64];
+            uint8_t indices[126 * 3];
+            uint8_t triangleCount;
+            uint8_t vertexCount;
+        };
+
         /**
          * @brief 网格资产
          * 包含完整的网格数据和GPU资源

@@ -30,6 +30,8 @@ namespace lincore
             size_t vertex_capacity{0};
             size_t index_capacity{0};
 
+            BufferHandle meshlet_buffer;
+
             // 实例数据缓冲区
             BufferHandle instance_data_buffer; // 存储全部 ObjectData
             size_t instance_capacity{0};
@@ -112,7 +114,9 @@ namespace lincore
             // 获取GPU资源
             GPUResourcePool &GetGPUResourcePool() { return gpu_resources_; }
 
-            void ReadyCullingData(CommandBuffer *cmd);
+            void BuildMeshlet();
+            void BuildMeshletCones();
+            void UploadMeshlet();
 
         private:
             // GPU资源
@@ -140,6 +144,8 @@ namespace lincore
                 std::vector<uint32_t> indices;
                 size_t total_vertex_size{0};
                 size_t total_index_size{0};
+
+                std::vector<Meshlet> meshlets;
 
                 // 实例数据
                 std::vector<ObjectData> instance_data; // 对象数据数组

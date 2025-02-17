@@ -469,7 +469,7 @@ namespace lincore
 			buffer_creation.Reset()
 				.SetName("ssao_kernel")
 				.SetData(ssao_kernel.data(), kMAX_KERNEL_SIZE * sizeof(glm::vec4))
-				.Set(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, ResourceUsageType::Immutable)
+				.SetUsage(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, ResourceUsageType::Immutable)
 				.SetDeviceOnly();
 			ssao_kernel_buffer_handle_ = gpu_device_.CreateResource(buffer_creation);
 

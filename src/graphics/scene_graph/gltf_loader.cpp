@@ -321,7 +321,7 @@ namespace lincore::scene
 
         BufferCreation buffer_info{};
         buffer_info.Reset()
-            .Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable)
+            .SetUsage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable)
             .SetData(nullptr, static_cast<uint32_t>(sizeof(MaterialInstance) * ctx.asset.materials.size()))
             .SetPersistent();
         ctx.material_data_buffer_handle = ctx.device->CreateResource(buffer_info);

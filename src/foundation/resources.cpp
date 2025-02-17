@@ -128,7 +128,7 @@ namespace lincore
 		return *this;
 	}
 
-	BufferCreation &BufferCreation::Set(VkBufferUsageFlags flags, ResourceUsageType::Enum usage)
+	BufferCreation &BufferCreation::SetUsage(VkBufferUsageFlags flags, ResourceUsageType::Enum usage)
 	{
 		type_flags = flags;
 		this->usage = usage;

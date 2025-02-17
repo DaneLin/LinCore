@@ -298,6 +298,7 @@ namespace lincore
 		Texture *GetSwapchainImage(uint32_t index) { return &swapchain_textures_[index]; }
 
 		// resource management
+		void UploadBuffer(BufferHandle staging_buffer, BufferHandle dst_buffer, const void *data, size_t size, size_t dst_offset = 0);
 		void CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle);
 		bool CreateTextureFromPaths(const std::vector<std::string> &paths, TextureHandle &out_texture_handle, const std::string& name, TextureType::Enum type = TextureType::Texture2D);
 

@@ -476,8 +476,13 @@ namespace lincore
 		}
 	}
 
-	void GpuDevice::CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle)
-	{
+    void GpuDevice::UploadBuffer(BufferHandle staging_buffer, BufferHandle dst_buffer, const void *data, size_t size, size_t dst_offset)
+    {
+		command_buffer_manager_.UploadBuffer(staging_buffer,dst_buffer, data, size, dst_offset);
+    }
+
+    void GpuDevice::CopyBuffer(CommandBuffer *cmd, BufferHandle &src_buffer_handle, BufferHandle &dst_buffer_handle)
+    {
 		Buffer *src = GetResource<Buffer>(src_buffer_handle.index);
 		Buffer *dst = GetResource<Buffer>(dst_buffer_handle.index);
 		VkBufferCopy copy_region{0};
@@ -540,10 +545,10 @@ namespace lincore
 		// 创建纹理
 		TextureCreation creation;
 		creation.SetSize(width, height, 1, false)
-			.SetLayers(paths.size())
+			.SetLayers(static_cast<uint32_t>(paths.size()))
 			.SetFormatType(VK_FORMAT_R8G8B8A8_UNORM, type)
 			.SetFlags(TextureFlags::Default_mask)
-			.SetData(total_data.data(), total_size)
+			.SetData(total_data.data(), static_cast<uint32_t>(total_size))
 			.SetName(name.c_str());
 
 		TextureHandle texture = CreateResource(creation);
@@ -860,7 +865,7 @@ namespace lincore
 
 		BufferCreation buffer_info{};
 		buffer_info.Reset()
-			.Set(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable)
+			.SetUsage(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, ResourceUsageType::Immutable)
 			.SetData(nullptr, sizeof(scene::GPUSceneData))
 			.SetPersistent();
 		global_scene_data_buffer_ = CreateResource(buffer_info);

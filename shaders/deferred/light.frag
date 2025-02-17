@@ -3,15 +3,6 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_nonuniform_qualifier : require
 
-layout(std140, set = 0, binding = 0) uniform SceneData {
-    mat4 view;
-    mat4 proj;  
-    mat4 viewproj;
-    vec4 sunlight_direction;
-    vec4 sunlight_color;
-    vec3 camera_position;
-    float padding;
-} scene_data;
 
 layout (set = 0, binding = 1) uniform sampler2D g_normal_rough;
 layout (set = 0, binding = 2) uniform sampler2D g_albedo_spec;
@@ -19,6 +10,7 @@ layout (set = 0, binding = 3) uniform sampler2D g_emission;
 layout (set = 0, binding = 4) uniform sampler2D depth_texture;
 layout (set = 0, binding = 5) uniform sampler2D ssao_blur;
 
+#include "../core/global.glsl"
 #include "../core/math.glsl"
 #include "../core/brdf.glsl"
 

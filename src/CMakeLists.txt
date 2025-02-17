@@ -9,7 +9,7 @@ target_compile_definitions(lincore PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE _CRT_SECUR
 target_include_directories(lincore PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_dependencies(lincore Shaders)
-target_link_libraries(lincore PUBLIC volk vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf spdlog::spdlog spirv_reflect enkiTS simdjson)
+target_link_libraries(lincore PUBLIC volk vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf spdlog::spdlog spirv_reflect enkiTS simdjson meshoptimizer)
 
 target_precompile_headers(lincore PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp>  <glm/vec4.hpp> <volk/volk.h>)
 
