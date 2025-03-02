@@ -279,12 +279,14 @@ namespace lincore
 		vkCmdBlitImage2(vk_command_buffer_, &blitInfo);
     }
 
-    void CommandBuffer::AddImageBarrier(Texture *texture, ResourceState new_state,
-							 uint32_t base_mip_level, uint32_t mip_count,
-							 uint32_t base_array_layer, uint32_t array_layer_count,
-							 uint32_t destination_family,
-							 QueueType::Enum destination_queue_type)
+    void CommandBuffer::AddImageBarrier(Texture *texture, ResourceState new_state,uint32_t destination_family,QueueType::Enum destination_queue_type)
     {
+		VkImageSubresourceRange subresource_range;
+		subresource_range.aspectMask = TextureFormat::HasDepthOrStencil(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+		subresource_range.baseArrayLayer = texture->array_base_layer;
+		subresource_range.layerCount = texture->array_layer_count;
+		subresource_range.baseMipLevel = texture->mip_base_level;
+		subresource_range.levelCount = texture->mip_level_count;
 		if (gpu_device_->enabled_features_.synchronization2_extension_present_)
 		{
 			VkImageMemoryBarrier2KHR barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2_KHR};
@@ -297,11 +299,7 @@ namespace lincore
 			barrier.srcQueueFamilyIndex = texture->queue_family;
 			barrier.dstQueueFamilyIndex = destination_family == VK_QUEUE_FAMILY_IGNORED ? texture->queue_family : destination_family;
 			barrier.image = texture->vk_image;
-			barrier.subresourceRange.aspectMask =  TextureFormat::HasDepthOrStencil(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.subresourceRange.baseArrayLayer = base_array_layer;
-			barrier.subresourceRange.layerCount = array_layer_count;
-			barrier.subresourceRange.baseMipLevel = base_mip_level;
-			barrier.subresourceRange.levelCount = mip_count;
+			barrier.subresourceRange = subresource_range;
 
 			VkDependencyInfoKHR dependency_info{VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR};
 			dependency_info.imageMemoryBarrierCount = 1;
@@ -315,12 +313,7 @@ namespace lincore
 			barrier.image = texture->vk_image;
 			barrier.srcQueueFamilyIndex = texture->queue_family;
 			barrier.dstQueueFamilyIndex = destination_family;
-			barrier.subresourceRange.aspectMask = TextureFormat::HasDepthOrStencil(texture->vk_format) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
-			barrier.subresourceRange.baseArrayLayer = base_array_layer;
-			barrier.subresourceRange.layerCount = array_layer_count;
-			barrier.subresourceRange.levelCount = mip_count;
-
-			barrier.subresourceRange.baseMipLevel = base_mip_level;
+			barrier.subresourceRange = subresource_range;
 			barrier.oldLayout = UtilToVkImageLayout(texture->state);
 			barrier.newLayout = UtilToVkImageLayout(new_state);
 			barrier.srcAccessMask = UtilToVkAccessFlags(texture->state);

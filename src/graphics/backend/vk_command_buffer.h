@@ -78,8 +78,6 @@ namespace lincore
 
 		// Image barrier methods
 		void AddImageBarrier(Texture *texture, ResourceState new_state,
-							 uint32_t base_mip_level = 0, uint32_t mip_count = 1,
-							 uint32_t base_array_layer = 0, uint32_t array_layer_count = 1,
 							 uint32_t destination_family = VK_QUEUE_FAMILY_IGNORED,
 							 QueueType::Enum destination_queue_type = QueueType::Graphics);
 

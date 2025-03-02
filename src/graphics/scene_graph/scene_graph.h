@@ -52,11 +52,6 @@ namespace lincore
 
             void Init(GpuDevice *device, const SceneConfig &config);
             void Shutdown(GpuDevice *device);
-            // 确保缓冲容量足够
-            void EnsureVertexCapacity(size_t size);
-            void EnsureIndexCapacity(size_t size);
-            void EnsureInstanceCapacity(size_t size);
-            void EnsureDrawCommandCapacity(size_t size);
         };
 
         class SceneGraph
@@ -82,13 +77,10 @@ namespace lincore
 
             // 资源管理
             void AddMesh(std::shared_ptr<MeshAsset> mesh);
-            void RemoveMesh(const std::string &name);
-            void RemoveMaterial(const std::string &name);
             uint32_t GetMaterialIndex(const MaterialInstance *material) const;
 
             // GLTF场景
             void AddGLTFScene(std::shared_ptr<LoadedGLTF> gltf);
-            void RemoveGLTFScene(const std::string &name);
 
             // 遍历和查询
             template <typename Filter, typename Func>

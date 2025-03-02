@@ -67,10 +67,7 @@ namespace lincore
 
         // 确保深度图像处于正确的布局
         Texture *depth_texture = gpu_device_->GetResource<Texture>(depth_target_.index);
-        cmd->AddImageBarrier(depth_texture,
-                             ResourceState::RESOURCE_STATE_DEPTH_WRITE,
-                             0, depth_texture->mip_level_count, // 转换所有mip级别
-                             0, depth_texture->array_layer_count);
+        cmd->AddImageBarrier(depth_texture, ResourceState::RESOURCE_STATE_DEPTH_WRITE);
 
         VkClearValue clear_values;
         clear_values.color = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -99,6 +96,7 @@ namespace lincore
             0,
             sizeof(scene::DrawCommand),
             frame->scene_gpu_data.draw_count);
+        // TODO: replaced with count
 
         cmd->EndRendering();
     }

@@ -141,10 +141,7 @@ namespace lincore
 				Texture *texture = gpu_device_->GetResource<Texture>(resource.handle);
 				if (texture->state != new_state)
 				{
-					cmd->AddImageBarrier(texture, new_state,
-										 texture->mip_base_level, texture->mip_level_count,
-										 texture->array_base_layer, texture->array_layer_count,
-										 texture->queue_family, queue_type_);
+					cmd->AddImageBarrier(texture, new_state,texture->queue_family, queue_type_);
 				}
 				shader_->BindImage(key.c_str(), UtilToVkDescriptorImageInfo(texture));
 			}

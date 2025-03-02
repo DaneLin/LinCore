@@ -413,10 +413,10 @@ namespace lincore
 
 		scene::LoadConfig load_config;
 		load_config.debug_name = "Main Scene";
-		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
+		//std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/structure.glb"), load_config);
 		std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/Sponza/glTF/Sponza.gltf"), load_config);
 		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/FlightHelmet/glTF/FlightHelmet.gltf"), load_config);
-		// std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
+		//std::shared_ptr<scene::LoadedGLTF> test = scene::GLTFLoader::LoadGLTF(&gpu_device_, GetAssetPath("assets/space-helmet/source/DamagedHelmet.glb"), load_config);
 		scene_graph_ = std::make_unique<scene::SceneGraph>(&gpu_device_);
 		scene_graph_->Init();
 		scene_graph_->BeginSceneUpdate();

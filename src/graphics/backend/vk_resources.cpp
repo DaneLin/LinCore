@@ -598,7 +598,7 @@ namespace lincore
 				[this, texture, staging_buffer](CommandBuffer *cmd)
 				{
 					// Copy staging buffer to texture
-					cmd->AddImageBarrier(texture, RESOURCE_STATE_COPY_DEST, texture->mip_base_level, texture->mip_level_count, texture->array_base_layer, texture->array_layer_count);
+					cmd->AddImageBarrier(texture, RESOURCE_STATE_COPY_DEST);
 
 					VkBufferImageCopy copy_region = {};
 					copy_region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -727,7 +727,7 @@ namespace lincore
 							1, &barrier);
 					}
 					else {
-						cmd->AddImageBarrier(texture, RESOURCE_STATE_SHADER_RESOURCE, texture->mip_base_level, texture->mip_level_count, texture->array_base_layer, texture->array_layer_count);
+						cmd->AddImageBarrier(texture, RESOURCE_STATE_SHADER_RESOURCE);
 					} }, submit_queue);
 			// Destroy staging buffer
 			DestroyBuffer(staging_buffer);

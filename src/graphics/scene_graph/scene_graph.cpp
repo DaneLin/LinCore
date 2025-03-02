@@ -103,25 +103,6 @@ namespace lincore
                 device->DestroyResource(material_buffer);
         }
 
-        void GPUResourcePool::EnsureVertexCapacity(size_t size)
-        {
-            // TODO : 扩容顶点缓冲
-        }
-
-        void GPUResourcePool::EnsureIndexCapacity(size_t size)
-        {
-            // TODO : 扩容索引缓冲
-        }
-
-        void GPUResourcePool::EnsureInstanceCapacity(size_t size)
-        {
-            // TODO : 扩容实例数据缓冲
-        }
-
-        void GPUResourcePool::EnsureDrawCommandCapacity(size_t size)
-        {
-            // TODO : 扩容绘制间接缓冲
-        }
 
         SceneGraph::SceneGraph(GpuDevice *device)
             : device_(device)
@@ -234,48 +215,22 @@ namespace lincore
             mesh->vertex_offset = vertex_base;
             mesh->index_offset = pending_.total_index_size;
 
-            // 2. 如果是静态网格，准备上传数据
-            {
-                // 2.1 确保GPU缓冲区容量足够
-                gpu_resources_.EnsureVertexCapacity(mesh->mesh_data.vertices.size());
-                gpu_resources_.EnsureIndexCapacity(mesh->mesh_data.indices.size());
 
-                // 2.2 添加顶点数据
-                pending_.vertices.insert(pending_.vertices.end(),
-                                         mesh->mesh_data.vertices.begin(),
-                                         mesh->mesh_data.vertices.end());
+            // 2.2 添加顶点数据
+            pending_.vertices.insert(pending_.vertices.end(),
+                                     mesh->mesh_data.vertices.begin(),
+                                     mesh->mesh_data.vertices.end());
 
-                // 2.3 添加索引数据，不需要调整索引值，因为DrawCommand中的vertex_offset会处理偏移
-                pending_.indices.insert(pending_.indices.end(),
-                                        mesh->mesh_data.indices.begin(),
-                                        mesh->mesh_data.indices.end());
+            // 2.3 添加索引数据，不需要调整索引值，因为DrawCommand中的vertex_offset会处理偏移
+            pending_.indices.insert(pending_.indices.end(),
+                                    mesh->mesh_data.indices.begin(),
+                                    mesh->mesh_data.indices.end());
 
-                pending_.total_vertex_size += mesh->mesh_data.vertices.size();
-                pending_.total_index_size += mesh->mesh_data.indices.size();
-            }
+            pending_.total_vertex_size += mesh->mesh_data.vertices.size();
+            pending_.total_index_size += mesh->mesh_data.indices.size();
+            
 
             needs_update_ = true;
-        }
-
-        void SceneGraph::RemoveMesh(const std::string &name)
-        {
-            /*auto it = meshes_.find(name);
-            if (it != meshes_.end())
-            {
-                meshes_.erase(it);
-                needs_update_ = true;
-            }*/
-        }
-
-        void SceneGraph::RemoveMaterial(const std::string &name)
-        {
-            /*auto it = materials_.find(name);
-            if (it != materials_.end())
-            {
-                material_indices_.erase(it->second.get());
-                materials_.erase(it);
-                needs_update_ = true;
-            }*/
         }
 
         uint32_t SceneGraph::GetMaterialIndex(const MaterialInstance *material) const
@@ -297,10 +252,6 @@ namespace lincore
             needs_update_ = true;
         }
 
-        void SceneGraph::RemoveGLTFScene(const std::string &name)
-        {
-            // TODO : 移除GLTF场景
-        }
         void SceneGraph::MergeGLTFScene(const LoadedGLTF &gltf)
         {
             // 1. 添加网格
